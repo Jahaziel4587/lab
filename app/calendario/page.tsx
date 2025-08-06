@@ -22,9 +22,8 @@ import Link from "next/link";
 import { useAuth } from "@/src/Context/AuthContext";
 import { adminEmails } from "@/src/config/admins";
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
+import { nombresPorCorreo } from "@/app/components/Clientlayout";
 
-
-// Tipo de dato para pedidos
 type Pedido = {
   id: string;
   titulo: string;
@@ -33,6 +32,7 @@ type Pedido = {
   costo?: string;
   status?: string;
   nombreCosto?: string;
+  correoUsuario?: string;
 };
 
 export default function CalendarioPage() {
@@ -53,11 +53,12 @@ export default function CalendarioPage() {
         pedidosData.push({
           id: docSnap.id,
           titulo: data.titulo || "Sin título",
-          fechaEntregaReal: data.fechaEntregaReal,
-          fechaLimite: data.fechaLimite,
+          fechaEntregaReal: data.fechaEntregaReal || "",
+          fechaLimite: data.fechaLimite || "",
           costo: data.costo || "",
           nombreCosto: data.nombreCosto || "",
           status: data.status || "enviado",
+          correoUsuario: data.correoUsuario || "",
         });
       });
 
@@ -112,7 +113,6 @@ export default function CalendarioPage() {
           </div>
         ))}
 
-        {/* Acomodar días correctamente */}
         {(() => {
           const primerDia = diasDelMes.length > 0 ? diasDelMes[0].getDay() : 0;
           const espacios = Array(primerDia).fill(null);
@@ -154,7 +154,6 @@ export default function CalendarioPage() {
         })()}
       </div>
 
-      {/* Tabla solo para administradores */}
       {esAdmin && (
         <div className="mt-10">
           <h2 className="text-lg font-semibold mb-4">Todos los pedidos</h2>
@@ -163,6 +162,7 @@ export default function CalendarioPage() {
               <thead className="bg-gray-100">
                 <tr>
                   <th className="px-4 py-2">Título</th>
+                  <th className="px-4 py-2">Solicitante</th>
                   <th className="px-4 py-2">Fecha propuesta</th>
                   <th className="px-4 py-2">Fecha real</th>
                   <th className="px-4 py-2">Cotización</th>
@@ -174,54 +174,56 @@ export default function CalendarioPage() {
                 {pedidos.map((p) => (
                   <tr key={p.id} className="border-t">
                     <td className="px-4 py-2">{p.titulo}</td>
+                    <td className="px-4 py-2">
+                      {nombresPorCorreo[p.correoUsuario || ""] || p.correoUsuario || "Sin información"}
+                    </td>
                     <td className="px-4 py-2">{p.fechaLimite || "No definida"}</td>
                     <td className="px-4 py-2">
                       <input
                         type="date"
-                        value={p.fechaEntregaReal || ""}
-                        onChange={(e) => actualizarCampo(p.id, "fechaEntregaReal", e.target.value)}
+                        value={p.fechaEntregaReal ?? ""}
+                        onChange={(e) =>
+                          actualizarCampo(p.id, "fechaEntregaReal", e.target.value)
+                        }
                         className="border px-2 py-1 rounded"
                       />
                     </td>
-                   <td className="px-4 py-2">
-  {p.costo && p.nombreCosto ? (
-    <div className="flex items-center gap-2">
-      <a
-        href={p.costo}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-blue-600 underline"
-      >
-        {p.nombreCosto}
-      </a>
-      {esAdmin && (
-        <button
-          onClick={() => {
-            actualizarCampo(p.id, "costo", "");
-            actualizarCampo(p.id, "nombreCosto", "");
-          }}
-          className="text-red-600 hover:text-red-800 text-lg"
-        >
-          &times;
-        </button>
-      )}
-    </div>
-  ) : esAdmin ? (
-    <input
-      type="file"
-      accept=".pdf,.doc,.docx,.xls,.xlsx"
-      onChange={(e) => subirArchivoCosto(e, p.id)}
-      className="text-sm text-black"
-    />
-  ) : (
-    <span>Pendiente</span>
-  )}
-</td>
-
+                    <td className="px-4 py-2">
+                      {p.costo && p.nombreCosto ? (
+                        <div className="flex items-center gap-2">
+                          <a
+                            href={p.costo}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 underline"
+                          >
+                            {p.nombreCosto}
+                          </a>
+                          <button
+                            onClick={() => {
+                              actualizarCampo(p.id, "costo", "");
+                              actualizarCampo(p.id, "nombreCosto", "");
+                            }}
+                            className="text-red-600 hover:text-red-800 text-lg"
+                          >
+                            &times;
+                          </button>
+                        </div>
+                      ) : (
+                        <input
+                          type="file"
+                          accept=".pdf,.doc,.docx,.xls,.xlsx"
+                          onChange={(e) => subirArchivoCosto(e, p.id)}
+                          className="text-sm text-black"
+                        />
+                      )}
+                    </td>
                     <td className="px-4 py-2">
                       <select
-                        value={p.status}
-                        onChange={(e) => actualizarCampo(p.id, "status", e.target.value)}
+                        value={p.status || "enviado"}
+                        onChange={(e) =>
+                          actualizarCampo(p.id, "status", e.target.value)
+                        }
                         className="border px-2 py-1 rounded"
                       >
                         <option value="enviado">Enviado</option>
@@ -249,5 +251,3 @@ export default function CalendarioPage() {
     </div>
   );
 }
-
-

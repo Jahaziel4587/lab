@@ -79,6 +79,7 @@ export default function EspecificacionesPage() {
         archivos: archivosSubidos,
         videoURL: urlDelVideo,
         timestamp: serverTimestamp(),
+        correoUsuario: usuario,
       });
 
       alert("✅ Pedido enviado con éxito");
