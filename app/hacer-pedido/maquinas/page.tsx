@@ -9,7 +9,7 @@ const MAQUINAS = [
   { nombre: "Fresadora CNC", imagen: "/cnc.jpg", servicio: "corte" },
   { nombre: "Filamento", imagen: "/Ultimaker.jpg", servicio: "impresion" },
   { nombre: "Resina", imagen: "/formlabs2B.jpeg", servicio: "impresion" },
- // { nombre: "Formlabs 3B", imagen: "/formlabs3B.jpg", servicio: "impresion" },
+ { nombre: "Libre", imagen: "/fixture-no-diseñado.jpg", servicio: "fixture" },
   //{ nombre: "BambuLab", imagen: "/bambulab.png", servicio: "impresion" },
  // { nombre: "Mayku", imagen: "/mayku.jpg", servicio: "fixture" },
 ];

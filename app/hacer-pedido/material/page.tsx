@@ -39,8 +39,8 @@ const MATERIALES_POR_MAQUINA: Record<string, string[]> = {
     "Papel",
     "Otro",
   ],
-  "Fresadora CNC": ["Madera", "MDF","Otro",]
-  //"Mayku": ["PET","Otro",],
+  "Fresadora CNC": ["Madera", "MDF","Otro",],
+  "Libre": ["Libre"],
 };
 
 export default function MaterialPage() {
