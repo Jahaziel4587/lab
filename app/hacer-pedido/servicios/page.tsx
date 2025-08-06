@@ -7,7 +7,7 @@ const servicios = [
   { nombre: "Corte", imagen: "/corte.jpg" },
   { nombre: "Impresion", imagen: "/impresion3D.jpg" },
   { nombre: "Fixture", imagen: "/fixture.jpg" },
-  { nombre: "Fixture no diseñado", imagen: "/fixture-no-diseñado.jpg" },
+  { nombre: "Fixture no diseñado", imagen: "/libre.png" },
   { nombre: "Necesidad", imagen: "/fixture-no-diseñado.jpg" }, // nueva tarjeta
 ];
 
