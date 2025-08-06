@@ -5,11 +5,11 @@ import { useRouter } from "next/navigation";
 import { FiArrowLeft, FiArrowRight } from "react-icons/fi";
 
 const MAQUINAS = [
-  { nombre: "Laser CO2", imagen: "/lasermex.png", servicio: "corte" },
-  { nombre: "Fresadora CNC", imagen: "/cnc.jpg", servicio: "corte" },
-  { nombre: "Filamento", imagen: "/Ultimaker.jpg", servicio: "impresion" },
-  { nombre: "Resina", imagen: "/formlabs2B.jpeg", servicio: "impresion" },
- { nombre: "Libre", imagen: "/fixture-no-diseñado.jpg", servicio: "fixture" },
+  { nombre: "Laser CO2", imagen: "/laser.jpg", servicio: "corte" },
+  { nombre: "Fresadora CNC", imagen: "/corte.jpg", servicio: "corte" },
+  { nombre: "Filamento", imagen: "/filamentos.jpg", servicio: "impresion" },
+  { nombre: "Resina", imagen: "/resinas.png", servicio: "impresion" },
+ { nombre: "Libre", imagen: "/libre.png", servicio: "fixture" },
   //{ nombre: "BambuLab", imagen: "/bambulab.png", servicio: "impresion" },
  // { nombre: "Mayku", imagen: "/mayku.jpg", servicio: "fixture" },
 ];
