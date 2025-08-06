@@ -7,7 +7,7 @@ export default function Home() {
     <div
       className="min-h-screen text-white flex flex-col"
       style={{
-        backgroundImage: "url('/fondo-bioana.jpg')",
+        backgroundImage: "url('/fondo-bioana.JPG')",
         backgroundSize: "cover",
         backgroundPosition: "center",
       }}
