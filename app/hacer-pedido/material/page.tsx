@@ -6,9 +6,9 @@ import { FiArrowLeft, FiArrowRight } from "react-icons/fi";
 
 // Diccionario de materiales por máquina
 const MATERIALES_POR_MAQUINA: Record<string, string[]> = {
-  "Ultimaker": ["PLA", "Otro"],
+  "Filamento": ["PLA", "Otro"],
   "BambuLab": ["PLA", "Otro"],
-  "Formlabs 2B": [
+  "Resina": [
     "Rigid 10K",
     "Black",
     "BioMed Amber",
@@ -30,7 +30,7 @@ const MATERIALES_POR_MAQUINA: Record<string, string[]> = {
     "Flexible 80A",
     "Otro",
   ],
-  "Laser Mex": [
+  "Laser CO2": [
     "Acrílico 2mm",
     "Acrílico 3mm",
     "Acrílico 4mm",
@@ -39,8 +39,8 @@ const MATERIALES_POR_MAQUINA: Record<string, string[]> = {
     "Papel",
     "Otro",
   ],
-  "Avid CNC": ["Madera", "MDF","Otro",],
-  "Mayku": ["PET","Otro",],
+  "Fresadora CNC": ["Madera", "MDF","Otro",]
+  //"Mayku": ["PET","Otro",],
 };
 
 export default function MaterialPage() {

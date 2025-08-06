@@ -5,13 +5,13 @@ import { useRouter } from "next/navigation";
 import { FiArrowLeft, FiArrowRight } from "react-icons/fi";
 
 const MAQUINAS = [
-  { nombre: "Laser Mex", imagen: "/lasermex.png", servicio: "corte" },
-  { nombre: "Avid CNC", imagen: "/cnc.jpg", servicio: "corte" },
-  { nombre: "Ultimaker", imagen: "/Ultimaker.jpg", servicio: "impresion" },
-  { nombre: "Formlabs 2B", imagen: "/formlabs2B.jpeg", servicio: "impresion" },
-  { nombre: "Formlabs 3B", imagen: "/formlabs3B.jpg", servicio: "impresion" },
-  { nombre: "BambuLab", imagen: "/bambulab.png", servicio: "impresion" },
-  { nombre: "Mayku", imagen: "/mayku.jpg", servicio: "fixture" },
+  { nombre: "Laser CO2", imagen: "/lasermex.png", servicio: "corte" },
+  { nombre: "Fresadora CNC", imagen: "/cnc.jpg", servicio: "corte" },
+  { nombre: "Filamento", imagen: "/Ultimaker.jpg", servicio: "impresion" },
+  { nombre: "Resina", imagen: "/formlabs2B.jpeg", servicio: "impresion" },
+ // { nombre: "Formlabs 3B", imagen: "/formlabs3B.jpg", servicio: "impresion" },
+  //{ nombre: "BambuLab", imagen: "/bambulab.png", servicio: "impresion" },
+ // { nombre: "Mayku", imagen: "/mayku.jpg", servicio: "fixture" },
 ];
 
 export default function MaquinasPage() {
@@ -49,7 +49,7 @@ export default function MaquinasPage() {
         <FiArrowLeft /> Regresar
       </button>
 
-      <h1 className="text-xl mb-6 font-semibold">Selecciona una máquina</h1>
+      <h1 className="text-xl mb-6 font-semibold">Selecciona la técnica</h1>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
         {maquinasFiltradas.map((m) => (
