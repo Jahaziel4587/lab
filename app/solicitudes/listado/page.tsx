@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   getDocs,
@@ -17,6 +17,7 @@ import { db, storage } from "../../../src/firebase/firebaseConfig";
 import { useAuth } from "../../../src/Context/AuthContext";
 import Link from "next/link";
 import { FiArrowLeft } from "react-icons/fi";
+
 
 export default function ListadoPedidosPage() {
   const searchParams = useSearchParams();
@@ -114,6 +115,7 @@ export default function ListadoPedidosPage() {
   if (!user || !proyectoSeleccionado) return null;
 
   return (
+     <Suspense fallback={<div className="text-center py-10">Cargando...</div>}>
     <div>
       <button
         onClick={() => router.push("/solicitudes")}
@@ -255,5 +257,6 @@ export default function ListadoPedidosPage() {
         </div>
       )}
     </div>
+    </Suspense>
   );
 }
