@@ -7,7 +7,7 @@ export default function Home() {
     <div
       className="min-h-screen text-white flex flex-col"
       style={{
-        backgroundImage: "url('/fondo-bioana.JPG')",
+        backgroundImage: "url('/fondo-bioana.jpg')",
         backgroundSize: "cover",
         backgroundPosition: "center",
       }}
@@ -15,7 +15,7 @@ export default function Home() {
       {/* CONTENIDO PRINCIPAL */}
       <main className="flex-grow flex flex-col items-start justify-center px1 py1 text-left">
         <img
-          src="/logo-completo.jpg"
+          src="/logo-completo.JPG"
           alt="Logo bioana"
           className="w-[700px] mb-4"
         />
