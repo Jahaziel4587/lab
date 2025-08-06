@@ -7,13 +7,19 @@ const servicios = [
   { nombre: "Corte", imagen: "/corte.jpg" },
   { nombre: "Impresion", imagen: "/impresion3D.jpg" },
   { nombre: "Fixture", imagen: "/fixture.jpg" },
-  { nombre: "Fixture no diseñado", imagen: "/fixture-no-diseñado.jpg" }, // misma imagen por ahora
+  { nombre: "Fixture no diseñado", imagen: "/fixture-no-diseñado.jpg" },
+  { nombre: "Necesidad", imagen: "/fixture-no-diseñado.jpg" }, // nueva tarjeta
 ];
 
 export default function ServiciosPage() {
   const router = useRouter();
 
   const seleccionarServicio = (nombre: string) => {
+    if (nombre === "Necesidad") {
+      router.push("/hacer-pedido/especificaciones");
+      return;
+    }
+
     const key = nombre === "Fixture no diseñado" ? "Fixture" : nombre;
     localStorage.setItem("servicio", key);
     router.push("/hacer-pedido/maquinas");
@@ -53,4 +59,3 @@ export default function ServiciosPage() {
     </div>
   );
 }
-
