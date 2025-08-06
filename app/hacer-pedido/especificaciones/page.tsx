@@ -170,7 +170,7 @@ export default function EspecificacionesPage() {
         </div>
 
         <div>
-          <label className="block font-medium text-black mb-1">Fecha límite de entrega</label>
+          <label className="block font-medium text-black mb-1">Fecha Propuesta</label>
           <input
             type="date"
             value={fecha}

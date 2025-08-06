@@ -142,7 +142,7 @@ export default function ListadoPedidosPage() {
                 <th className="py-2 px-4">Entrega real</th>
                 <th className="py-2 px-4">Cotización</th>
                 <th className="py-2 px-4">Status</th>
-                <th className="py-2 px-4">Seleccionar</th>
+                
               </tr>
             </thead>
             <tbody>
@@ -232,13 +232,7 @@ export default function ListadoPedidosPage() {
                       </span>
                     )}
                   </td>
-                  <td className="py-2 px-4">
-                    <input
-                      type="checkbox"
-                      value={p.id}
-                      onChange={handleSeleccionar}
-                    />
-                  </td>
+                
                 </tr>
               ))}
             </tbody>
