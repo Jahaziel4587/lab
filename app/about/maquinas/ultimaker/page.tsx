@@ -6,6 +6,7 @@ import {
   doc,
   getDoc,
   updateDoc,
+  setDoc,
 } from "firebase/firestore";
 import { useAuth } from "@/src/Context/AuthContext";
 import { FiArrowLeft } from "react-icons/fi";
@@ -18,14 +19,23 @@ export default function UltimakerPage() {
   const esAdmin = user?.email === "jahaziel@bioana.com" || user?.email === "manuel@bioana.com";
 
   const fetchData = async () => {
-    const ref = doc(db, "maquinas", "ultimaker");
-    const snap = await getDoc(ref);
-    if (snap.exists()) {
-      const data = snap.data();
-      setMateriales(data.materiales || []);
-      setQsURL(data.qs || "");
-    }
-  };
+  const ref = doc(db, "maquinas", "ultimaker");
+  const snap = await getDoc(ref);
+  if (snap.exists()) {
+    const data = snap.data();
+    setMateriales(data.materiales || []);
+    setQsURL(data.qs || "");
+  } else {
+    // Creamos el documento con campos vacíos
+    await setDoc(ref, {
+      materiales: [],
+      qs: ""
+    });
+    setMateriales([]);
+    setQsURL("");
+  }
+};
+
 
   useEffect(() => {
     fetchData();

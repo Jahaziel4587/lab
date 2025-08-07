@@ -6,6 +6,7 @@ import {
   doc,
   getDoc,
   updateDoc,
+  setDoc,
 } from "firebase/firestore";
 import { useAuth } from "@/src/Context/AuthContext";
 import { FiArrowLeft } from "react-icons/fi";
@@ -25,6 +26,14 @@ const fetchData = async () => {
     const data = snap.data();
     setMateriales(data.materiales || []);
     setQsURL(data.qs || "");
+  } else {
+    // Creamos el documento con campos vacíos
+    await setDoc(ref, {
+      materiales: [],
+      qs: ""
+    });
+    setMateriales([]);
+    setQsURL("");
   }
 };
 
