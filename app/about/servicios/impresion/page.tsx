@@ -1,25 +1,55 @@
 "use client";
 import Link from "next/link";
+import Image from "next/image";
 
 export default function ImpresionPage() {
+  const opcionesImpresion = [
+    {
+      nombre: "Resina",
+      descripcion: "Alta precisión, excelente acabado",
+      ruta: "/about/servicios/impresion/resina",
+      imagen: "/resinas.png",
+    },
+    {
+      nombre: "Filamento",
+      descripcion: "Opciones como PLA, TPU, ABS",
+      ruta: "/about/servicios/impresion/filamento",
+      imagen: "/filamentos.jpg",
+    },
+  ];
+
   return (
-    <div className="min-h-screen bg-gray-100 text-gray-900 px-6 py-20">
+    <div className="min-h-screen  text-white-900 px-6 py-20">
       <h1 className="text-3xl font-bold text-center mb-10">Impresión</h1>
 
-      <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 max-w-4xl mx-auto">
-        <Link href="/about/servicios/impresion/resina">
-          <div className="bg-white p-6 rounded-lg shadow-md hover:bg-purple-100 hover:scale-105 transition cursor-pointer text-center">
-            <h2 className="text-xl font-semibold text-purple-700">Resina</h2>
-            <p className="text-sm mt-2 text-gray-600">Alta precisión, excelente acabado</p>
-          </div>
-        </Link>
+      {/* Botón de regreso */}
+      <div className="max-w-6xl mx-auto mb-6">
+        <button
+          onClick={() => window.history.back()}
+          className="mb-4 bg-white text-black px-4 py-2 rounded flex items-center gap-2 hover:bg-gray-800"
+        >
+          ← Regresar
+        </button>
+      </div>
 
-        <Link href="/about/servicios/impresion/filamento">
-          <div className="bg-white p-6 rounded-lg shadow-md hover:bg-blue-100 hover:scale-105 transition cursor-pointer text-center">
-            <h2 className="text-xl font-semibold text-blue-700">Filamento</h2>
-            <p className="text-sm mt-2 text-gray-600">Opciones como PLA, TPU, ABS</p>
-          </div>
-        </Link>
+      <div className="grid gap-6 grid-cols-1 sm:grid-cols-2 max-w-4xl mx-auto">
+        {opcionesImpresion.map((opcion, index) => (
+          <Link href={opcion.ruta} key={index}>
+            <div className="bg-white text-black rounded-xl overflow-hidden shadow-lg transform hover:scale-105 transition cursor-pointer">
+              <Image
+                src={opcion.imagen}
+                alt={opcion.nombre}
+                width={400}
+                height={300}
+                className="object-cover w-full h-64"
+              />
+              <div className="p-4 text-center">
+                <h2 className="text-xl font-semibold mb-2">{opcion.nombre}</h2>
+                <p className="text-sm text-gray-700">{opcion.descripcion}</p>
+              </div>
+            </div>
+          </Link>
+        ))}
       </div>
     </div>
   );

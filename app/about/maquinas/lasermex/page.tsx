@@ -8,6 +8,7 @@ import {
   updateDoc,
 } from "firebase/firestore";
 import { useAuth } from "@/src/Context/AuthContext";
+import { FiArrowLeft } from "react-icons/fi";
 
 export default function LasermexPage() {
   const [materiales, setMateriales] = useState<string[]>([]);
@@ -16,47 +17,53 @@ export default function LasermexPage() {
   const { user } = useAuth();
   const esAdmin = user?.email === "jahaziel@bioana.com" || user?.email === "manuel@bioana.com";
 
-  useEffect(() => {
-    const fetchData = async () => {
-      const ref = doc(db, "maquinas", "lasermex");
-      const snap = await getDoc(ref);
-      if (snap.exists()) {
-        const data = snap.data();
-        setMateriales(data.materiales || []);
-        setQsURL(data.qs || "");
-      }
-    };
-    fetchData();
-  }, []);
+  // Función reutilizable para cargar datos desde Firestore
+const fetchData = async () => {
+  const ref = doc(db, "maquinas", "lasermex");
+  const snap = await getDoc(ref);
+  if (snap.exists()) {
+    const data = snap.data();
+    setMateriales(data.materiales || []);
+    setQsURL(data.qs || "");
+  }
+};
 
-  const guardarMateriales = async () => {
-    const ref = doc(db, "maquinas", "lasermex");
-    await updateDoc(ref, { materiales });
-  };
+useEffect(() => {
+  fetchData();
+}, []);
 
-  const actualizarQS = async (nuevaURL: string) => {
-    const ref = doc(db, "maquinas", "lasermex");
-    await updateDoc(ref, { qs: nuevaURL });
-    setQsURL(nuevaURL);
-  };
+const agregarMaterial = async () => {
+  if (nuevoMaterial.trim() !== "") {
+    const actualizados = [...materiales, nuevoMaterial.trim()];
+    await updateDoc(doc(db, "maquinas", "lasermex"), { materiales: actualizados });
+    setNuevoMaterial("");
+    fetchData(); // Recargar desde Firestore
+  }
+};
 
-  const agregarMaterial = () => {
-    if (nuevoMaterial.trim() !== "") {
-      const actualizados = [...materiales, nuevoMaterial.trim()];
-      setMateriales(actualizados);
-      setNuevoMaterial("");
-      guardarMateriales();
-    }
-  };
+const eliminarMaterial = async (index: number) => {
+  const actualizados = materiales.filter((_, i) => i !== index);
+  await updateDoc(doc(db, "maquinas", "lasermex"), { materiales: actualizados });
+  fetchData(); // Recargar desde Firestore
+};
 
-  const eliminarMaterial = (index: number) => {
-    const actualizados = materiales.filter((_, i) => i !== index);
-    setMateriales(actualizados);
-    guardarMateriales();
-  };
+const actualizarQS = async (nuevaURL: string) => {
+  const ref = doc(db, "maquinas", "lasermex");
+  await updateDoc(ref, { qs: nuevaURL });
+  fetchData(); // Recargar desde Firestore
+};
 
   return (
     <div className="min-h-screen bg-white text-gray-900 px-6 py-20">
+      {/* Botón de regreso */}
+      <div className="max-w-6xl mx-auto mb-6">
+        <button
+          onClick={() => window.history.back()}
+          className="mb-4 bg-black text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-black-200"
+        >
+          <FiArrowLeft /> Regresar
+        </button>
+      </div>
       <div className="max-w-4xl mx-auto">
         <h1 className="text-3xl font-bold mb-6">Lasermex</h1>
 

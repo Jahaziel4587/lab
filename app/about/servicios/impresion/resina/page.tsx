@@ -2,9 +2,20 @@
 
 export default function ResinaPage() {
   return (
-    <div className="min-h-screen bg-white text-gray-900 px-6 py-20">
-      <div className="max-w-3xl mx-auto">
-        <h1 className="text-3xl font-bold mb-6 text-purple-700">Impresión en Resina</h1>
+    <div className="min-h-screen text-white px-6 py-20">
+  <div className="max-w-4xl mx-auto bg-black rounded-lg p-8 shadow-lg">
+
+{/* Botón de regreso */}
+      <div className="max-w-6xl mx-auto mb-6">
+        <button
+          onClick={() => window.history.back()}
+          className="mb-4 bg-white text-black px-4 py-2 rounded flex items-center gap-2 hover:bg-white-800"
+        >
+          ← Regresar
+        </button>
+      </div>
+
+        <h1 className="text-3xl font-bold mb-6 text-black-700">Impresión en Resina</h1>
 
         <p className="mb-6">
           La impresión con resina permite obtener piezas de alta precisión, excelente detalle y acabados lisos.

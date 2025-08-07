@@ -2,149 +2,144 @@
 
 import { useEffect, useState } from "react";
 import { db } from "@/src/firebase/firebaseConfig";
-import { doc, getDoc, updateDoc } from "firebase/firestore";
+import {
+  doc,
+  getDoc,
+  updateDoc,
+} from "firebase/firestore";
 import { useAuth } from "@/src/Context/AuthContext";
-import { adminEmails } from "@/src/config/admins";
+import { FiArrowLeft } from "react-icons/fi";
 
-export default function formlabsaPage() {
+export default function Formlabs3APage() {
   const [materiales, setMateriales] = useState<string[]>([]);
   const [nuevoMaterial, setNuevoMaterial] = useState("");
   const [qsURL, setQsURL] = useState("");
-  const [editando, setEditando] = useState(false);
   const { user } = useAuth();
+  const esAdmin = user?.email === "jahaziel@bioana.com" || user?.email === "manuel@bioana.com";
 
-  const esAdmin = user?.email && adminEmails.includes(user.email);
+  const fetchData = async () => {
+    const ref = doc(db, "maquinas", "formlabs3A");
+    const snap = await getDoc(ref);
+    if (snap.exists()) {
+      const data = snap.data();
+      setMateriales(data.materiales || []);
+      setQsURL(data.qs || "");
+    }
+  };
 
   useEffect(() => {
-    const fetchData = async () => {
-      const docRef = doc(db, "maquinas", "formlabs3a");
-      const docSnap = await getDoc(docRef);
-      if (docSnap.exists()) {
-        const data = docSnap.data();
-        setMateriales(data.materiales || []);
-        setQsURL(data.qsURL || "");
-      }
-    };
     fetchData();
   }, []);
 
-  const guardarCambios = async () => {
-    const docRef = doc(db, "maquinas", "formlabs3a");
-    await updateDoc(docRef, {
-      materiales,
-      qsURL,
-    });
-    setEditando(false);
+  const agregarMaterial = async () => {
+    if (nuevoMaterial.trim() !== "") {
+      const actualizados = [...materiales, nuevoMaterial.trim()];
+      await updateDoc(doc(db, "maquinas", "formlabs3A"), { materiales: actualizados });
+      setNuevoMaterial("");
+      fetchData();
+    }
   };
 
-  const eliminarMaterial = (index: number) => {
-    setMateriales((prev) => prev.filter((_, i) => i !== index));
+  const eliminarMaterial = async (index: number) => {
+    const actualizados = materiales.filter((_, i) => i !== index);
+    await updateDoc(doc(db, "maquinas", "formlabs3A"), { materiales: actualizados });
+    fetchData();
+  };
+
+  const actualizarQS = async (nuevaURL: string) => {
+    const ref = doc(db, "maquinas", "formlabs3A");
+    await updateDoc(ref, { qs: nuevaURL });
+    fetchData();
   };
 
   return (
     <div className="min-h-screen bg-white text-gray-900 px-6 py-20">
+      <div className="max-w-6xl mx-auto mb-6">
+        <button
+          onClick={() => window.history.back()}
+          className="mb-4 bg-black text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-black-200"
+        >
+          <FiArrowLeft /> Regresar
+        </button>
+      </div>
+
       <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-6">Formlabs 3A</h1>
+        <h1 className="text-3xl font-bold mb-6">Formlabs 3B</h1>
 
         <img
-          src="/formlabs3B.jpeg"
-          alt="Formlabs 3A"
-          className="w-full max-w-md mb-6 rounded shadow"
+          src="/formlabs3b.jpg"
+          alt="Formlabs 3B"
+          className="w-full h-auto max-w-md rounded mb-6 shadow"
         />
 
         <p className="mb-6">
-          La Formlabs 3A es una impresora 3D de resina de alta precisión, ideal para fabricar piezas detalladas, prototipos funcionales y componentes médicos de alta resolución.
+          La Formlabs 3B es una impresora 3D de resina diseñada para aplicaciones profesionales, ideal para prototipado preciso y fabricación de piezas funcionales con resinas especializadas.
         </p>
 
         <h2 className="text-xl font-semibold mb-2">Materiales disponibles:</h2>
-
-        {editando && esAdmin ? (
-          <div className="space-y-2">
-            {materiales.map((mat, idx) => (
-              <div key={idx} className="flex items-center gap-2">
-                <span>{mat}</span>
+        <ul className="list-disc list-inside space-y-1 mb-4">
+          {materiales.map((mat, index) => (
+            <li key={index} className="flex justify-between items-center">
+              {mat}
+              {esAdmin && (
                 <button
-                  onClick={() => eliminarMaterial(idx)}
-                  className="text-red-500 hover:text-red-700"
+                  onClick={() => eliminarMaterial(index)}
+                  className="text-red-600 ml-2 hover:text-red-800"
                 >
-                  ✕
+                  ×
                 </button>
-              </div>
-            ))}
+              )}
+            </li>
+          ))}
+        </ul>
+
+        {esAdmin && (
+          <div className="flex items-center gap-2 mb-6">
             <input
               type="text"
-              placeholder="Nuevo material"
               value={nuevoMaterial}
               onChange={(e) => setNuevoMaterial(e.target.value)}
-              className="border px-2 py-1 rounded text-black"
+              placeholder="Agregar material"
+              className="border px-2 py-1 rounded"
             />
             <button
-              onClick={() => {
-                if (nuevoMaterial.trim() !== "") {
-                  setMateriales([...materiales, nuevoMaterial]);
-                  setNuevoMaterial("");
-                }
-              }}
+              onClick={agregarMaterial}
               className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
             >
               Agregar
             </button>
           </div>
-        ) : (
-          <ul className="list-disc list-inside space-y-1 mb-4">
-            {materiales.map((mat, idx) => (
-              <li key={idx}>{mat}</li>
-            ))}
-          </ul>
         )}
 
-        <h2 className="text-xl font-semibold mt-6 mb-2">Guía técnica:</h2>
-        {editando && esAdmin ? (
-          <input
-            type="text"
-            value={qsURL}
-            onChange={(e) => setQsURL(e.target.value)}
-            className="border px-2 py-1 rounded w-full text-black"
-            placeholder="https://..."
-          />
-        ) : qsURL ? (
+        <h2 className="text-xl font-semibold mb-2">Quick Start:</h2>
+        {qsURL ? (
           <a
             href={qsURL}
             target="_blank"
             rel="noopener noreferrer"
             className="text-blue-600 underline"
           >
-            Ver Quick Start
+            Ver guía técnica
           </a>
         ) : (
-          <p>No se ha cargado una guía técnica aún.</p>
+          <p>No hay guía técnica disponible.</p>
         )}
 
         {esAdmin && (
-          <div className="mt-6">
-            {editando ? (
-              <div className="flex gap-4">
-                <button
-                  onClick={guardarCambios}
-                  className="bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
-                >
-                  Guardar
-                </button>
-                <button
-                  onClick={() => setEditando(false)}
-                  className="bg-gray-400 text-white px-4 py-2 rounded hover:bg-gray-500"
-                >
-                  Cancelar
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setEditando(true)}
-                className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700"
-              >
-                Editar
-              </button>
-            )}
+          <div className="mt-4">
+            <input
+              type="text"
+              value={qsURL}
+              onChange={(e) => setQsURL(e.target.value)}
+              placeholder="URL del QS"
+              className="border px-2 py-1 rounded w-full"
+            />
+            <button
+              onClick={() => actualizarQS(qsURL)}
+              className="mt-2 bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
+            >
+              Guardar guía técnica
+            </button>
           </div>
         )}
       </div>
