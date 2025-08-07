@@ -67,7 +67,7 @@ export default function formlabs2aPage() {
         <h1 className="text-3xl font-bold mb-6">Formlabs 2B</h1>
 
         <img
-          src="/formlabs2b.jpeg"
+          src="/formlabs2B.jpeg"
           alt="Formlabs 2B"
           className="w-full h-auto max-w-md rounded mb-6 shadow"
         />

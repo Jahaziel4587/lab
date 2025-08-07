@@ -67,7 +67,7 @@ export default function UltimakerPage() {
         <h1 className="text-3xl font-bold mb-6">Ultimaker 2+</h1>
 
         <img
-          src="/ultimaker.jpg"
+          src="/Ultimaker.jpg"
           alt="Ultimaker 2+"
           className="w-full h-auto max-w-md rounded mb-6 shadow"
         />

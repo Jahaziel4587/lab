@@ -67,7 +67,7 @@ export default function Formlabs3APage() {
         <h1 className="text-3xl font-bold mb-6">Formlabs 3B</h1>
 
         <img
-          src="/formlabs3b.jpg"
+          src="/formlabs3B.jpg"
           alt="Formlabs 3B"
           className="w-full h-auto max-w-md rounded mb-6 shadow"
         />
