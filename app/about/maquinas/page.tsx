@@ -4,9 +4,9 @@ import { FiArrowLeft } from "react-icons/fi";
 
 const maquinas = [
   { nombre: "Lasermex", ruta: "lasermex", imagen: "/lasermex.png" },
-  { nombre: "Ultimaker 2+", ruta: "ultimaker", imagen: "/ultimaker.jpg" },
-  { nombre: "Formlabs 2B", ruta: "formlabs2a", imagen: "/formlabs2b.jpeg" },
-  { nombre: "Formlabs 3B", ruta: "formlabs3A", imagen: "/formlabs3b.jpg" },
+  { nombre: "Ultimaker 2+", ruta: "ultimaker", imagen: "/Ultimaker.jpg" },
+  { nombre: "Formlabs 2B", ruta: "formlabs2a", imagen: "/formlabs2B.jpeg" },
+  { nombre: "Formlabs 3B", ruta: "formlabs3A", imagen: "/formlabs3B.jpg" },
   { nombre: "BambuLab", ruta: "bambulab", imagen: "/bambulab.png" },
   { nombre: "Avid CNC Benchtop 24x24", ruta: "avidcnc", imagen: "/cnc.jpg" },
   { nombre: "Mayku Formbox", ruta: "mayku", imagen: "/mayku.jpg" },
