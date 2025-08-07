@@ -1,118 +1,132 @@
 "use client";
+import { useEffect, useState } from "react";
+import { getDownloadURL, ref, uploadBytes, deleteObject } from "firebase/storage";
+import { doc, getDoc, updateDoc, setDoc } from "firebase/firestore";
+import { db, storage } from "@/src/firebase/firebaseConfig";
+import { useAuth } from "@/src/Context/AuthContext";
+import { v4 as uuidv4 } from "uuid";
 
-import { useState, useRef } from "react";
-import { ref, uploadBytes } from "firebase/storage";
-import { storage } from "@/src/firebase/firebaseConfig";
-import { FiX, FiUpload } from "react-icons/fi";
+export default function FixtureCollectionPage() {
+  const [proyectos, setProyectos] = useState<{ imagenURL: string; descripcion: string }[]>([]);
+  const [descripcion, setDescripcion] = useState("");
+  const [imagen, setImagen] = useState<File | null>(null);
 
-export default function FixtureUploadPage() {
-  const [archivos, setArchivos] = useState<File[]>([]);
-  const [subiendo, setSubiendo] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { user, isAdmin } = useAuth();
 
-  const handleSelectFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const nuevosArchivos = Array.from(e.target.files || []);
-    setArchivos((prev) => [...prev, ...nuevosArchivos]);
-    e.target.value = ""; // limpia el input para permitir volver a elegir el mismo archivo
+  const fetchProyectos = async () => {
+    const ref = doc(db, "collection", "fixture");
+    const snap = await getDoc(ref);
+    if (snap.exists()) {
+      setProyectos(snap.data().proyectos || []);
+    } else {
+      await setDoc(ref, { proyectos: [] });
+      setProyectos([]);
+    }
   };
 
-  const handleRemove = (nombre: string) => {
-    setArchivos((prev) => prev.filter((file) => file.name !== nombre));
-  };
+  useEffect(() => {
+    fetchProyectos();
+  }, []);
 
-  const handleClickBoton = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleUploadAll = async () => {
-  if (archivos.length === 0) return alert("Selecciona al menos un archivo.");
-  setSubiendo(true);
-
-  try {
-    for (const archivo of archivos) {
-      console.log("⏫ Subiendo archivo:", archivo.name);
-
-      const storageRef = ref(storage, `fixture-tests/${archivo.name}`);
-
-      const uploadWithTimeout = new Promise<void>((resolve, reject) => {
-        const timeout = setTimeout(() => {
-          reject(new Error(`⏱️ Timeout al subir ${archivo.name}`));
-        }, 10000); // 10 segundos de límite por archivo
-
-        uploadBytes(storageRef, archivo)
-          .then(() => {
-            clearTimeout(timeout);
-            console.log("✅ Subido:", archivo.name);
-            resolve();
-          })
-          .catch((error) => {
-            clearTimeout(timeout);
-            console.error("❌ Error al subir:", archivo.name, error);
-            reject(error);
-          });
-      });
-
-      await uploadWithTimeout;
+  const handleAgregar = async () => {
+    if (!imagen || descripcion.trim() === "") {
+      alert("Completa todos los campos");
+      return;
     }
 
-    alert("✅ Todos los archivos fueron subidos.");
-    setArchivos([]);
-  } catch (err: any) {
-    console.error("❌ Falló la subida:", err);
-    alert(`Error: ${err.message || err}`);
-  }
+    const id = uuidv4();
+    const storageRef = ref(storage, `collection/fixture/${id}`);
+    await uploadBytes(storageRef, imagen);
+    const imagenURL = await getDownloadURL(storageRef);
 
-  setSubiendo(false);
-};
+    const nuevoProyecto = { imagenURL, descripcion };
+    const nuevos = [...proyectos, nuevoProyecto];
 
+    await updateDoc(doc(db, "collection", "fixture"), { proyectos: nuevos });
 
+    setDescripcion("");
+    setImagen(null);
+    fetchProyectos();
+  };
+
+  const handleEliminar = async (index: number) => {
+    const proyecto = proyectos[index];
+    const nuevos = proyectos.filter((_, i) => i !== index);
+
+    const match = decodeURIComponent(proyecto.imagenURL).match(/\/o\/(.*?)\?alt/);
+    const path = match?.[1].replace(/%2F/g, "/");
+
+    if (path) {
+      const imageRef = ref(storage, path);
+      await deleteObject(imageRef).catch((err) => console.warn("Error al eliminar imagen:", err));
+    }
+
+    await updateDoc(doc(db, "collection", "fixture"), { proyectos: nuevos });
+    fetchProyectos();
+  };
 
   return (
-    <div className="p-6 space-y-4 max-w-xl mx-auto bg-white rounded-xl shadow">
-      <h1 className="text-xl font-bold text-black">Subir archivos de prueba</h1>
+    <div className="min-h-screen  text-white-900 px-6 py-20">
+      <h1 className="text-3xl font-bold text-center mb-10">Proyectos de Fixture</h1>
+<div className="max-w-6xl mx-auto mb-6">
+  <button
+    onClick={() => window.history.back()}
+    className="mb-4 bg-black text-white px-4 py-2 rounded flex items-center gap-2 hover:bg-gray-800"
+  >
+    ← Regresar
+  </button>
+</div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 max-w-6xl mx-auto mb-16">
+        {proyectos.map((p, i) => (
+          <div
+            key={i}
+            className="bg-white text-black rounded-xl shadow overflow-hidden transform hover:scale-105 transition"
+          >
+            <img
+              src={p.imagenURL}
+              alt="Proyecto"
+              className="w-full h-56 object-cover"
+            />
+            <div className="p-4">
+              <p className="text-sm text-gray-700">{p.descripcion}</p>
+              {isAdmin && (
+                <button
+                  onClick={() => handleEliminar(i)}
+                  className="mt-2 text-red-600 text-sm hover:underline"
+                >
+                  Eliminar
+                </button>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
 
-      {/* Input oculto */}
-      <input
-        ref={fileInputRef}
-        type="file"
-        multiple
-        onChange={handleSelectFiles}
-        className="hidden"
-      />
+      {isAdmin && (
+        <div className="max-w-xl mx-auto bg-white text-black rounded-lg p-6 shadow">
+          <h2 className="text-xl font-semibold mb-4">Agregar nuevo proyecto</h2>
 
-      {/* Botón personalizado */}
-      <button
-        onClick={handleClickBoton}
-        className="bg-black text-white px-4 py-2 rounded hover:bg-gray-800 flex items-center gap-2"
-      >
-        <FiUpload /> Seleccionar archivos
-      </button>
 
-      {/* Lista de archivos */}
-      {archivos.length > 0 && (
-        <ul className="text-black space-y-2">
-          {archivos.map((file) => (
-            <li key={file.name} className="flex justify-between items-center bg-gray-100 px-3 py-2 rounded">
-              <span className="truncate">{file.name}</span>
-              <button
-                onClick={() => handleRemove(file.name)}
-                className="text-red-600 hover:text-red-800"
-              >
-                <FiX />
-              </button>
-            </li>
-          ))}
-        </ul>
+          <input
+            type="file"
+            accept="image/*"
+            onChange={(e) => setImagen(e.target.files?.[0] || null)}
+            className="mb-3"
+          />
+          <textarea
+            value={descripcion}
+            onChange={(e) => setDescripcion(e.target.value)}
+            placeholder="Descripción del proyecto"
+            className="w-full border px-3 py-2 rounded mb-4"
+          />
+          <button
+            onClick={handleAgregar}
+            className="bg-black text-white px-4 py-2 rounded hover:bg-gray-800"
+          >
+            Subir
+          </button>
+        </div>
       )}
-
-      {/* Botón de subir */}
-      <button
-        onClick={handleUploadAll}
-        disabled={subiendo || archivos.length === 0}
-        className="w-full bg-green-600 text-white py-3 rounded hover:bg-green-700 transition"
-      >
-        {subiendo ? "Subiendo..." : "Subir archivos"}
-      </button>
     </div>
   );
 }

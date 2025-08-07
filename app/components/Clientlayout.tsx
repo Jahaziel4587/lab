@@ -13,9 +13,8 @@ export const nombresPorCorreo: { [correo: string]: string } = {
 };
 
    export default function ClientLayout({ children }: { children: React.ReactNode }) {
-  const { user, logout } = useAuth();
+  const { user, logout, isAdmin } = useAuth();
 
-  const adminEmails = ["jahaziel@bioana.com", "manuel@bioana.com"];
 
   // ✅ Esta línea ya está bien, porque `user` ya está definido arriba
   const nombreUsuario =

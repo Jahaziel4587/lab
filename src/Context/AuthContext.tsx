@@ -3,15 +3,19 @@ import { createContext, useContext, useEffect, useState } from "react";
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
 import { auth } from "../firebase/firebaseConfig";
 
-// 🔧 Tipo que incluye logout además de user
+// ✅ Lista central de correos de administradores
+const adminEmails = ["jahaziel@bioana.com", "manuel@bioana.com"];
+
 type AuthContextType = {
   user: User | null;
   logout: () => Promise<void>;
+  isAdmin: boolean;
 };
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   logout: async () => {},
+  isAdmin: false,
 });
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
@@ -22,14 +26,16 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     return () => unsubscribe();
   }, []);
 
-  // ✅ Función logout que además redirige y limpia sesión
   const logout = async () => {
     await signOut(auth);
-    window.location.href = "/"; // 🔁 Forzar recarga y redirección al home
+    window.location.href = "/";
   };
 
+  // ✅ Verificación de administrador centralizada
+  const isAdmin = !!user && adminEmails.includes(user.email || "");
+
   return (
-    <AuthContext.Provider value={{ user, logout }}>
+    <AuthContext.Provider value={{ user, logout, isAdmin }}>
       {children}
     </AuthContext.Provider>
   );

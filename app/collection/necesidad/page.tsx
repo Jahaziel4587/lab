@@ -6,7 +6,7 @@ import { db, storage } from "@/src/firebase/firebaseConfig";
 import { useAuth } from "@/src/Context/AuthContext";
 import { v4 as uuidv4 } from "uuid";
 
-export default function ImpresionCollectionPage() {
+export default function NecesidadCollectionPage() {
   const [proyectos, setProyectos] = useState<{ imagenURL: string; descripcion: string }[]>([]);
   const [descripcion, setDescripcion] = useState("");
   const [imagen, setImagen] = useState<File | null>(null);
@@ -14,7 +14,7 @@ export default function ImpresionCollectionPage() {
   const { user, isAdmin } = useAuth();
 
   const fetchProyectos = async () => {
-    const ref = doc(db, "collection", "impresion");
+    const ref = doc(db, "collection", "necesidad");
     const snap = await getDoc(ref);
     if (snap.exists()) {
       setProyectos(snap.data().proyectos || []);
@@ -35,14 +35,14 @@ export default function ImpresionCollectionPage() {
     }
 
     const id = uuidv4();
-    const storageRef = ref(storage, `collection/impresion/${id}`);
+    const storageRef = ref(storage, `collection/necesidad/${id}`);
     await uploadBytes(storageRef, imagen);
     const imagenURL = await getDownloadURL(storageRef);
 
     const nuevoProyecto = { imagenURL, descripcion };
     const nuevos = [...proyectos, nuevoProyecto];
 
-    await updateDoc(doc(db, "collection", "impresion"), { proyectos: nuevos });
+    await updateDoc(doc(db, "collection", "necesidad"), { proyectos: nuevos });
 
     setDescripcion("");
     setImagen(null);
@@ -61,13 +61,13 @@ export default function ImpresionCollectionPage() {
       await deleteObject(imageRef).catch((err) => console.warn("Error al eliminar imagen:", err));
     }
 
-    await updateDoc(doc(db, "collection", "impresion"), { proyectos: nuevos });
+    await updateDoc(doc(db, "collection", "necesidad"), { proyectos: nuevos });
     fetchProyectos();
   };
 
   return (
-    <div className="min-h-screen  text-white-900 px-6 py-20">
-      <h1 className="text-3xl font-bold text-center mb-10">Proyectos de Impresión</h1>
+    <div className="min-h-screen  text-black-900 px-6 py-20">
+      <h1 className="text-3xl font-bold text-center mb-10">Proyectos por Necesidad</h1>
 <div className="max-w-6xl mx-auto mb-6">
   <button
     onClick={() => window.history.back()}
@@ -76,6 +76,7 @@ export default function ImpresionCollectionPage() {
     ← Regresar
   </button>
 </div>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6 max-w-6xl mx-auto mb-16">
         {proyectos.map((p, i) => (
           <div
