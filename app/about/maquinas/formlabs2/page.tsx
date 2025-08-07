@@ -10,7 +10,7 @@ import {
 import { useAuth } from "@/src/Context/AuthContext";
 import { FiArrowLeft } from "react-icons/fi";
 
-export default function formlabs2aPage() {
+export default function formlabs2Page() {
   const [materiales, setMateriales] = useState<string[]>([]);
   const [nuevoMaterial, setNuevoMaterial] = useState("");
   const [qsURL, setQsURL] = useState("");
@@ -18,7 +18,7 @@ export default function formlabs2aPage() {
   const esAdmin = user?.email === "jahaziel@bioana.com" || user?.email === "manuel@bioana.com";
 
   const fetchData = async () => {
-    const ref = doc(db, "maquinas", "formlabs2a");
+    const ref = doc(db, "maquinas", "formlabs2");
     const snap = await getDoc(ref);
     if (snap.exists()) {
       const data = snap.data();
@@ -34,7 +34,7 @@ export default function formlabs2aPage() {
   const agregarMaterial = async () => {
     if (nuevoMaterial.trim() !== "") {
       const actualizados = [...materiales, nuevoMaterial.trim()];
-      await updateDoc(doc(db, "maquinas", "formlabs2a"), { materiales: actualizados });
+      await updateDoc(doc(db, "maquinas", "formlabs2"), { materiales: actualizados });
       setNuevoMaterial("");
       fetchData();
     }
@@ -42,12 +42,12 @@ export default function formlabs2aPage() {
 
   const eliminarMaterial = async (index: number) => {
     const actualizados = materiales.filter((_, i) => i !== index);
-    await updateDoc(doc(db, "maquinas", "formlabs2a"), { materiales: actualizados });
+    await updateDoc(doc(db, "maquinas", "formlabs2"), { materiales: actualizados });
     fetchData();
   };
 
   const actualizarQS = async (nuevaURL: string) => {
-    const ref = doc(db, "maquinas", "formlabs2a");
+    const ref = doc(db, "maquinas", "formlabs2");
     await updateDoc(ref, { qs: nuevaURL });
     fetchData();
   };
