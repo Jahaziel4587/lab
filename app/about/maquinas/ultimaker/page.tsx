@@ -63,7 +63,7 @@ export default function UltimakerPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white text-gray-900 px-6 py-20">
+    <div className="bg-black text-white p-8 rounded-lg max-w-4xl mx-auto">
       <div className="max-w-6xl mx-auto mb-6">
         <button
           onClick={() => window.history.back()}
@@ -83,8 +83,26 @@ export default function UltimakerPage() {
         />
 
         <p className="mb-6">
-          La Ultimaker 2+ es una impresora 3D FDM confiable y precisa, ideal para impresión de prototipos funcionales con filamentos como PLA, ABS y TPU.
-        </p>
+  La Ultimaker 2+ es una impresora 3D de alta precisión diseñada para ofrecer resultados consistentes y de calidad profesional. 
+  Es una de las máquinas más confiables en el ámbito del prototipado rápido, gracias a su estructura estable, facilidad de uso y excelente calidad de impresión.
+</p>
+
+<p className="mb-6">
+  Cuenta con un volumen de impresión de 223 x 223 x 205 mm y utiliza filamento de 2.85 mm de diámetro. 
+  Dispone de boquillas intercambiables de 0.25 mm, 0.4 mm, 0.6 mm y 0.8 mm, lo que permite adaptarse a distintos niveles de detalle y velocidad. 
+  Su resolución de capa alcanza las 20 micras, y su velocidad de impresión varía entre 30 y 300 mm/s.
+</p>
+
+<p className="mb-6">
+  La temperatura máxima del hotend es de 260 °C y la de la cama calefactada es de 100 °C, lo que ayuda a minimizar deformaciones durante la impresión. 
+  Es compatible con materiales como PLA, ABS, CPE, Nylon, TPU y otros filamentos de 2.85 mm, lo que la hace versátil para distintos proyectos.
+</p>
+
+<p className="mb-6">
+  Entre sus ventajas destacan su alta confiabilidad, excelente calidad superficial, versatilidad en materiales y boquillas, así como su fácil calibración y mantenimiento, 
+  lo que la convierte en una opción ideal para entornos de laboratorio, diseño e ingeniería.
+</p>
+
 
         <h2 className="text-xl font-semibold mb-2">Materiales disponibles:</h2>
         <ul className="list-disc list-inside space-y-1 mb-4">

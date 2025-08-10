@@ -62,7 +62,7 @@ export default function maykuPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white text-gray-900 px-6 py-20">
+      <div className="bg-black text-white p-8 rounded-lg max-w-4xl mx-auto">
       <div className="max-w-6xl mx-auto mb-6">
         <button
           onClick={() => window.history.back()}
@@ -82,8 +82,24 @@ export default function maykuPage() {
         />
 
         <p className="mb-6">
-          La Mayku...
-        </p>
+  La Mayku FormBox es una termoformadora de escritorio diseñada para crear moldes y piezas personalizadas de forma rápida y sencilla. 
+  Es ideal para prototipado, fabricación de empaques, moldes para colada y proyectos creativos, gracias a su facilidad de uso y tamaño compacto.
+</p>
+
+<p className="mb-6">
+  Cuenta con un área de moldeo de 200 x 200 mm y una altura máxima de formación de 130 mm. 
+  Funciona con hojas de plástico termoformable y se conecta a cualquier aspiradora doméstica estándar para generar el vacío necesario durante el proceso.
+</p>
+
+<p className="mb-6">
+  Es compatible con diversos materiales termoformables como HIPS, PETG, ABS, polipropileno y hojas biodegradables. 
+  También permite trabajar con objetos moldeados en madera, metal, arcilla, resina, jabón, chocolate y otros materiales que resistan la temperatura del proceso.
+</p>
+
+<p className="mb-6">
+  Entre sus ventajas destacan la rapidez en la creación de moldes, su portabilidad, el bajo consumo energético y la capacidad de producir series pequeñas sin necesidad de maquinaria industrial.
+</p>
+
 
         <h2 className="text-xl font-semibold mb-2">Materiales disponibles:</h2>
         <ul className="list-disc list-inside space-y-1 mb-4">

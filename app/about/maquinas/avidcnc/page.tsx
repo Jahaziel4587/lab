@@ -62,7 +62,7 @@ export default function avidcncPage() {
   };
 
   return (
-    <div className="min-h-screen bg-white text-gray-900 px-6 py-20">
+     <div className="bg-black text-white p-8 rounded-lg max-w-4xl mx-auto">
       <div className="max-w-6xl mx-auto mb-6">
         <button
           onClick={() => window.history.back()}
@@ -81,9 +81,25 @@ export default function avidcncPage() {
           className="w-full h-auto max-w-md rounded mb-6 shadow"
         />
 
-        <p className="mb-6">
-          La cortadora Avid CNC...
-        </p>
+       <p className="mb-6">
+  La Avid CNC Benchtop PRO 24x24 es una fresadora CNC de escritorio diseñada para ofrecer precisión industrial en un formato compacto. 
+  Es ideal para trabajos de mecanizado de alta calidad en madera, plásticos y metales no ferrosos, siendo una excelente opción para laboratorios de prototipado, talleres y entornos educativos.
+</p>
+
+<p className="mb-6">
+  Cuenta con un área de trabajo de 610 x 610 mm (24" x 24") y una estructura robusta de aluminio y acero que garantiza estabilidad y precisión durante el corte. 
+  Su sistema de movimiento utiliza guías lineales y husillos de bolas, lo que permite lograr tolerancias ajustadas incluso en piezas complejas.
+</p>
+
+<p className="mb-6">
+  Es compatible con diversos materiales, incluyendo maderas duras y blandas, MDF, acrílico, plásticos técnicos y aluminio. 
+  Permite el uso de fresas de diferentes diámetros y configuraciones, y se controla mediante software de CNC como Mach4 o similares, con conectividad por puerto USB o Ethernet según el controlador instalado.
+</p>
+
+<p className="mb-6">
+  Entre sus ventajas destacan la precisión de corte, la capacidad de producir piezas personalizadas con alta repetibilidad, su formato compacto que se adapta a espacios reducidos y la versatilidad para realizar tanto cortes como grabados y mecanizados 3D.
+</p>
+
 
         <h2 className="text-xl font-semibold mb-2">Materiales disponibles:</h2>
         <ul className="list-disc list-inside space-y-1 mb-4">

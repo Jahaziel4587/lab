@@ -62,7 +62,7 @@ export default function Formlabs3APage() {
   };
 
   return (
-    <div className="min-h-screen bg-white text-gray-900 px-6 py-20">
+   <div className="bg-black text-white p-8 rounded-lg max-w-4xl mx-auto">
       <div className="max-w-6xl mx-auto mb-6">
         <button
           onClick={() => window.history.back()}
@@ -81,9 +81,25 @@ export default function Formlabs3APage() {
           className="w-full h-auto max-w-md rounded mb-6 shadow"
         />
 
-        <p className="mb-6">
-          La Formlabs 3B es una impresora 3D de resina diseñada para aplicaciones profesionales, ideal para prototipado preciso y fabricación de piezas funcionales con resinas especializadas.
-        </p>
+       <p className="mb-6">
+  La Formlabs Form 3B es una impresora 3D de tecnología LFS (Low Force Stereolithography) optimizada para aplicaciones profesionales y médicas. 
+  Utiliza resina líquida fotosensible que se cura capa por capa con un sistema láser avanzado, ofreciendo piezas con alta precisión y acabados extremadamente finos.
+</p>
+
+<p className="mb-6">
+  Su volumen de impresión es de 145 x 145 x 185 mm, con una resolución de capa mínima de 25 micras. 
+  Gracias a su sistema de tanque flexible y óptica de alta calidad, reduce las fuerzas de desprendimiento durante la impresión, prolongando la vida útil de los consumibles y mejorando la calidad de las piezas.
+</p>
+
+<p className="mb-6">
+  Es compatible con una amplia gama de resinas, incluyendo opciones biocompatibles y de grado médico, lo que la hace ideal para odontología, ortopedia, fabricación de dispositivos médicos y prototipado de precisión. 
+  Su software PreForm facilita la preparación de archivos y optimiza la orientación y soportes para cada impresión.
+</p>
+
+<p className="mb-6">
+  Entre sus ventajas destacan la calidad de superficie superior, alta repetibilidad en piezas complejas, conectividad por Wi-Fi, Ethernet y USB, así como un flujo de trabajo optimizado para uso intensivo en entornos profesionales y de laboratorio.
+</p>
+
 
         <h2 className="text-xl font-semibold mb-2">Materiales disponibles:</h2>
         <ul className="list-disc list-inside space-y-1 mb-4">

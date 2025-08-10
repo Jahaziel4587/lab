@@ -63,7 +63,7 @@ const actualizarQS = async (nuevaURL: string) => {
 };
 
   return (
-    <div className="min-h-screen bg-white text-gray-900 px-6 py-20">
+    <div className="bg-black text-white p-8 rounded-lg max-w-4xl mx-auto">
       {/* Botón de regreso */}
       <div className="max-w-6xl mx-auto mb-6">
         <button
@@ -81,10 +81,21 @@ const actualizarQS = async (nuevaURL: string) => {
           alt="Lasermex"
           className="w-full h-auto max-w-md rounded mb-6 shadow"
         />
+<p className="mb-6">
+  La Lasermex Gazela es una cortadora láser de alta precisión diseñada para trabajos de grabado y corte en una amplia variedad de materiales. 
+  Es ideal para prototipado rápido, fabricación de piezas personalizadas y diseño industrial. 
+  Su diseño robusto y software intuitivo la convierten en una herramienta confiable para usuarios técnicos y creativos.
+</p>
 
-        <p className="mb-6">
-          La Lasermex es una cortadora láser de alta precisión, ideal para cortar y grabar materiales como acrílico, madera y MDF.
-        </p>
+<p className="mb-6">
+  Cuenta con un área de trabajo de 600 x 400 mm y un láser CO₂ de 60W, lo que le permite trabajar con materiales como acrílico, MDF, madera natural, cartón, cuero y tela. 
+  Ofrece una velocidad de corte de hasta 500 mm/s y una resolución de 1000 DPI, garantizando acabados precisos y profesionales.
+</p>
+
+<p className="mb-6">
+  No es apta para cortar metales ni plásticos que contengan cloro como el PVC. 
+  Su uso es común en fabricación de maquetas, corte de piezas para ensambles, grabado de logotipos y personalización de productos.
+</p>
 
         <h2 className="text-xl font-semibold mb-2">Materiales disponibles:</h2>
         <ul className="list-disc list-inside space-y-1 mb-4">

@@ -63,7 +63,7 @@ const actualizarQS = async (nuevaURL: string) => {
 };
 
   return (
-    <div className="min-h-screen bg-white text-gray-900 px-6 py-20">
+    <div className="bg-black text-white p-8 rounded-lg max-w-4xl mx-auto">
       {/* Botón de regreso */}
       <div className="max-w-6xl mx-auto mb-6">
         <button
@@ -83,8 +83,24 @@ const actualizarQS = async (nuevaURL: string) => {
         />
 
         <p className="mb-6">
-          La BambuLab es una...
-        </p>
+  La Bambu Lab X1 Carbon es una impresora 3D de alta velocidad y precisión diseñada para ofrecer un flujo de trabajo optimizado en entornos de prototipado y producción. 
+  Utiliza tecnología FDM (Modelado por Deposición Fundida) y cuenta con un sistema de movimiento avanzado basado en CoreXY, lo que le permite imprimir de forma rápida sin sacrificar calidad.
+</p>
+
+<p className="mb-6">
+  Posee un volumen de impresión de 256 x 256 x 256 mm y una velocidad máxima de hasta 500 mm/s, con aceleraciones de 20.000 mm/s². 
+  Incorpora un sistema de extrusión directa con boquillas intercambiables y es compatible con una amplia variedad de filamentos, incluyendo materiales reforzados con fibra de carbono y fibra de vidrio.
+</p>
+
+<p className="mb-6">
+  Su estructura cerrada y su sistema de control de temperatura permiten imprimir materiales técnicos como PA-CF, PETG, ABS y ASA, además de PLA y TPU. 
+  Incluye un sistema de nivelación automática por sensores LIDAR y cámara interna para monitoreo remoto en tiempo real.
+</p>
+
+<p className="mb-6">
+  Entre sus ventajas destacan la alta velocidad de impresión, excelente calidad de superficie incluso en geometrías complejas, compatibilidad con impresión multicolor y un ecosistema de software y hardware que facilita la producción continua.
+</p>
+
 
         <h2 className="text-xl font-semibold mb-2">Materiales disponibles:</h2>
         <ul className="list-disc list-inside space-y-1 mb-4">

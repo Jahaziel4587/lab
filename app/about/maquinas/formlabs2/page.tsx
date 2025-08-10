@@ -61,7 +61,7 @@ export default function formlabs2Page() {
   };
 
   return (
-    <div className="min-h-screen bg-white text-gray-900 px-6 py-20">
+       <div className="bg-black text-white p-8 rounded-lg max-w-4xl mx-auto">
       <div className="max-w-6xl mx-auto mb-6">
         <button
           onClick={() => window.history.back()}
@@ -81,8 +81,25 @@ export default function formlabs2Page() {
         />
 
         <p className="mb-6">
-          La Formlabs 2B es una impresora 3D de resina confiable, ideal para piezas con gran nivel de detalle. Utiliza tecnología SLA para fabricar modelos precisos en una amplia gama de resinas.
-        </p>
+  La Formlabs Form 2B es una impresora 3D de tecnología SLA (estereolitografía) diseñada para ofrecer piezas con un alto nivel de detalle y precisión. 
+  Utiliza resina líquida fotosensible que se solidifica capa por capa mediante un láser, logrando superficies lisas y acabados profesionales ideales para prototipado y aplicaciones funcionales.
+</p>
+
+<p className="mb-6">
+  Cuenta con un volumen de impresión de 145 x 145 x 175 mm y una resolución de capa que puede alcanzar las 25 micras. 
+  Su sistema de tanque de resina y plataforma de impresión es de fácil reemplazo, lo que agiliza el mantenimiento y permite cambiar rápidamente entre diferentes tipos de resina.
+</p>
+
+<p className="mb-6">
+  Es compatible con una amplia variedad de resinas desarrolladas por Formlabs, incluyendo resinas estándar, de ingeniería, biocompatibles y dentales. 
+  Esto la hace versátil para sectores como el diseño, la joyería, la medicina y la ingeniería de precisión.
+</p>
+
+<p className="mb-6">
+  Entre sus ventajas destacan la alta calidad de impresión, la consistencia en resultados, su interfaz intuitiva con pantalla táctil y conectividad por Wi-Fi, USB o Ethernet. 
+  Es una impresora confiable para proyectos que requieren acabados finos y tolerancias ajustadas.
+</p>
+
 
         <h2 className="text-xl font-semibold mb-2">Materiales disponibles:</h2>
         <ul className="list-disc list-inside space-y-1 mb-4">
