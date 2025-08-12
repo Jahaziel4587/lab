@@ -4,23 +4,13 @@ import Link from "next/link";
 import { useAuth } from "../../src/Context/AuthContext";
 import { FiUser } from "react-icons/fi";
 
-// Exportar fuera del componente
-export const nombresPorCorreo: { [correo: string]: string } = {
-  "jahaziel@bioana.com": "Jahaziel Garza",
-  "manuel@bioana.com": "Manuel García",
-  "claudia@bioana.com": "Claudia Quiroz",
-  "andrea@bioana.com": "Andrea Siller",
-};
 
    export default function ClientLayout({ children }: { children: React.ReactNode }) {
-  const { user, logout, isAdmin } = useAuth();
+  const { user, logout, isAdmin, displayName} = useAuth();
 
 
   // ✅ Esta línea ya está bien, porque `user` ya está definido arriba
-  const nombreUsuario =
-    user?.email && nombresPorCorreo[user.email]
-      ? nombresPorCorreo[user.email]
-      : user?.email ?? "";
+ const nombreUsuario = displayName || user?.email || "";
 
   const handleIconClick = async () => {
     if (user) {
