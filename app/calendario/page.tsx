@@ -22,7 +22,7 @@ import Link from "next/link";
 import { useAuth } from "@/src/Context/AuthContext";
 import { adminEmails } from "@/src/config/admins";
 import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
-import { nombresPorCorreo } from "@/app/components/Clientlayout";
+
 
 type Pedido = {
   id: string;
@@ -33,6 +33,7 @@ type Pedido = {
   status?: string;
   nombreCosto?: string;
   correoUsuario?: string;
+  nombreUsuario?: string;
 };
 
 export default function CalendarioPage() {
@@ -41,29 +42,44 @@ export default function CalendarioPage() {
   const { user } = useAuth();
   const hoy = new Date();
   const esAdmin = !!user?.email && adminEmails.includes(user.email);
+  const [nameByEmail, setNameByEmail] = useState<Record<string, string>>({});
 
   useEffect(() => {
-    const obtenerPedidos = async () => {
-      const q = query(collection(db, "pedidos"), orderBy("timestamp", "desc"));
-      const querySnapshot = await getDocs(q);
-      const pedidosData: Pedido[] = [];
+  const obtenerPedidos = async () => {
+    // 1️⃣ Obtener todos los usuarios para mapear email → nombre completo
+    const usuariosSnap = await getDocs(collection(db, "users"));
+    const nameByEmail: Record<string, string> = {};
+    usuariosSnap.forEach((docu) => {
+      const d = docu.data() as any;
+      if (d?.email) {
+        nameByEmail[d.email] = [d?.nombre, d?.apellido].filter(Boolean).join(" ") || d.email;
+      }
+    });
 
-      querySnapshot.forEach((docSnap) => {
-        const data = docSnap.data();
-        pedidosData.push({
-          id: docSnap.id,
-          titulo: data.titulo || "Sin título",
-          fechaEntregaReal: data.fechaEntregaReal || "",
-          fechaLimite: data.fechaLimite || "",
-          costo: data.costo || "",
-          nombreCosto: data.nombreCosto || "",
-          status: data.status || "enviado",
-          correoUsuario: data.correoUsuario || "",
-        });
+    // 2️⃣ Obtener pedidos
+    const q = query(collection(db, "pedidos"), orderBy("timestamp", "desc"));
+    const querySnapshot = await getDocs(q);
+    const pedidosData: Pedido[] = [];
+
+    querySnapshot.forEach((docSnap) => {
+      const data = docSnap.data();
+      pedidosData.push({
+        id: docSnap.id,
+        titulo: data.titulo || "Sin título",
+        fechaEntregaReal: data.fechaEntregaReal || "",
+        fechaLimite: data.fechaLimite || "",
+        costo: data.costo || "",
+        nombreCosto: data.nombreCosto || "",
+        status: data.status || "enviado",
+        correoUsuario: data.correoUsuario || "",
+        // 👇 Nuevo: nombre completo del usuario
+        nombreUsuario: nameByEmail[data.correoUsuario] || data.correoUsuario || "",
       });
+    });
 
-      setPedidos(pedidosData);
-    };
+    setPedidos(pedidosData);
+  };
+
 
     obtenerPedidos();
 
@@ -175,7 +191,7 @@ export default function CalendarioPage() {
                   <tr key={p.id} className="border-t">
                     <td className="px-4 py-2">{p.titulo}</td>
                     <td className="px-4 py-2">
-                      {nombresPorCorreo[p.correoUsuario || ""] || p.correoUsuario || "Sin información"}
+                      {p.nombreUsuario || p.correoUsuario|| "Sin información"}
                     </td>
                     <td className="px-4 py-2">{p.fechaLimite || "No definida"}</td>
                     <td className="px-4 py-2">
