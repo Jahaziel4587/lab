@@ -153,7 +153,7 @@ export default function CalendarioPage() {
                 <div className="text-xs mt-1 space-y-1">
                   {pedidosDelDia.map((p) => (
                     <div key={p.id} className="truncate">
-                      {esAdmin ? (
+                      {isAdmin ? (
                         <Link
                           href={`/solicitudes/listado/${p.id}`}
                           className="text-blue-600 hover:underline"
