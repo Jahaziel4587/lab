@@ -16,8 +16,8 @@ export default function UltimakerPage() {
   const [nuevoMaterial, setNuevoMaterial] = useState("");
   const [qsURL, setQsURL] = useState("");
   const { user } = useAuth();
-  const esAdmin = user?.email === "jahaziel@bioana.com" || user?.email === "manuel@bioana.com";
-
+  //const esAdmin = user?.email === "jahaziel@bioana.com" || user?.email === "manuel@bioana.com";
+const {isAdmin} = useAuth();
   const fetchData = async () => {
   const ref = doc(db, "maquinas", "ultimaker");
   const snap = await getDoc(ref);
@@ -109,7 +109,7 @@ export default function UltimakerPage() {
           {materiales.map((mat, index) => (
             <li key={index} className="flex justify-between items-center">
               {mat}
-              {esAdmin && (
+              {isAdmin && (
                 <button
                   onClick={() => eliminarMaterial(index)}
                   className="text-red-600 ml-2 hover:text-red-800"
@@ -121,7 +121,7 @@ export default function UltimakerPage() {
           ))}
         </ul>
 
-        {esAdmin && (
+        {isAdmin && (
           <div className="flex items-center gap-2 mb-6">
             <input
               type="text"
@@ -153,7 +153,7 @@ export default function UltimakerPage() {
           <p>No hay guía técnica disponible.</p>
         )}
 
-        {esAdmin && (
+        {isAdmin && (
           <div className="mt-4">
             <input
               type="text"
