@@ -43,6 +43,8 @@ export default function CalendarioPage() {
   const hoy = new Date();
   const esAdmin = !!user?.email && adminEmails.includes(user.email);
   const [nameByEmail, setNameByEmail] = useState<Record<string, string>>({});
+  const {isAdmin} = useAuth();
+
 
   useEffect(() => {
   const obtenerPedidos = async () => {
@@ -170,7 +172,7 @@ export default function CalendarioPage() {
         })()}
       </div>
 
-      {esAdmin && (
+      {isAdmin && (
         <div className="mt-10">
           <h2 className="text-lg font-semibold mb-4">Todos los pedidos</h2>
           <div className="overflow-x-auto">
