@@ -32,15 +32,22 @@ import { FiUser } from "react-icons/fi";
         <Link href="/" className="font-bold text-sm tracking-wider hover:underline">
           LABORATORIO DE PROTOTIPADO
         </Link>
-
+  
         <div className="flex gap-6 items-center text-sm font-light">
           <Link href="/calendario" className="hover:underline">Calendario</Link>
           <Link href="/about" className="hover:underline">Información</Link>
           <Link href="/collection" className="hover:underline">Colección</Link>
           <Link href="/solicitudes" className="hover:underline">Mis solicitudes</Link>
           <Link href="/hacer-pedido/proyecto" className="hover:underline">Hacer pedido</Link>
-          
-        
+          {isAdmin && (
+            <Link
+              href="/cotizador"
+              className="hover:underline"
+            >
+              Cotizador
+            </Link>
+          )}
+      
           {user && (
             <span className="text-xs font-semibold text-white mr-1">
               {nombreUsuario}

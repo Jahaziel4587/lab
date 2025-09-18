@@ -4,13 +4,36 @@ import { useRouter } from "next/navigation";
 import { FiArrowLeft, FiArrowRight } from "react-icons/fi";
 
 const proyectos = [
-  { nombre: "MUV", imagen: "/MUV.jpg" },
-  { nombre: "Ocumetics", imagen: "/ocumetics.jpg" },
-  { nombre: "Solvein", imagen: "/solvein.jpg" },
-  { nombre: "AGMI", imagen: "/AGMI.jpg" },
-  { nombre: "XSONXS", imagen: "/XSONX.png" },
-  { nombre: "Lumenex", imagen: "/Lumenex.jpeg" },
-  { nombre: "Otro", imagen: "/otro.jpg" }, // puedes cambiar la imagen si quieres
+  { nombre: "001.Ocumetics", imagen: "/ocumetics.jpg" },
+  { nombre: "002.Labella", imagen: "/" },
+  { nombre: "003.XSONXS", imagen: "/XSONX.png" },
+  { nombre: "004.Solvein", imagen: "/solvein.jpg" },
+  { nombre: "005.XSONXS wound heads", imagen: "/XSONX.png" },
+  { nombre: "006.AGMI", imagen: "/AGMI.jpg" },
+  { nombre: "007.LumeNXT", imagen: "/Lumenex.jpeg" },
+  { nombre: "008.Panter", imagen: "/" },
+  { nombre: "009.Recopad", imagen: "/" },
+  { nombre: "010.Juno", imagen: "/" },
+  { nombre: "012.Neurocap", imagen: "/" },
+  { nombre: "013.T-EZ", imagen: "/" },
+  { nombre: "014.QIK Cap handle", imagen: "/" },
+  { nombre: "015.QIK Cap disponible", imagen: "/" },
+  { nombre: "016.Portacad shield", imagen: "/" },
+  { nombre: "027.XSCRUB", imagen: "/" },
+  { nombre: "029.Zipstich", imagen: "/" },
+  { nombre: "030.MUV", imagen: "/MUV.jpg" },
+  { nombre: "E001.Avarie Menstrual Pads", imagen: "/" },
+  { nombre: "E002.Hero Cap", imagen: "/" },
+  { nombre: "E003.Injectable Dermis", imagen: "/" },
+  { nombre: "E004.DiViDiaper", imagen: "/" },
+  { nombre: "E006.Structural Heart", imagen: "/" },
+  { nombre: "E007.Leg wrap", imagen: "/" },
+  { nombre: "E009.InjectMate", imagen: "/" },
+  { nombre: "E010.Orthodoxo", imagen: "/" },
+  { nombre: "E011.Orthodoxo Anclas", imagen: "/" },
+  { nombre: "E012.Falcon View", imagen: "/" },
+  { nombre: "E013.Birchconcepts", imagen: "/" },
+  { nombre: "Otro", imagen: "/otro.jpg" }, 
 ];
 
 export default function ProyectoPage() {
