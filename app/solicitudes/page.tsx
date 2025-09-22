@@ -9,13 +9,44 @@ import Image from "next/image";
 import { FiArrowRight } from "react-icons/fi";
 
 const proyectosImagenes: { [key: string]: string } = {
-  MUV: "/MUV.jpg",
-  Ocumetics: "/ocumetics.jpg",
-  Solvein: "/solvein.jpg",
+  
+  "001.Ocumetics": "/ocumetics.jpg",
+  "002.Labella": "/" ,
+  "003.XSONXS": "/XSONX.png" ,
+  "004.Solvein": "/solvein.jpg",
+  "005.XSONXS wound heads": "/XSONX.png" ,
+  "006.AGMI": "/AGMI.jpg" ,
+  "007.LumeNXT": "/Lumenex.jpeg" ,
+  "008.Panter": "/" ,
+  "009.Recopad": "/" ,
+  "010.Juno": "/" ,
+  "012.Neurocap": "/" ,
+  "013.T-EZ": "/" ,
+  "014.QIK Cap handle": "/" ,
+  "015.QIK Cap disponible": "/" ,
+  "016.Portacad shield": "/" ,
+  "027.XSCRUB": "/" ,
+  "029.Zipstich": "/" ,
+  "030.MUV": "/MUV.jpg" ,
+  "E001.Avarie Menstrual Pads": "/" ,
+  "E002.Hero Cap": "/" ,
+  "E003.Injectable Dermis": "/" ,
+  "E004.DiViDiaper": "/" ,
+  "E006.Structural Heart": "/" ,
+  "E007.Leg wrap": "/" ,
+  "E009.InjectMate": "/" ,
+  "E010.Orthodoxo": "/" ,
+  "E011.Orthodoxo Anclas": "/" ,
+  "E012.Falcon View": "/" ,
+  "E013.Birchconcepts": "/" ,
+
+  /*Solvein: "/solvein.jpg",
   AGMI: "/AGMI.jpg",
   XSONXS: "/XSONX.png",
   Lumenex: "/Lumenex.jpeg",
   Otro: "/otro.jpg",
+  MUV: "/MUV.jpg",
+*/
 };
 
 export default function SolicitudesPage() {
