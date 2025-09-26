@@ -6,9 +6,8 @@ import { FiArrowLeft, FiArrowRight } from "react-icons/fi";
 
 // Diccionario de materiales por máquina
 const MATERIALES_POR_MAQUINA: Record<string, string[]> = {
-  "Filamento": ["PLA", "Otro"],
-  "BambuLab": ["PLA", "Otro"],
-  "Resina": [
+  "Filamento": ["PLA 2.85mm", "PLA 1.75mm", "Otro"],
+  "Resina Formlabs 3B": [
     "Rigid 10K",
     "Black",
     "BioMed Amber",
@@ -19,7 +18,7 @@ const MATERIALES_POR_MAQUINA: Record<string, string[]> = {
     "Flexible 80A",
     "Otro",
   ],
-  "Formlabs 3B": [
+  "Resina Formlabs 2B": [
     "Rigid 10K",
     "Black",
     "BioMed Amber",
@@ -30,7 +29,7 @@ const MATERIALES_POR_MAQUINA: Record<string, string[]> = {
     "Flexible 80A",
     "Otro",
   ],
-  "Laser CO2": [
+  "Láser CO2": [
     "Acrílico 2mm",
     "Acrílico 3mm",
     "Acrílico 4mm",

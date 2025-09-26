@@ -8,7 +8,10 @@ import { useRouter } from "next/navigation";
 import { FiX, FiUpload, FiVideo } from "react-icons/fi";
 
 export default function EspecificacionesPage() {
+  // Sufijo editable por el usuario (lo que va DESPUÉS del prefijo no editable)
   const [titulo, setTitulo] = useState("");
+  const [prefijoTitulo, setPrefijoTitulo] = useState<string>(""); // p. ej. "FL3B_AB12_"
+
   const [explicacion, setExplicacion] = useState("");
   const [fecha, setFecha] = useState("");
   const [archivos, setArchivos] = useState<File[]>([]);
@@ -23,6 +26,83 @@ export default function EspecificacionesPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const router = useRouter();
 
+  // ---------- Helpers: normalizar texto y resolver abreviación ----------
+  const normalize = (s: string) =>
+    (s || "")
+      .toString()
+      .trim()
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, ""); // quita acentos
+
+  const ABBR_MAP: Record<string, string> = {
+    "pla 2.85mm": "UMKR",
+    "pla 1.75mm": "BML",
+    "resina formlabs 3b": "FL3B",
+    "resina formlabs 2b": "FL2B",
+    "laser co2": "Láser",
+    "fresadora cnc": "CNC",
+    "necesidad": "Need",
+    "libre": "FXT",
+  };
+
+  function resolveAbbrFromValue(value: string | null): string | null {
+    if (!value) return null;
+    const key = normalize(value);
+    // claves tal cual
+    if (ABBR_MAP[key]) return ABBR_MAP[key];
+
+    // intentos suaves con "incluye"
+    if (key.includes("2.85") && key.includes("pla")) return "UMKR";
+    if (key.includes("1.75") && key.includes("pla")) return "BML";
+    if (key.includes("formlabs") && key.includes("3b")) return "FL3B";
+    if (key.includes("formlabs") && key.includes("2b")) return "FL2B";
+    if (key.includes("laser") || key.includes("lazer") || key.includes("láser")) return "Láser";
+    if (key.includes("cnc")) return "CNC";
+    if (key.includes("necesidad") || key === "need") return "Need";
+    if (key.includes("libre") || key.includes("fixture") || key === "fxt") return "FXT";
+
+    return null;
+  }
+
+  function getProyectoCode(raw: string | null): string {
+    const clean = (raw || "")
+      .toString()
+      .replace(/[^A-Za-z0-9]/g, "") // solo alfanumérico
+      .toUpperCase()
+      .slice(0, 4);
+    return clean || "PRJ0";
+  }
+
+  function computePrefijo(): string {
+    // Leemos posibles selecciones guardadas en pasos previos
+    const tecnica = localStorage.getItem("tecnica");
+    const material = localStorage.getItem("material");
+    const servicio = localStorage.getItem("servicio");
+    const maquina = localStorage.getItem("maquina"); // por si acaso existiera
+
+    // Prioridad: técnica > material > servicio > máquina
+    const abbrCandidate =
+      resolveAbbrFromValue(tecnica) ||
+      resolveAbbrFromValue(material) ||
+      resolveAbbrFromValue(servicio) ||
+      resolveAbbrFromValue(maquina) ||
+      "GEN";
+
+    const proyecto = localStorage.getItem("proyecto");
+    const code = getProyectoCode(proyecto);
+
+    return `${abbrCandidate}_${code}_`;
+  }
+
+  // Calcular el prefijo al montar (y cuando cambien dependencias observables)
+  useEffect(() => {
+    setPrefijoTitulo(computePrefijo());
+    // Nota: si en esta misma página cambiases tecnica/material/servicio en localStorage
+    // y quisieras recomputar dinámicamente, podrías escuchar a "storage" o agregar controles aquí.
+  }, []);
+
+  // -------------------- Archivos y video --------------------
   const handleSelectFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     const nuevosArchivos = Array.from(e.target.files || []);
     setArchivos((prev) => [...prev, ...nuevosArchivos]);
@@ -38,9 +118,15 @@ export default function EspecificacionesPage() {
     fileInputRef.current?.click();
   };
 
+  // -------------------- Upload / Guardado --------------------
   const handleUploadAll = async () => {
-    if (!titulo) return alert("Agrega un título para el pedido.");
+    if (!titulo) return alert("Agrega la parte final del título del pedido.");
     if (!fecha) return alert("Selecciona una fecha de entrega.");
+
+    const tituloFinal = `${prefijoTitulo}${titulo}`;
+    // sanitizar para carpeta de Storage
+    const carpetaTitulo = tituloFinal.replace(/[\/\\#?]/g, "-");
+
     setSubiendo(true);
 
     try {
@@ -53,7 +139,7 @@ export default function EspecificacionesPage() {
       const archivosSubidos: string[] = [];
 
       for (const archivo of archivos) {
-        const archivoRef = ref(storage, `pedidos/${titulo}/${archivo.name}`);
+        const archivoRef = ref(storage, `pedidos/${carpetaTitulo}/${archivo.name}`);
         await uploadBytes(archivoRef, archivo);
         const url = await getDownloadURL(archivoRef);
         archivosSubidos.push(url);
@@ -61,14 +147,14 @@ export default function EspecificacionesPage() {
 
       let urlDelVideo = "";
       if (videoFile) {
-        const videoStorageRef = ref(storage, `pedidos/${titulo}/${videoFile.name}`);
+        const videoStorageRef = ref(storage, `pedidos/${carpetaTitulo}/${videoFile.name}`);
         await uploadBytes(videoStorageRef, videoFile);
         urlDelVideo = await getDownloadURL(videoStorageRef);
         if (!archivos.includes(videoFile)) archivosSubidos.push(urlDelVideo);
       }
 
       await addDoc(collection(db, "pedidos"), {
-        titulo,
+        titulo: tituloFinal, // Prefijo + Sufijo
         descripcion: explicacion,
         fechaLimite: fecha,
         proyecto,
@@ -92,6 +178,7 @@ export default function EspecificacionesPage() {
     setSubiendo(false);
   };
 
+  // -------------------- Grabación de video --------------------
   const iniciarGrabacion = async () => {
     const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
     const recorder = new MediaRecorder(mediaStream);
@@ -148,14 +235,27 @@ export default function EspecificacionesPage() {
       <h1 className="text-xl font-bold text-center text-white">Especificaciones del pedido</h1>
 
       <div className="bg-white p-4 rounded-xl shadow space-y-4">
+        {/* TÍTULO COMPUESTO: Prefijo fijo + Sufijo editable */}
         <div>
           <label className="block font-medium text-black mb-1">Título del pedido</label>
-          <input
-            type="text"
-            value={titulo}
-            onChange={(e) => setTitulo(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded text-black"
-          />
+          <div className="flex items-stretch w-full border border-gray-300 rounded overflow-hidden">
+            <span
+              className="px-3 py-2 bg-gray-100 text-gray-700 border-r border-gray-300 select-none whitespace-nowrap"
+              title="Prefijo automático (no editable)"
+            >
+              {prefijoTitulo || "GEN_PRJ0_"}
+            </span>
+            <input
+              type="text"
+              value={titulo}
+              onChange={(e) => setTitulo(e.target.value)}
+              className="flex-1 px-3 py-2 text-black outline-none"
+              placeholder="Escribe aquí la parte final del título…"
+            />
+          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            Se guardará como: <strong>{(prefijoTitulo || "GEN_PRJ0_") + (titulo || "…")}</strong>
+          </p>
         </div>
 
         <div>
@@ -234,11 +334,7 @@ export default function EspecificacionesPage() {
                     </button>
                   </div>
                   {file.type.startsWith("video") && (
-                    <video
-                      controls
-                      src={URL.createObjectURL(file)}
-                      className="mt-2 rounded"
-                    />
+                    <video controls src={URL.createObjectURL(file)} className="mt-2 rounded" />
                   )}
                 </li>
               ))}
