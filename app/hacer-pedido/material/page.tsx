@@ -6,7 +6,7 @@ import { FiArrowLeft, FiArrowRight } from "react-icons/fi";
 
 // Diccionario de materiales por máquina
 const MATERIALES_POR_MAQUINA: Record<string, string[]> = {
-  "Filamento": ["PLA 2.85mm", "PLA 1.75mm", "Otro"],
+  "Filamento": ["PLA 2.85mm (Ultimaker 2+)", "PLA 1.75mm (BambuLab)", "Otro"],
   "Resina Formlabs 3B": [
     "Rigid 10K",
     "Black",
