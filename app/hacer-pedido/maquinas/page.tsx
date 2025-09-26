@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { FiArrowLeft, FiArrowRight } from "react-icons/fi";
 
 const MAQUINAS = [
-  { nombre: "Laser CO2", imagen: "/laser.jpg", servicio: "corte" },
+  { nombre: "Láser CO2", imagen: "/laser.jpg", servicio: "corte" },
   { nombre: "Fresadora CNC", imagen: "/corte.jpg", servicio: "corte" },
   { nombre: "Filamento", imagen: "/filamentos.jpg", servicio: "impresion" },
   { nombre: "Resina Formlabs 3B", imagen: "/resinas.png", servicio: "impresion" },
