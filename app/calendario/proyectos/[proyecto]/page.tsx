@@ -1,10 +1,10 @@
 import ProyectoCalendarioClient from "./ProyectoCalendarioClient";
 
-export default function Page({
+export default async function Page({
   params,
 }: {
-  params: { proyecto: string };
+  params: Promise<{ proyecto: string }>;
 }) {
-  const proyecto = decodeURIComponent(params.proyecto);
-  return <ProyectoCalendarioClient proyecto={proyecto} />;
+  const { proyecto } = await params; // 👈 desenrollamos el Promise
+  return <ProyectoCalendarioClient proyecto={decodeURIComponent(proyecto)} />;
 }
