@@ -76,16 +76,23 @@ export default function EspecificacionesPage() {
 
   function computePrefijo(): string {
     // Leemos posibles selecciones guardadas en pasos previos
+     const servicio = localStorage.getItem("servicio");
     const tecnica = localStorage.getItem("tecnica");
     const material = localStorage.getItem("material");
-    const servicio = localStorage.getItem("servicio");
     const maquina = localStorage.getItem("maquina"); // por si acaso existiera
+
+const sNorm = normalize(servicio || "");
+if (sNorm.includes("necesidad") || sNorm === "need") {
+  const proyecto = localStorage.getItem("proyecto");
+  const code = getProyectoCode(proyecto);
+  return `Need_${code}_`; // retorna aquí dentro de computePrefijo()
+}
 
     // Prioridad: técnica > material > servicio > máquina
     const abbrCandidate =
+      resolveAbbrFromValue(servicio) ||
       resolveAbbrFromValue(tecnica) ||
       resolveAbbrFromValue(material) ||
-      resolveAbbrFromValue(servicio) ||
       resolveAbbrFromValue(maquina) ||
       "GEN";
 
@@ -119,15 +126,21 @@ export default function EspecificacionesPage() {
   };
 
   // -------------------- Upload / Guardado --------------------
-  const handleUploadAll = async () => {
-    if (!titulo) return alert("Agrega la parte final del título del pedido.");
-    if (!fecha) return alert("Selecciona una fecha de entrega.");
+ const handleUploadAll = async () => {
+  if (!titulo) return alert("Agrega la parte final del título del pedido.");
+  if (!fecha) return alert("Selecciona una fecha de entrega.");
 
-    const tituloFinal = `${prefijoTitulo}${titulo}`;
-    // sanitizar para carpeta de Storage
-    const carpetaTitulo = tituloFinal.replace(/[\/\\#?]/g, "-");
+  // 🔁 Recalcular el prefijo para evitar usar uno viejo
+  const prefijo = computePrefijo();
+  setPrefijoTitulo(prefijo); // opcional: refleja el cambio en la UI
 
-    setSubiendo(true);
+  const tituloFinal = `${prefijo}${titulo}`;
+
+  // 🧹 Sanitizar para usarlo como carpeta en Storage
+  const carpetaTitulo = tituloFinal.replace(/[\/\\#?]/g, "-");
+
+  setSubiendo(true);
+
 
     try {
       const proyecto = localStorage.getItem("proyecto") || "Sin proyecto";

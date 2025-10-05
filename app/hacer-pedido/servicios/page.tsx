@@ -8,7 +8,7 @@ const servicios = [
   { nombre: "Impresion", imagen: "/impresion3D.jpg" },
   { nombre: "Fixture", imagen: "/fixture.jpg" },
   { nombre: "Fixture no diseñado", imagen: "/libre.png" },
-  { nombre: "Necesidad", imagen: "/fixture-no-diseñado.jpg" }, // nueva tarjeta
+  { nombre: "Necesidad", imagen: "/fixture-no-diseñado.jpg" },
 ];
 
 export default function ServiciosPage() {
@@ -16,18 +16,25 @@ export default function ServiciosPage() {
 
   const seleccionarServicio = (nombre: string) => {
     if (nombre === "Necesidad") {
+      // Guardar el servicio y limpiar residuos que luego “contaminan”
+      localStorage.setItem("servicio", "Necesidad");
+      localStorage.removeItem("maquina");
+      localStorage.removeItem("material");
+      localStorage.removeItem("tecnica");
       router.push("/hacer-pedido/especificaciones");
       return;
     }
 
+    // Para esta tarjeta queremos que el servicio quede como "Libre"
     const key = nombre === "Fixture no diseñado" ? "Fixture" : nombre;
     localStorage.setItem("servicio", key);
+
+
     router.push("/hacer-pedido/maquinas");
   };
 
   return (
     <div>
-      {/* Botón de regreso */}
       <button
         onClick={() => router.push("/hacer-pedido/proyecto")}
         className="mb-4 bg-white text-black px-4 py-2 rounded flex items-center gap-2 hover:bg-gray-200"
