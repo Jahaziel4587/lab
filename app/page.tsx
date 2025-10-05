@@ -23,12 +23,7 @@ export default function Home() {
       className="w-[700px] mb-4"
     />
 
-    {/* Guía rápida */}
-    <img
-      src="/guia_rapida.jpeg"
-      alt="Guía rápida"
-      className="w-[400px] mb-4"
-    />
+    
   </div>
 
   {/* Texto y botón (debajo) */}
