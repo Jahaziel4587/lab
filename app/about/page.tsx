@@ -19,7 +19,7 @@ export default function AboutPage() {
               className="object-cover w-full h-80"
             />
             <div className="p-4 text-center">
-              <h2 className="text-xl font-semibold text-black">Máquinas</h2>
+              <h2 className="text-xl font-semibold text-black">Equipos</h2>
               <p className="text-sm text-gray-600 mt-1">Ver disponibles</p>
             </div>
           </div>
