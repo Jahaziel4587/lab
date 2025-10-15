@@ -19,7 +19,7 @@ export default function InventarioPage() {
         <Link href="/inventario/equipos" className="cursor-pointer">
           <div className="w-64 rounded-xl overflow-hidden shadow-lg transform hover:scale-105 transition bg-white">
             <Image
-              src="/equipos.jfif"
+              src="/Herramientas.jpg"
               alt="Equipos y herramientas"
               width={300}
               height={400}
@@ -39,7 +39,7 @@ export default function InventarioPage() {
         <Link href="/inventario/consumibles" className="cursor-pointer">
           <div className="w-64 rounded-xl overflow-hidden shadow-lg transform hover:scale-105 transition bg-white">
             <Image
-              src="/servicio.jpg"
+              src="/consumibles.jpg"
               alt="Consumibles"
               width={300}
               height={400}

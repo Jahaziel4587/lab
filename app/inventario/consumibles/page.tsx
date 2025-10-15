@@ -136,7 +136,7 @@ export default function ConsumiblesPage() {
               <p className="text-sm text-gray-600">Cargando…</p>
             ) : items.length === 0 ? (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-                {isAdmin && <AddCard onSave={addItem} />}
+                
               </div>
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
@@ -151,7 +151,7 @@ export default function ConsumiblesPage() {
                   />
                 ))}
 
-                {isAdmin && <AddCard onSave={addItem} />}
+                
               </div>
             )}
           </div>
@@ -193,19 +193,7 @@ function ConsumibleCard({
   // Contenido de la tarjeta
   const Inner = (
     <div className="relative bg-white text-black border rounded-xl overflow-hidden shadow-sm">
-      {/* Botón borrar (solo admin) */}
-      {isAdmin && (
-        <button
-          onClick={(e) => {
-            e.preventDefault(); // en caso de estar dentro de Link
-            if (confirm("¿Eliminar este consumible?")) onDelete();
-          }}
-          className="absolute right-2 top-2 w-6 h-6 rounded-full bg-white border text-gray-700 hover:bg-gray-100 text-xs z-10"
-          title="Eliminar"
-        >
-          ×
-        </button>
-      )}
+      
 
       {/* Título */}
       <div className="px-3 pt-2 pr-8">
@@ -242,17 +230,7 @@ function ConsumibleCard({
                 {typeof item.cantidad === "number" ? item.cantidad : "—"}
               </span>
             </div>
-            {isAdmin && (
-              <button
-                onClick={(e) => {
-                  e.preventDefault();
-                  setEditingCantidad(true);
-                }}
-                className="text-blue-600 hover:underline"
-              >
-                Editar
-              </button>
-            )}
+            
           </div>
         ) : (
           <div className="mt-2 space-y-2">
@@ -303,114 +281,4 @@ function ConsumibleCard({
   return <div>{Inner}</div>;
 }
 
-function AddCard({
-  onSave,
-}: {
-  onSave: (payload: { titulo: string; lugar: string; cantidad: number; imagen: File }) => Promise<void>;
-}) {
-  const [open, setOpen] = useState(false);
-  const [titulo, setTitulo] = useState("");
-  const [lugar, setLugar] = useState("");
-  const [cantidad, setCantidad] = useState<string>("");
-  const [imagen, setImagen] = useState<File | null>(null);
-  const [saving, setSaving] = useState(false);
 
-  const reset = () => {
-    setTitulo("");
-    setLugar("");
-    setCantidad("");
-    setImagen(null);
-    setOpen(false);
-    setSaving(false);
-  };
-
-  const handleSave = async () => {
-    if (!titulo.trim() || !imagen || cantidad === "") {
-      alert("Completa título, imagen y cantidad.");
-      return;
-    }
-    const cant = Number(cantidad);
-    if (Number.isNaN(cant) || cant < 0) {
-      alert("Cantidad inválida.");
-      return;
-    }
-    try {
-      setSaving(true);
-      await onSave({ titulo, lugar, cantidad: cant, imagen });
-      reset();
-    } catch (e) {
-      console.error(e);
-      setSaving(false);
-      alert("Error al guardar.");
-    }
-  };
-
-  if (!open) {
-    return (
-      <button
-        onClick={() => setOpen(true)}
-        className="h-full min-h-40 bg-white text-black border rounded-xl flex flex-col items-center justify-center hover:shadow-sm"
-        title="Agregar consumible"
-      >
-        <div className="w-12 h-12 rounded-full border flex items-center justify-center text-2xl">
-          +
-        </div>
-        <span className="mt-2 text-xs text-gray-600">Agregar consumible</span>
-      </button>
-    );
-  }
-
-  return (
-    <div className="bg-white text-black border rounded-xl p-3 shadow-sm">
-      <h4 className="text-sm font-semibold mb-2">Nuevo consumible</h4>
-      <div className="space-y-2">
-        <input
-          type="text"
-          placeholder='Ej. "C1.Papel.Lija 400"'
-          className="w-full border rounded px-3 py-2 text-sm"
-          value={titulo}
-          onChange={(e) => setTitulo(e.target.value)}
-        />
-        <input
-          type="text"
-          placeholder="Lugar (ej. Gaveta A-1)"
-          className="w-full border rounded px-3 py-2 text-sm"
-          value={lugar}
-          onChange={(e) => setLugar(e.target.value)}
-        />
-        <input
-          type="number"
-          min={0}
-          placeholder="Cantidad"
-          className="w-full border rounded px-3 py-2 text-sm"
-          value={cantidad}
-          onChange={(e) => setCantidad(e.target.value)}
-        />
-        <input
-          type="file"
-          accept="image/*"
-          className="w-full text-sm"
-          onChange={(e) => setImagen(e.target.files?.[0] || null)}
-        />
-
-        <div className="flex gap-2 justify-end pt-1">
-          <button
-            onClick={reset}
-            className="px-3 py-2 rounded border text-sm hover:bg-gray-50"
-            type="button"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={handleSave}
-            disabled={saving}
-            className="px-3 py-2 rounded bg-black text-white text-sm hover:opacity-90 disabled:opacity-50"
-            type="button"
-          >
-            {saving ? "Guardando…" : "Guardar"}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
