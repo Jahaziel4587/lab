@@ -11,6 +11,8 @@ import {
   where,
   updateDoc,
   doc,
+  getDoc,
+  setDoc,
 } from "firebase/firestore";
 import {
   ref as storageRef,
@@ -31,10 +33,26 @@ type Pedido = {
   nombreCosto?: string;
 };
 
+type Usuario = {
+  email: string;
+  nombre: string;
+  uid?: string;
+};
+
 export default function ProyectoCalendarioClient({ proyecto }: { proyecto: string }) {
   const { isAdmin } = useAuth();
+
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [nameByEmail, setNameByEmail] = useState<Record<string, string>>({});
+
+  // --- Compartir proyecto ---
+  const [usuarios, setUsuarios] = useState<Usuario[]>([]);
+  const [seleccionados, setSeleccionados] = useState<Set<string>>(new Set());
+  const [busqueda, setBusqueda] = useState("");
+  const [abiertoCompartir, setAbiertoCompartir] = useState(false);
+  const [guardandoShare, setGuardandoShare] = useState(false);
+  const [cargandoShare, setCargandoShare] = useState(true);
+  // --------------------------
 
   // Helpers
   const actualizarCampo = async (id: string, campo: string, valor: string) => {
@@ -56,23 +74,36 @@ export default function ProyectoCalendarioClient({ proyecto }: { proyecto: strin
     await actualizarCampo(id, "nombreCosto", file.name);
   };
 
-  // Cargar usuarios (mapa nombre completo) + pedidos del proyecto
+  // Cargar usuarios (mapa nombre->email) + pedidos del proyecto + sharing del proyecto
   useEffect(() => {
     if (!isAdmin) return;
 
     const cargar = async () => {
-      // 1) Mapear email -> nombre completo desde "users"
+      // 1) Usuarios
       const usuariosSnap = await getDocs(collection(db, "users"));
       const map: Record<string, string> = {};
+      const listaUsuarios: Usuario[] = [];
+
       usuariosSnap.forEach((docu) => {
         const u = docu.data() as any;
         if (u?.email) {
-          map[u.email] = [u?.nombre, u?.apellido].filter(Boolean).join(" ") || u.email;
+          const nombre =
+            [u?.nombre, u?.apellido].filter(Boolean).join(" ") ||
+            u?.displayName ||
+            u.email;
+          map[u.email] = nombre;
+          listaUsuarios.push({
+            email: u.email,
+            nombre,
+            uid: u?.uid,
+          });
         }
       });
-      setNameByEmail(map);
 
-      // 2) Traer pedidos del proyecto
+      setNameByEmail(map);
+      setUsuarios(listaUsuarios.sort((a, b) => a.nombre.localeCompare(b.nombre)));
+
+      // 2) Pedidos del proyecto
       const qPed = query(collection(db, "pedidos"), where("proyecto", "==", proyecto));
       const snap = await getDocs(qPed);
 
@@ -87,7 +118,7 @@ export default function ProyectoCalendarioClient({ proyecto }: { proyecto: strin
           fechaLimite: d.fechaLimite || "",
           status: d.status || "enviado",
           correoUsuario: d.correoUsuario || "",
-          // 👇 usa el mismo formato de nombre que en el calendario general
+          // usa el mismo formato de nombre que en el calendario general
           nombreUsuario: map[d.correoUsuario] || d.nombreUsuario || d.correoUsuario || "",
           costo: d.costo || "",
           nombreCosto: d.nombreCosto || "",
@@ -99,6 +130,19 @@ export default function ProyectoCalendarioClient({ proyecto }: { proyecto: strin
           .filter((p) => p.fechaEntregaReal && p.fechaEntregaReal.trim() !== "")
           .sort((a, b) => (a.fechaEntregaReal! < b.fechaEntregaReal! ? -1 : 1))
       );
+
+      // 3) Estado de compartición del proyecto
+      setCargandoShare(true);
+      const shareRef = doc(db, "proyectos_shares", proyecto);
+      const shareSnap = await getDoc(shareRef);
+      if (shareSnap.exists()) {
+        const datos = shareSnap.data() as any;
+        const arr: string[] = Array.isArray(datos?.users) ? datos.users : [];
+        setSeleccionados(new Set(arr));
+      } else {
+        setSeleccionados(new Set());
+      }
+      setCargandoShare(false);
     };
 
     cargar();
@@ -114,6 +158,43 @@ export default function ProyectoCalendarioClient({ proyecto }: { proyecto: strin
           .pop()
       : "");
 
+  const toggleSeleccion = (email: string) => {
+    setSeleccionados((prev) => {
+      const nuevo = new Set(prev);
+      if (nuevo.has(email)) nuevo.delete(email);
+      else nuevo.add(email);
+      return nuevo;
+    });
+  };
+
+  const guardarCompartir = async () => {
+    try {
+      setGuardandoShare(true);
+      const shareRef = doc(db, "proyectos_shares", proyecto);
+      await setDoc(
+        shareRef,
+        {
+          users: Array.from(seleccionados),
+          actualizadoEn: new Date().toISOString(),
+        },
+        { merge: true }
+      );
+      setAbiertoCompartir(false);
+    } finally {
+      setGuardandoShare(false);
+    }
+  };
+
+  const filtrados = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    if (!q) return usuarios;
+    return usuarios.filter(
+      (u) =>
+        u.nombre.toLowerCase().includes(q) ||
+        u.email.toLowerCase().includes(q)
+    );
+  }, [usuarios, busqueda]);
+
   if (!isAdmin) {
     return (
       <div className="max-w-5xl mx-auto bg-white text-black p-6 rounded-xl shadow">
@@ -125,12 +206,26 @@ export default function ProyectoCalendarioClient({ proyecto }: { proyecto: strin
 
   return (
     <div className="max-w-6xl mx-auto bg-white text-black p-6 rounded-xl shadow space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-3">
         <Link href="/calendario" className="text-blue-600 hover:underline">← Volver</Link>
+
         <h1 className="text-lg font-semibold truncate">Pedidos fechados — {proyecto}</h1>
-        <span className="text-sm text-gray-500">{total} pedido{total === 1 ? "" : "s"}</span>
+
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-gray-500">{total} pedido{total === 1 ? "" : "s"}</span>
+
+          {/* Botón Compartir proyecto */}
+          <button
+            onClick={() => setAbiertoCompartir(true)}
+            className="px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 text-sm"
+            title="Compartir este proyecto con usuarios específicos"
+          >
+            Compartir proyecto
+          </button>
+        </div>
       </div>
 
+      {/* Tabla de pedidos */}
       <div className="overflow-x-auto">
         <table className="min-w-full text-sm bg-white rounded shadow">
           <thead className="bg-gray-100">
@@ -214,6 +309,92 @@ export default function ProyectoCalendarioClient({ proyecto }: { proyecto: strin
           </tbody>
         </table>
       </div>
+
+      {/* MODAL Compartir proyecto */}
+      {abiertoCompartir && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center">
+          {/* Fondo */}
+          <div
+            className="absolute inset-0 bg-black/40"
+            onClick={() => !guardandoShare && setAbiertoCompartir(false)}
+          />
+
+          {/* Contenido */}
+          <div className="relative bg-white text-black rounded-xl shadow-xl w-full max-w-2xl p-5">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <h2 className="text-base font-semibold">Compartir proyecto — {proyecto}</h2>
+              <button
+                className="text-gray-500 hover:text-gray-700 text-xl"
+                onClick={() => !guardandoShare && setAbiertoCompartir(false)}
+                title="Cerrar"
+              >
+                &times;
+              </button>
+            </div>
+
+            <p className="text-sm text-gray-600 mb-3">
+              Selecciona los usuarios que podrán ver este proyecto y sus pedidos en <strong>Mis solicitudes</strong>, aunque ellos no hayan creado los pedidos.
+            </p>
+
+            <div className="mb-3">
+              <input
+                type="text"
+                placeholder="Buscar por nombre o correo..."
+                value={busqueda}
+                onChange={(e) => setBusqueda(e.target.value)}
+                className="w-full border rounded px-3 py-2 text-sm"
+              />
+            </div>
+
+            <div className="border rounded max-h-80 overflow-auto">
+              {cargandoShare ? (
+                <div className="p-4 text-sm text-gray-500">Cargando...</div>
+              ) : filtrados.length === 0 ? (
+                <div className="p-4 text-sm text-gray-500">No hay usuarios que coincidan.</div>
+              ) : (
+                <ul className="divide-y">
+                  {filtrados.map((u) => (
+                    <li key={u.email} className="flex items-center justify-between px-3 py-2">
+                      <div className="min-w-0">
+                        <div className="font-medium truncate">{u.nombre}</div>
+                        <div className="text-xs text-gray-500 truncate">{u.email}</div>
+                      </div>
+                      <input
+                        type="checkbox"
+                        checked={seleccionados.has(u.email)}
+                        onChange={() => toggleSeleccion(u.email)}
+                        className="w-4 h-4"
+                      />
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button
+                disabled={guardandoShare}
+                onClick={() => setAbiertoCompartir(false)}
+                className="px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 text-sm disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+              <button
+                disabled={guardandoShare}
+                onClick={guardarCompartir}
+                className="px-3 py-1.5 rounded-lg bg-black text-white hover:opacity-90 text-sm disabled:opacity-60"
+              >
+                {guardandoShare ? "Guardando..." : "Guardar cambios"}
+              </button>
+            </div>
+
+            <div className="mt-2 text-xs text-gray-500">
+              {seleccionados.size} usuario{seleccionados.size === 1 ? "" : "s"} seleccionado{seleccionados.size === 1 ? "" : "s"}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
+
