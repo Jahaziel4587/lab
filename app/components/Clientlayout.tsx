@@ -37,7 +37,7 @@ import { FiUser } from "react-icons/fi";
           <Link href="/calendario" className="hover:underline">Calendario</Link>
           <Link href="/about" className="hover:underline">Información</Link>
           <Link href="/collection" className="hover:underline">Colección</Link>
-          <Link href="/solicitudes" className="hover:underline">Mis solicitudes</Link>
+          <Link href="/solicitudes" className="hover:underline">Mis proyectos</Link>
           <Link href="/hacer-pedido/proyecto" className="hover:underline">Hacer pedido</Link>
           <Link href="/inventario" className="hover:underline">Inventario</Link>
           {isAdmin && (
