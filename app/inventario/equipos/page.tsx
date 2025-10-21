@@ -1,5 +1,5 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { getDownloadURL, ref, uploadBytes, deleteObject } from "firebase/storage";
 import { doc, getDoc, updateDoc, setDoc } from "firebase/firestore";
 import { db, storage } from "@/src/firebase/firebaseConfig";
@@ -11,6 +11,7 @@ type Item = {
   imagenURL: string;
   lugar: string;
   cantidad: number;
+  etiquetas?: string[];  // <-- NUEVO
 };
 
 type DocData = {
@@ -37,8 +38,9 @@ export default function EquiposInventarioPage() {
       return;
     }
     const data = snap.data() as Partial<DocData>;
-    setHerramientas(data.herramientas || []);
-    setEquipos(data.equipos || []);
+    // normalizar etiquetas a []
+    setHerramientas((data.herramientas || []).map((x) => ({ ...x, etiquetas: Array.isArray(x.etiquetas) ? x.etiquetas : [] })));
+    setEquipos((data.equipos || []).map((x) => ({ ...x, etiquetas: Array.isArray(x.etiquetas) ? x.etiquetas : [] })));
   };
 
   useEffect(() => {
@@ -47,7 +49,6 @@ export default function EquiposInventarioPage() {
 
   // ------ helpers ------
   const storagePathFromUrl = (url: string): string | null => {
-    // mismo patrón que ya usas: /o/<bucketPath>?alt=media...
     const match = decodeURIComponent(url).match(/\/o\/(.*?)\?alt/);
     return match?.[1]?.replace(/%2F/g, "/") ?? null;
   };
@@ -55,7 +56,7 @@ export default function EquiposInventarioPage() {
   // Guardar nuevo item (se llama desde cada sección)
   const saveNewItem = async (
     categoria: "herramientas" | "equipos",
-    payload: { titulo: string; lugar: string; cantidad: number; imagen: File }
+    payload: { titulo: string; lugar: string; cantidad: number; imagen: File; etiquetas: string[] } // <-- NUEVO
   ) => {
     // 1) Subir imagen
     const id = uuidv4();
@@ -76,6 +77,7 @@ export default function EquiposInventarioPage() {
       lugar: payload.lugar.trim(),
       cantidad: payload.cantidad,
       imagenURL,
+      etiquetas: payload.etiquetas, // <-- NUEVO
     };
 
     const nuevos =
@@ -104,7 +106,6 @@ export default function EquiposInventarioPage() {
       try {
         await deleteObject(ref(storage, path));
       } catch (err) {
-        // no bloquea la operación si falla la eliminación de la imagen
         console.warn("No se pudo eliminar la imagen del Storage:", err);
       }
     }
@@ -121,42 +122,41 @@ export default function EquiposInventarioPage() {
   };
 
   return (
-    
-      <div className="max-w-7xl mx-auto bg-white text-black rounded-2xl p-6">
-        <div className="mb-6 flex items-center justify-between">
-          <h1 className="text-xl font-bold">Equipos y herramientas</h1>
-          <button
-            onClick={() => window.history.back()}
-            className="bg-black text-white px-4 py-2 rounded hover:opacity-90"
-          >
-            ← Regresar
-          </button>
-        </div>
-
-        {/* Sección Herramientas */}
-        <Section
-          title="Herramientas"
-          open={openHerramientas}
-          onToggle={() => setOpenHerramientas((v) => !v)}
-          items={herramientas}
-          isAdmin={!!isAdmin}
-          categoria="herramientas"
-          onAdd={saveNewItem}
-          onDelete={deleteItem}
-        />
-
-        {/* Sección Equipos */}
-        <Section
-          title="Equipos"
-          open={openEquipos}
-          onToggle={() => setOpenEquipos((v) => !v)}
-          items={equipos}
-          isAdmin={!!isAdmin}
-          categoria="equipos"
-          onAdd={saveNewItem}
-          onDelete={deleteItem}
-        />
+    <div className="max-w-7xl mx-auto bg-white text-black rounded-2xl p-6">
+      <div className="mb-6 flex items-center justify-between">
+        <h1 className="text-xl font-bold">Equipos y herramientas</h1>
+        <button
+          onClick={() => window.history.back()}
+          className="bg-black text-white px-4 py-2 rounded hover:opacity-90"
+        >
+          ← Regresar
+        </button>
       </div>
+
+      {/* Sección Herramientas */}
+      <Section
+        title="Herramientas"
+        open={openHerramientas}
+        onToggle={() => setOpenHerramientas((v) => !v)}
+        items={herramientas}
+        isAdmin={!!isAdmin}
+        categoria="herramientas"
+        onAdd={saveNewItem}
+        onDelete={deleteItem}
+      />
+
+      {/* Sección Equipos */}
+      <Section
+        title="Equipos"
+        open={openEquipos}
+        onToggle={() => setOpenEquipos((v) => !v)}
+        items={equipos}
+        isAdmin={!!isAdmin}
+        categoria="equipos"
+        onAdd={saveNewItem}
+        onDelete={deleteItem}
+      />
+    </div>
   );
 }
 
@@ -178,7 +178,7 @@ function Section({
   items: Item[];
   isAdmin: boolean;
   categoria: "herramientas" | "equipos";
-  onAdd: (categoria: "herramientas" | "equipos", payload: { titulo: string; lugar: string; cantidad: number; imagen: File }) => Promise<void>;
+  onAdd: (categoria: "herramientas" | "equipos", payload: { titulo: string; lugar: string; cantidad: number; imagen: File; etiquetas: string[] }) => Promise<void>;
   onDelete: (categoria: "herramientas" | "equipos", index: number) => Promise<void>;
 }) {
   const [showForm, setShowForm] = useState(false);
@@ -186,15 +186,36 @@ function Section({
   const [lugar, setLugar] = useState("");
   const [cantidad, setCantidad] = useState<string>("");
   const [imagen, setImagen] = useState<File | null>(null);
+  const [etiquetasStr, setEtiquetasStr] = useState(""); // <-- NUEVO
   const [saving, setSaving] = useState(false);
+
+  const [q, setQ] = useState(""); // <-- NUEVO: buscador por sección
 
   const reset = () => {
     setTitulo("");
     setLugar("");
     setCantidad("");
     setImagen(null);
+    setEtiquetasStr("");
     setShowForm(false);
     setSaving(false);
+  };
+
+  const parseEtiquetas = (raw: string): string[] => {
+    const arr = (raw || "")
+      .split(/[,;\n]/g)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    // quitar duplicados preservando orden
+    const seen = new Set<string>();
+    const out: string[] = [];
+    for (const t of arr) {
+      if (!seen.has(t)) {
+        seen.add(t);
+        out.push(t);
+      }
+    }
+    return out;
   };
 
   const handleSave = async () => {
@@ -210,7 +231,7 @@ function Section({
     }
     try {
       setSaving(true);
-      await onAdd(categoria, { titulo, lugar, cantidad: cant, imagen });
+      await onAdd(categoria, { titulo, lugar, cantidad: cant, imagen, etiquetas: parseEtiquetas(etiquetasStr) });
       reset();
     } catch (e) {
       console.error(e);
@@ -218,6 +239,22 @@ function Section({
       setSaving(false);
     }
   };
+
+  const normalize = (s: string) =>
+    (s || "")
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/\p{Diacritic}/gu, "");
+
+  const filtered = useMemo(() => {
+    const needle = normalize(q.trim());
+    if (!needle) return items;
+    return items.filter((it) => {
+      const inTitle = normalize(it.titulo).includes(needle);
+      const inTags = (it.etiquetas || []).some((tg) => normalize(tg).includes(needle));
+      return inTitle || inTags;
+    });
+  }, [items, q]);
 
   return (
     <div className="border rounded-xl mb-6">
@@ -231,6 +268,25 @@ function Section({
 
       {open && (
         <div className="px-4 pb-4">
+          {/* Buscador por sección */}
+          <div className="flex items-center gap-2 pb-3">
+            <input
+              type="text"
+              placeholder={`Buscar ${title.toLowerCase()} por título o etiqueta…`}
+              className="w-full sm:w-96 border rounded px-3 py-2 text-sm"
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+            {q && (
+              <button
+                onClick={() => setQ("")}
+                className="text-xs px-3 py-2 border rounded hover:bg-gray-50"
+              >
+                Limpiar
+              </button>
+            )}
+          </div>
+
           {items.length === 0 ? (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
               {isAdmin && (
@@ -245,6 +301,8 @@ function Section({
                   cantidad={cantidad}
                   setCantidad={setCantidad}
                   setImagen={setImagen}
+                  etiquetasStr={etiquetasStr}
+                  setEtiquetasStr={setEtiquetasStr}
                   onSave={handleSave}
                   saving={saving}
                 />
@@ -252,12 +310,13 @@ function Section({
             </div>
           ) : (
             <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
-              {items.map((it, idx) => (
+              {filtered.map((it, idx) => (
                 <Card
                   key={idx}
                   item={it}
                   isAdmin={isAdmin}
                   onDelete={() => onDelete(categoria, idx)}
+                  onTagClick={(t) => setQ(t)} // clic en chip aplica búsqueda
                 />
               ))}
               {isAdmin && (
@@ -272,6 +331,8 @@ function Section({
                   cantidad={cantidad}
                   setCantidad={setCantidad}
                   setImagen={setImagen}
+                  etiquetasStr={etiquetasStr}
+                  setEtiquetasStr={setEtiquetasStr}
                   onSave={handleSave}
                   saving={saving}
                 />
@@ -288,10 +349,12 @@ function Card({
   item,
   isAdmin,
   onDelete,
+  onTagClick,
 }: {
   item: Item;
   isAdmin: boolean;
   onDelete: () => void;
+  onTagClick: (tag: string) => void;
 }) {
   return (
     <div className="relative bg-white text-black border rounded-xl overflow-hidden shadow-sm">
@@ -326,7 +389,7 @@ function Card({
         ) : null}
       </div>
 
-      {/* Lugar / Cantidad */}
+      {/* Lugar / Cantidad / Etiquetas */}
       <div className="px-3 py-2 text-xs">
         <div>
           <span className="font-semibold">Lugar:</span>{" "}
@@ -338,6 +401,21 @@ function Card({
             {typeof item.cantidad === "number" ? item.cantidad : "—"}
           </span>
         </div>
+
+        {(item.etiquetas && item.etiquetas.length > 0) && (
+          <div className="mt-2 flex flex-wrap gap-1">
+            {item.etiquetas.map((tag, i) => (
+              <button
+                key={`${tag}-${i}`}
+                onClick={() => onTagClick(tag)}
+                className="px-2 py-0.5 rounded-full bg-gray-200 hover:bg-gray-300 transition text-[11px]"
+                title={`Buscar: ${tag}`}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
@@ -354,6 +432,8 @@ function AddCard({
   cantidad,
   setCantidad,
   setImagen,
+  etiquetasStr,
+  setEtiquetasStr,
   onSave,
   saving,
 }: {
@@ -367,6 +447,8 @@ function AddCard({
   cantidad: string;
   setCantidad: (v: string) => void;
   setImagen: (f: File | null) => void;
+  etiquetasStr: string;                 // <-- NUEVO
+  setEtiquetasStr: (v: string) => void; // <-- NUEVO
   onSave: () => void;
   saving: boolean;
 }) {
@@ -391,7 +473,7 @@ function AddCard({
       <div className="space-y-2">
         <input
           type="text"
-          placeholder='Ej. "B1.XXX.Taladro "'
+          placeholder='Ej. "B1.XXX.Taladro"'
           className="w-full border rounded px-3 py-2 text-sm"
           value={titulo}
           onChange={(e) => setTitulo(e.target.value)}
@@ -417,6 +499,19 @@ function AddCard({
           className="w-full text-sm"
           onChange={(e) => setImagen(e.target.files?.[0] || null)}
         />
+        {/* NUEVO: Etiquetas */}
+        <div>
+          <input
+            type="text"
+            placeholder='Etiquetas (ej. "taladro, eléctrico, dewalt")'
+            className="w-full border rounded px-3 py-2 text-sm"
+            value={etiquetasStr}
+            onChange={(e) => setEtiquetasStr(e.target.value)}
+          />
+          <p className="text-[11px] text-gray-500 mt-1">
+            Separa por comas (ej. <code>taladro, eléctrico, dewalt</code>)
+          </p>
+        </div>
 
         <div className="flex gap-2 justify-end pt-1">
           <button

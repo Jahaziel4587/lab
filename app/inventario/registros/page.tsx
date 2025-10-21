@@ -23,6 +23,7 @@ type Consumible = {
   imagenURL: string;
   lugar: string;
   cantidad: number;
+  etiquetas?: string[]; // <-- NUEVO: etiquetas
 };
 
 type DocConsumibles = {
@@ -75,6 +76,7 @@ export default function RegistrosInventarioPage() {
   const [lugar, setLugar] = useState("");
   const [cantidadStr, setCantidadStr] = useState("");
   const [archivoImg, setArchivoImg] = useState<File | null>(null);
+  const [etiquetasStr, setEtiquetasStr] = useState(""); // <-- NUEVO: input de etiquetas (coma-separadas)
   const [guardando, setGuardando] = useState(false);
 
   /* ----- Estado: listado de consumibles ----- */
@@ -86,6 +88,10 @@ export default function RegistrosInventarioPage() {
   const [editCantidad, setEditCantidad] = useState<string>("");
   const [authOpen, setAuthOpen] = useState(false);
   const [pendingCantidad, setPendingCantidad] = useState<number | null>(null);
+
+  /* ----- NUEVO: Edición de etiquetas ----- */
+  const [editTagsIndex, setEditTagsIndex] = useState<number | null>(null);
+  const [editTagsStr, setEditTagsStr] = useState<string>("");
 
   /* ----- Estado: movimientos (tu tabla actual) ----- */
   const [movs, setMovs] = useState<Movement[]>([]);
@@ -100,7 +106,12 @@ export default function RegistrosInventarioPage() {
     const refDoc = doc(db, "inventario", "consumibles");
     const unsubConsumibles = onSnapshot(refDoc, (snap) => {
       const data = (snap.data() as DocConsumibles) || { items: [] };
-      setConsumibles(data.items || []);
+      // Asegurar que siempre exista el arreglo de etiquetas para evitar undefined
+      const normalizados = (data.items || []).map((c) => ({
+        ...c,
+        etiquetas: Array.isArray(c.etiquetas) ? c.etiquetas : [],
+      }));
+      setConsumibles(normalizados);
       setLoadingConsumibles(false);
     });
 
@@ -133,6 +144,27 @@ export default function RegistrosInventarioPage() {
     setLugar("");
     setCantidadStr("");
     setArchivoImg(null);
+    setEtiquetasStr(""); // <-- NUEVO
+  };
+
+  // util para parsear/limpiar etiquetas
+  const parseEtiquetas = (raw: string): string[] => {
+    // soporta separar por comas y/o saltos de línea
+    const arr = raw
+      .split(/[,;\n]/g)
+      .map((t) => t.trim())
+      .filter(Boolean);
+    // quitar duplicados manteniendo orden
+    const seen = new Set<string>();
+    const clean: string[] = [];
+    for (const tag of arr) {
+      const key = tag; // puedes normalizar a lower: tag.toLowerCase()
+      if (!seen.has(key)) {
+        seen.add(key);
+        clean.push(tag);
+      }
+    }
+    return clean;
   };
 
   const handleGuardarConsumible = async () => {
@@ -149,6 +181,8 @@ export default function RegistrosInventarioPage() {
       alert("Cantidad inválida.");
       return;
     }
+
+    const etiquetas = parseEtiquetas(etiquetasStr); // <-- NUEVO
 
     setGuardando(true);
     try {
@@ -174,6 +208,7 @@ export default function RegistrosInventarioPage() {
         lugar: lugar.trim(),
         cantidad,
         imagenURL,
+        etiquetas, // <-- NUEVO
       };
 
       await updateDoc(refDoc, { items: [...(actual.items || []), nuevo] });
@@ -217,6 +252,32 @@ export default function RegistrosInventarioPage() {
     const arr = [...(data.items || [])];
     if (!arr[index]) return;
     arr[index] = { ...arr[index], cantidad: nueva };
+    await updateDoc(refDoc, { items: arr });
+  };
+
+  /* ---------- NUEVO: Acciones edición de etiquetas ---------- */
+  const startEditTags = (i: number) => {
+    const current = consumibles[i];
+    const tags = (current?.etiquetas || []).join(", ");
+    setEditTagsIndex(i);
+    setEditTagsStr(tags);
+  };
+
+  const cancelEditTags = () => {
+    setEditTagsIndex(null);
+    setEditTagsStr("");
+  };
+
+  const persistEtiquetas = async (index: number, nuevasStr: string) => {
+    const refDoc = doc(db, "inventario", "consumibles");
+    const snap = await getDoc(refDoc);
+    if (!snap.exists()) return;
+    const data = snap.data() as DocConsumibles;
+    const arr = [...(data.items || [])];
+    if (!arr[index]) return;
+
+    const nuevas = parseEtiquetas(nuevasStr);
+    arr[index] = { ...arr[index], etiquetas: nuevas };
     await updateDoc(refDoc, { items: arr });
   };
 
@@ -267,13 +328,14 @@ export default function RegistrosInventarioPage() {
 
           <div className="p-4">
             <div className="overflow-auto">
-              <table className="min-w-[720px] w-full text-sm">
+              <table className="min-w-[980px] w-full text-sm">
                 <thead className="bg-gray-50 text-gray-700">
                   <tr>
                     <th className="text-left px-3 py-2 font-semibold">Título</th>
                     <th className="text-left px-3 py-2 font-semibold">Lugar</th>
-                    <th className="text-left px-3 py-2 font-semibold">Cantidad</th>
+                    <th className="text-right px-3 py-2 font-semibold">Cantidad</th>
                     <th className="text-left px-3 py-2 font-semibold">Imagen</th>
+                    <th className="text-left px-3 py-2 font-semibold">Etiquetas</th>{/* NUEVO */}
                     <th className="text-left px-3 py-2 font-semibold">Acciones</th>
                   </tr>
                 </thead>
@@ -297,11 +359,11 @@ export default function RegistrosInventarioPage() {
                         onChange={(e) => setLugar(e.target.value)}
                       />
                     </td>
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2 text-right">
                       <input
                         type="number"
                         min={0}
-                        className="w-full border rounded px-2 py-1"
+                        className="w-full border rounded px-2 py-1 text-right"
                         placeholder="0"
                         value={cantidadStr}
                         onChange={(e) => setCantidadStr(e.target.value)}
@@ -314,6 +376,18 @@ export default function RegistrosInventarioPage() {
                         onChange={(e) => setArchivoImg(e.target.files?.[0] || null)}
                         className="w-full"
                       />
+                    </td>
+                    <td className="px-3 py-2">
+                      <input
+                        type="text"
+                        className="w-full border rounded px-2 py-1"
+                        placeholder='Ej. "abrasivos, lija, 400"'
+                        value={etiquetasStr}
+                        onChange={(e) => setEtiquetasStr(e.target.value)}
+                      />
+                      <p className="text-[11px] text-gray-500 mt-1">
+                        Separa por comas (ej. <code>abrasivos, lija, 400</code>)
+                      </p>
                     </td>
                     <td className="px-3 py-2">
                       <button
@@ -336,7 +410,7 @@ export default function RegistrosInventarioPage() {
         </section>
 
         {/* =========================================================
-            B) Tabla desplegable con consumibles (editable en cantidad)
+            B) Tabla desplegable con consumibles (editable en cantidad + NUEVO: etiquetas)
            ========================================================= */}
         <section className="border rounded-xl">
           <details open className="w-full">
@@ -345,7 +419,7 @@ export default function RegistrosInventarioPage() {
             </summary>
 
             <div className="p-4 overflow-auto">
-              <table className="min-w-[820px] w-full text-sm">
+              <table className="min-w-[980px] w-full text-sm">
                 <thead className="bg-gray-50 text-gray-700">
                   <tr>
                     <th className="text-left px-3 py-2 font-semibold">#</th>
@@ -353,12 +427,14 @@ export default function RegistrosInventarioPage() {
                     <th className="text-left px-3 py-2 font-semibold">Lugar</th>
                     <th className="text-right px-3 py-2 font-semibold">Cantidad</th>
                     <th className="text-left px-3 py-2 font-semibold">Imagen</th>
+                    <th className="text-left px-3 py-2 font-semibold">Etiquetas</th>{/* NUEVO */}
                     <th className="text-left px-3 py-2 font-semibold">Acciones</th>
                   </tr>
                 </thead>
                 <tbody>
                   {consumibles.map((c, i) => {
                     const isEditing = editIndex === i;
+                    const isEditingTags = editTagsIndex === i; // NUEVO
                     return (
                       <tr key={i} className="border-t hover:bg-gray-50">
                         <td className="px-3 py-2">{i + 1}</td>
@@ -395,7 +471,70 @@ export default function RegistrosInventarioPage() {
                           )}
                         </td>
 
-                        {/* Acciones */}
+                        {/* NUEVO: Etiquetas (editable independiente) */}
+                        <td className="px-3 py-2">
+                          {!isEditingTags ? (
+                            <div className="flex flex-wrap gap-1 items-center">
+                              {(c.etiquetas && c.etiquetas.length > 0) ? (
+                                c.etiquetas.map((tag, idx) => (
+                                  <span
+                                    key={idx}
+                                    className="px-2 py-0.5 text-xs rounded-full bg-gray-200"
+                                  >
+                                    {tag}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="text-gray-400">—</span>
+                              )}
+                              <button
+                                onClick={() => startEditTags(i)}
+                                className="ml-2 px-2 py-1 rounded border text-[11px] hover:bg-gray-50"
+                              >
+                                Editar
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col gap-2">
+                              <input
+                                type="text"
+                                className="w-full border rounded px-2 py-1"
+                                value={editTagsStr}
+                                onChange={(e) => setEditTagsStr(e.target.value)}
+                                placeholder='Ej. "abrasivos, lija, 400"'
+                              />
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={cancelEditTags}
+                                  className="px-3 py-1 rounded border text-xs hover:bg-gray-50"
+                                >
+                                  Cancelar
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    try {
+                                      await persistEtiquetas(i, editTagsStr);
+                                      setEditTagsIndex(null);
+                                      setEditTagsStr("");
+                                      alert("Etiquetas actualizadas.");
+                                    } catch (e) {
+                                      console.error(e);
+                                      alert("No se pudieron actualizar las etiquetas.");
+                                    }
+                                  }}
+                                  className="px-3 py-1 rounded bg-black text-white text-xs hover:opacity-90"
+                                >
+                                  Guardar
+                                </button>
+                              </div>
+                              <p className="text-[11px] text-gray-500">
+                                Separa por comas (ej. <code>abrasivos, lija, 400</code>)
+                              </p>
+                            </div>
+                          )}
+                        </td>
+
+                        {/* Acciones (iguales para cantidad) */}
                         <td className="px-3 py-2">
                           {!isEditing ? (
                             <button
@@ -427,7 +566,7 @@ export default function RegistrosInventarioPage() {
 
                   {!loadingConsumibles && consumibles.length === 0 && (
                     <tr>
-                      <td colSpan={6} className="px-4 py-6 text-center text-gray-500 text-sm">
+                      <td colSpan={7} className="px-4 py-6 text-center text-gray-500 text-sm">
                         No hay consumibles registrados aún.
                       </td>
                     </tr>

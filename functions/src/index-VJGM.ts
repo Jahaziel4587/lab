@@ -45,13 +45,13 @@ export const onPedidoCreatedSendEmail = onDocumentCreated(
         servicio,
         maquina,
         material,
-        tecnica,
-        explicacion,
+       
+        descripcion,
         archivos,
         videoURL,
-        fecha,
+        fechaLimite,
         usuario,
-        createdAt,
+        
       } = p;
 
       const detalleURL = `${APP_BASE_URL}/solicitudes/listado/${pedidoId}`;
@@ -70,13 +70,13 @@ export const onPedidoCreatedSendEmail = onDocumentCreated(
             <tr><td style="padding:6px 0"><strong>Servicio:</strong></td><td style="padding:6px 0">${pretty(servicio)}</td></tr>
             <tr><td style="padding:6px 0"><strong>Máquinas:</strong></td><td style="padding:6px 0">${pretty(maquina)}</td></tr>
             <tr><td style="padding:6px 0"><strong>Materiales:</strong></td><td style="padding:6px 0">${pretty(material)}</td></tr>
-            <tr><td style="padding:6px 0"><strong>Técnica:</strong></td><td style="padding:6px 0">${pretty(tecnica)}</td></tr>
-            <tr><td style="padding:6px 0;vertical-align:top"><strong>Especificaciones:</strong></td><td style="padding:6px 0;white-space:pre-wrap">${pretty(explicacion)}</td></tr>
+            
+            <tr><td style="padding:6px 0;vertical-align:top"><strong>Especificaciones:</strong></td><td style="padding:6px 0;white-space:pre-wrap">${pretty(descripcion)}</td></tr>
             <tr><td style="padding:6px 0;vertical-align:top"><strong>Archivos:</strong></td><td style="padding:6px 0">${archivosList}</td></tr>
             <tr><td style="padding:6px 0"><strong>Video:</strong></td><td style="padding:6px 0">${videoURL ? `<a href="${videoURL}">${videoURL}</a>` : "—"}</td></tr>
-            <tr><td style="padding:6px 0"><strong>Entrega propuesta:</strong></td><td style="padding:6px 0">${pretty(fecha)}</td></tr>
+            <tr><td style="padding:6px 0"><strong>Entrega propuesta:</strong></td><td style="padding:6px 0">${pretty(fechaLimite)}</td></tr>
             <tr><td style="padding:6px 0"><strong>Solicitante:</strong></td><td style="padding:6px 0">${pretty(usuario)}</td></tr>
-            <tr><td style="padding:6px 0"><strong>Creado:</strong></td><td style="padding:6px 0">${pretty(createdAt)}</td></tr>
+            
           </table>
           <hr style="border:none;border-top:1px solid #ddd;margin:12px 0"/>
           <p>Ver detalles: <a href="${detalleURL}">${detalleURL}</a></p>
