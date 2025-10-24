@@ -76,9 +76,7 @@ export default function ListadoPedidosPage() {
     checarCompartido();
   }, [user, proyectoSeleccionado]);
 
-  // 2) Cargar pedidos según permisos:
-  //    - Admin o compartido -> TODOS los pedidos del proyecto
-  //    - Caso contrario     -> solo pedidos del usuario en ese proyecto
+  // 2) Cargar pedidos según permisos
   useEffect(() => {
     const cargarPedidos = async () => {
       if (!proyectoSeleccionado || !user?.email) return;
@@ -104,7 +102,7 @@ export default function ListadoPedidosPage() {
         ...doc.data(),
       }));
 
-      // Orden opcional (fecha real asc, luego fecha propuesta)
+      // Orden opcional
       lista.sort((a: any, b: any) => {
         const aR = a?.fechaEntregaReal || "";
         const bR = b?.fechaEntregaReal || "";
@@ -183,7 +181,6 @@ export default function ListadoPedidosPage() {
 
   // --- Helper para mostrar solicitante ---
   const solicitanteDe = (p: any) => {
-    // Prioridad: nombreUsuario en el doc -> mapa por correo -> correo plano -> usuario -> guion
     const email = p?.correoUsuario || p?.usuario || "";
     return (
       p?.nombreUsuario ||
@@ -218,7 +215,7 @@ export default function ListadoPedidosPage() {
               <thead>
                 <tr className="bg-gray-200 text-left">
                   <th className="py-2 px-4">Título</th>
-                  <th className="py-2 px-4">Solicitante</th> {/* NUEVA COLUMNA */}
+                  <th className="py-2 px-4">Solicitante</th>
                   <th className="py-2 px-4">Detalles</th>
                   <th className="py-2 px-4">Entrega propuesta</th>
                   <th className="py-2 px-4">Entrega real</th>
@@ -231,7 +228,7 @@ export default function ListadoPedidosPage() {
                   <tr key={p.id} className="border-t">
                     <td className="py-2 px-4">{p.titulo || "Sin título"}</td>
 
-                    <td className="py-2 px-4">{solicitanteDe(p)}</td> {/* muestra nombre o correo */}
+                    <td className="py-2 px-4">{solicitanteDe(p)}</td>
 
                     <td className="py-2 px-4">
                       <Link
@@ -259,45 +256,50 @@ export default function ListadoPedidosPage() {
                       )}
                     </td>
 
+                    {/* COTIZACIÓN */}
                     <td className="px-4 py-2">
-                      {p.costo ? (
-                        <div className="flex items-center gap-2">
-                          <a
-                            href={p.costo}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 underline"
-                          >
-                            {p.nombreCosto
-                              ? p.nombreCosto
-                              : decodeURIComponent(
-                                  p.costo.split("/").pop()?.split("?")[0] || "archivo"
-                                )
-                                  .split("%2F")
-                                  .pop()}
-                          </a>
-                          {isAdmin && (
-                            <button
-                              onClick={() => {
-                                actualizarCampo(p.id, "costo", "");
-                                actualizarCampo(p.id, "nombreCosto", "");
-                              }}
-                              className="text-red-600 hover:text-red-800 text-lg"
+                      {/* Nuevo flujo: Cotización Viva */}
+                      <div className="flex flex-col gap-1">
+                        <Link
+                          href={`/solicitudes/listado/${p.id}#cotizacion-viva`}
+                          className="inline-flex items-center justify-center px-3 py-1 rounded bg-black text-white hover:opacity-90"
+                          title="Ver Cotización Viva del pedido"
+                        >
+                          Ver Cotización Viva
+                        </Link>
+
+                        {/* Compatibilidad: PDF legacy si existe */}
+                        {p.costo && (
+                          <div className="flex items-center gap-2">
+                            <a
+                              href={p.costo}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 underline"
                             >
-                              &times;
-                            </button>
-                          )}
-                        </div>
-                      ) : isAdmin ? (
-                        <input
-                          type="file"
-                          accept=".pdf,.doc,.docx,.xls,.xlsx"
-                          onChange={(e) => subirArchivoCosto(e, p.id)}
-                          className="text-sm text-black"
-                        />
-                      ) : (
-                        <span>Pendiente</span>
-                      )}
+                              {p.nombreCosto
+                                ? p.nombreCosto
+                                : decodeURIComponent(
+                                    p.costo.split("/").pop()?.split("?")[0] || "archivo"
+                                  )
+                                    .split("%2F")
+                                    .pop()}
+                            </a>
+                            {isAdmin && (
+                              <button
+                                onClick={() => {
+                                  actualizarCampo(p.id, "costo", "");
+                                  actualizarCampo(p.id, "nombreCosto", "");
+                                }}
+                                className="text-red-600 hover:text-red-800 text-lg"
+                                title="Eliminar archivo legacy"
+                              >
+                                &times;
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </td>
 
                     <td className="py-2 px-4">

@@ -21,7 +21,11 @@ import {
   type QueryConstraint,
   type QueryDocumentSnapshot,
   type QuerySnapshot,
+  // >>> NEW
+  getDoc,
 } from "firebase/firestore";
+// >>> NEW
+import { useAuth } from "@/src/Context/AuthContext";
 
 /* =====================================
  * Tipos
@@ -115,6 +119,32 @@ function findConflicts(
     return `Conflicto: "${name}" ya está definida en ${definedIn.join(" y ")}.`;
   }
   return null;
+}
+
+/* >>> NEW =====================================
+ * Helper: asegurar el doc de Cotización Viva
+ * ============================================ */
+async function ensureQuoteLiveDoc(pedidoId: string, settings: SettingsDoc | null) {
+  const liveDocRef = doc(db, "pedidos", pedidoId, "quote_live", "live");
+  const snap = await getDoc(liveDocRef);
+  if (!snap.exists()) {
+    await setDoc(liveDocRef, {
+      currency: settings?.currency ?? "MXN",
+      exchangeRate: settings?.exchangeRate ?? 17,
+      ivaDefault: settings?.iva ?? 0.16,
+      status: "open",
+      createdAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
+    });
+  } else {
+    await updateDoc(liveDocRef, {
+      currency: settings?.currency ?? "MXN",
+      exchangeRate: settings?.exchangeRate ?? 17,
+      ivaDefault: settings?.iva ?? 0.16,
+      updatedAt: serverTimestamp(),
+    });
+  }
+  return liveDocRef;
 }
 
 /* =====================================
@@ -261,6 +291,8 @@ export default function CotizadorClient() {
 
 function CotizacionPanel() {
   const [settings, setSettings] = useState<SettingsDoc | null>(null);
+  // >>> NEW
+  const { user } = useAuth?.() ?? { user: null };
 
   // Crea/lee settings default
   useEffect(() => {
@@ -559,17 +591,47 @@ function CotizacionPanel() {
         </p>
       </div>
 
-      {/* Adjuntar servicio (stub) */}
+      {/* Adjuntar servicio → Cotización Viva */}
       <div className="flex gap-2">
         <button
           className="px-4 py-2 rounded-xl bg-black text-white hover:opacity-90 disabled:opacity-50"
           disabled={!pedidoId || !serviceId}
-          onClick={() => {
-            alert(
-              `Adjuntado (simulado): pedido=${pedidoId}, servicio=${serviceId}\n` +
-                `variables: ${JSON.stringify(answers, null, 2)}\n` +
-                `total ${currency} ${displayTotal.toFixed(2)}`
+          onClick={async () => {
+            if (!pedidoId || !serviceId || !selService) return;
+            // asegurar contenedor
+            await ensureQuoteLiveDoc(pedidoId, settings);
+
+            const serviceName = selService.name;
+            const calcGroupName =
+              calcGroups.find((g) => g.id === activeCalcGroup)?.data?.name || "";
+            const costGroupName =
+              costTablesGroups.find((g) => g.id === selectedCostGroup)?.data?.name || "";
+
+            // payload de línea
+            const linePayload = {
+              serviceId,
+              serviceName,
+              calcGroupId: activeCalcGroup || null,
+              calcGroupName,
+              costGroupId: selectedCostGroup || null,
+              costGroupName,
+              answers,
+              selects,
+              resolvedCalc, // útil para auditoría/desglose
+              subtotalMXN: total, // base en MXN
+              displayCurrency: settings?.currency ?? "MXN",
+              displayTotal: displayTotal,
+              createdBy: user?.uid || null,
+              createdAt: serverTimestamp(),
+            };
+
+            await addDoc(
+              collection(db, "pedidos", pedidoId, "quote_live", "live", "lines"),
+              linePayload
             );
+
+            // feedback simple
+            alert("Servicio agregado a la Cotización Viva del pedido.");
           }}
         >
           Adjuntar servicio a la cotización
