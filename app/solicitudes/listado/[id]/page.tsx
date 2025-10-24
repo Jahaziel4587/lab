@@ -531,23 +531,30 @@ export default function DetallePedidoPage() {
           },
 
           // Tabla de totales (debajo de servicios)
-          {
-            alignment: "right",
-            table: {
-              widths: [120, 120],
-              body: [
-                [{ text: "Subtotal:", bold: true }, { text: formatMoney(subtotalConGananciaMXN), alignment: "right" }],
-                [{ text: "IVA (16%):", bold: true }, { text: formatMoney(ivaMonto), alignment: "right" }],
-                [{ text: "Envío:", bold: true }, { text: formatMoney(Number(draft.envio) || 0), alignment: "right" }],
-                [
-                  { text: "TOTAL:", bold: true },
-                  { text: formatMoney(totalFinal), bold: true, alignment: "right" },
-                ],
-              ],
-            },
-            layout: "lightHorizontalLines",
-            margin: [0, 0, 0, 16],
-          },
+      // Tabla de totales (a la derecha)
+{
+  columns: [
+    { width: '*', text: '' },                       // columna "espaciadora"
+    {
+      width: 260,                                   // ancho total aprox. de la tabla (ajusta si cambias widths)
+      table: {
+        widths: [120, 120],
+        body: [
+          [{ text: "Subtotal:", bold: true }, { text: formatMoney(subtotalConGananciaMXN), alignment: "right" }],
+          [{ text: "IVA (16%):", bold: true },     { text: formatMoney(ivaMonto), alignment: "right" }],
+          [{ text: "Envío:", bold: true },         { text: formatMoney(Number(draft.envio) || 0), alignment: "right" }],
+          [
+            { text: "TOTAL:", bold: true },
+            { text: formatMoney(totalFinal), bold: true, alignment: "right" }
+          ],
+        ],
+      },
+      layout: "lightHorizontalLines",
+    }
+  ],
+  margin: [0, 0, 0, 16],
+}
+,
 
           // Bloques informativos con banda verde
           sectionBlock("General Information", generalInfo),
@@ -576,7 +583,7 @@ export default function DetallePedidoPage() {
               { text: "¡Gracias por su preferencia!", italics: true, fontSize: 9 },
               {
                 text:
-                  "Calle Ángel Martínez Villarreal, Monterrey, NL, México\nmanuel.garcia@bioana.com.mx\nwww.bioanamedia.com",
+                  "Calle Ángel Martínez Villarreal 510, Monterrey, NL, México\nmanuel.garcia@bioana.com.mx\nwww.bioanamedical.com",
                 fontSize: 8,
                 margin: [0, 4, 0, 0],
               },
@@ -887,8 +894,7 @@ export default function DetallePedidoPage() {
           <p>Cargando cotización…</p>
         ) : quoteLines.length === 0 ? (
           <p className="text-gray-600">
-            Aún no hay líneas en la Cotización Viva para este pedido. Usa el cotizador y presiona “Adjuntar servicio a la
-            cotización”.
+            No se han adjuntado servicios a esta cotización.
           </p>
         ) : (
           <>
@@ -949,7 +955,7 @@ export default function DetallePedidoPage() {
 
             {/* Resumen de totales */}
             <div className="space-y-2 text-right">
-              <div className="font-semibold">Subtotal (base): {formatMoney(subtotalBaseMXN)}</div>
+              <div className="font-semibold">Subtotal sin ganancia: {formatMoney(subtotalBaseMXN)}</div>
 
               <div className="flex items-center justify-end gap-2">
                 <label className="text-sm" htmlFor="gananciaPct">

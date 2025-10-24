@@ -416,7 +416,7 @@ function CotizacionPanel() {
           <label className="block text-sm font-medium">Tasa USD→MXN</label>
           <input
             type="number"
-            step="0.0001"
+            step="1"
             className="mt-1 border border-neutral-300 rounded-lg px-3 py-2 w-32 placeholder-neutral-500"
             value={rate}
             onChange={async (e) => {
@@ -430,7 +430,7 @@ function CotizacionPanel() {
           <label className="block text-sm font-medium">IVA</label>
           <input
             type="number"
-            step="0.0001"
+            step="1"
             className="mt-1 border border-neutral-300 rounded-lg px-3 py-2 w-24"
             value={settings?.iva ?? 0.16}
             onChange={async (e) => {
@@ -701,7 +701,7 @@ function ServiceFieldInput({
       </label>
       <input
         type="number"
-        step="0.0001"
+        step="1"
         className="mt-1 border border-neutral-300 rounded-lg px-3 py-2 w-full placeholder-neutral-500 text-neutral-900"
         value={value === undefined ? "" : value}
         onChange={(e) => {
@@ -939,7 +939,7 @@ function TablaCostosPanel() {
                 <td className="px-3 py-2">
                   <input
                     type="number"
-                    step="0.0001"
+                    step="1"
                     className="border border-neutral-300 rounded-lg px-2 py-1 w-full"
                     placeholder="0"
                     value={varValue}

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, Suspense } from "react";
+import { useEffect, useState, Suspense, useMemo } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   getDocs,
@@ -28,6 +28,9 @@ export default function ListadoPedidosPage() {
   const [esCompartidoConmigo, setEsCompartidoConmigo] = useState<boolean>(false);
   const [nameByEmail, setNameByEmail] = useState<Record<string, string>>({});
   const router = useRouter();
+
+  const fmtMXN = (n: number) =>
+    n.toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2 });
 
   // --- Cargar mapa de usuarios (email -> nombre completo) ---
   useEffect(() => {
@@ -76,7 +79,7 @@ export default function ListadoPedidosPage() {
     checarCompartido();
   }, [user, proyectoSeleccionado]);
 
-  // 2) Cargar pedidos según permisos
+  // 2) Cargar pedidos según permisos + traer costos (subtotal base) por pedido
   useEffect(() => {
     const cargarPedidos = async () => {
       if (!proyectoSeleccionado || !user?.email) return;
@@ -97,24 +100,52 @@ export default function ListadoPedidosPage() {
       }
 
       const querySnapshot = await getDocs(qBase);
-      const lista = querySnapshot.docs.map((doc) => ({
-        id: doc.id,
-        ...doc.data(),
+      const listaBase = querySnapshot.docs.map((d) => ({
+        id: d.id,
+        ...d.data(),
       }));
 
       // Orden opcional
-      lista.sort((a: any, b: any) => {
-        const aR = a?.fechaEntregaReal || "";
-        const bR = b?.fechaEntregaReal || "";
-        if (aR && bR) return aR.localeCompare(bR);
-        if (aR) return -1;
-        if (bR) return 1;
-        const aP = a?.fechaLimite || "";
-        const bP = b?.fechaLimite || "";
-        return aP.localeCompare(bP);
-      });
+      // Orden: más nuevo primero.
+// 1) fechaEntregaReal (desc)  2) fechaLimite (desc)
+listaBase.sort((a: any, b: any) => {
+  const aR = a?.fechaEntregaReal || "";
+  const bR = b?.fechaEntregaReal || "";
 
-      setPedidos(lista);
+  // ambos con fecha real → descendente
+  if (aR && bR) return bR.localeCompare(aR);
+
+  // quien tenga fecha real va primero
+  if (aR) return -1;
+  if (bR) return 1;
+
+  // sin fecha real: usar fecha propuesta → descendente
+  const aP = a?.fechaLimite || "";
+  const bP = b?.fechaLimite || "";
+  return bP.localeCompare(aP);
+});
+
+
+      // Para cada pedido: sumar subtotalMXN (base) de quote_live/live/lines
+      const listaConCostos = await Promise.all(
+        listaBase.map(async (p: any) => {
+          try {
+            const linesRef = collection(db, "pedidos", p.id, "quote_live", "live", "lines");
+            const linesSnap = await getDocs(linesRef);
+            let subtotalBase = 0;
+            linesSnap.forEach((ln) => {
+              const data = ln.data() as any;
+              subtotalBase += Number(data?.subtotalMXN || 0);
+            });
+            return { ...p, costoBaseProyecto: subtotalBase };
+          } catch (err) {
+            console.warn("No se pudieron leer líneas de cotización para", p.id, err);
+            return { ...p, costoBaseProyecto: 0 };
+          }
+        })
+      );
+
+      setPedidos(listaConCostos);
     };
 
     cargarPedidos();
@@ -190,6 +221,12 @@ export default function ListadoPedidosPage() {
     );
   };
 
+  // Total gastado en el proyecto (suma de costoBaseProyecto)
+  const totalGastadoProyecto = useMemo(
+    () => pedidos.reduce((acc, p: any) => acc + (Number(p?.costoBaseProyecto) || 0), 0),
+    [pedidos]
+  );
+
   if (!user || !proyectoSeleccionado) return null;
 
   return (
@@ -202,10 +239,16 @@ export default function ListadoPedidosPage() {
           <FiArrowLeft /> Regresar
         </button>
 
-        <h1 className="text-xl font-semibold mb-4">
+        <h1 className="text-xl font-semibold mb-2">
           Pedidos del proyecto:{" "}
           <span className="capitalize">{proyectoSeleccionado}</span>
         </h1>
+
+        {/* Total del proyecto */}
+        <div className="mb-4 text-sm">
+          <span className="font-semibold">Total gastado (subtotal base): </span>
+          <span>{fmtMXN(totalGastadoProyecto)}</span>
+        </div>
 
         {pedidos.length === 0 ? (
           <p>No hay pedidos registrados para este proyecto.</p>
@@ -219,6 +262,7 @@ export default function ListadoPedidosPage() {
                   <th className="py-2 px-4">Detalles</th>
                   <th className="py-2 px-4">Entrega propuesta</th>
                   <th className="py-2 px-4">Entrega real</th>
+                  <th className="py-2 px-4">Costos (base)</th> 
                   <th className="py-2 px-4">Cotización</th>
                   <th className="py-2 px-4">Status</th>
                 </tr>
@@ -256,6 +300,13 @@ export default function ListadoPedidosPage() {
                       )}
                     </td>
 
+                    {/* COSTOS BASE (subtotal de la Cotización Viva) */}
+                    <td className="py-2 px-4">
+                      {p.costoBaseProyecto > 0
+                        ? fmtMXN(Number(p.costoBaseProyecto))
+                        : "—"}
+                    </td>
+
                     {/* COTIZACIÓN */}
                     <td className="px-4 py-2">
                       {/* Nuevo flujo: Cotización Viva */}
@@ -265,7 +316,7 @@ export default function ListadoPedidosPage() {
                           className="inline-flex items-center justify-center px-3 py-1 rounded bg-black text-white hover:opacity-90"
                           title="Ver Cotización Viva del pedido"
                         >
-                          Ver Cotización Viva
+                          Ver Cotización 
                         </Link>
 
                         {/* Compatibilidad: PDF legacy si existe */}
@@ -323,6 +374,12 @@ export default function ListadoPedidosPage() {
                 ))}
               </tbody>
             </table>
+
+            {/* Pie con total del proyecto (opcional, ya está arriba) */}
+            <div className="text-right text-sm mt-3">
+              <span className="font-semibold">Total gastado (subtotal base): </span>
+              <span>{fmtMXN(totalGastadoProyecto)}</span>
+            </div>
           </div>
         )}
 

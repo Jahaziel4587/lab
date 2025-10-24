@@ -31,6 +31,7 @@ type Pedido = {
   nombreUsuario?: string;
   costo?: string;
   nombreCosto?: string;
+  subtotalBaseMXN?: number; // suma base de la cotización viva
 };
 
 type Usuario = {
@@ -38,6 +39,11 @@ type Usuario = {
   nombre: string;
   uid?: string;
 };
+
+function formatMoney(n?: number) {
+  const v = Number(n || 0);
+  return `MXN ${v.toFixed(2)}`;
+}
 
 export default function ProyectoCalendarioClient({ proyecto }: { proyecto: string }) {
   const { isAdmin } = useAuth();
@@ -54,7 +60,7 @@ export default function ProyectoCalendarioClient({ proyecto }: { proyecto: strin
   const [cargandoShare, setCargandoShare] = useState(true);
   // --------------------------
 
-  // Helpers
+  // Helpers (se mantienen aunque ya no se use el upload)
   const actualizarCampo = async (id: string, campo: string, valor: string) => {
     const ref = doc(db, "pedidos", id);
     await updateDoc(ref, { [campo]: valor });
@@ -74,7 +80,7 @@ export default function ProyectoCalendarioClient({ proyecto }: { proyecto: strin
     await actualizarCampo(id, "nombreCosto", file.name);
   };
 
-  // Cargar usuarios (mapa nombre->email) + pedidos del proyecto + sharing del proyecto
+  // Cargar usuarios + pedidos + sharing
   useEffect(() => {
     if (!isAdmin) return;
 
@@ -92,11 +98,7 @@ export default function ProyectoCalendarioClient({ proyecto }: { proyecto: strin
             u?.displayName ||
             u.email;
           map[u.email] = nombre;
-          listaUsuarios.push({
-            email: u.email,
-            nombre,
-            uid: u?.uid,
-          });
+          listaUsuarios.push({ email: u.email, nombre, uid: u?.uid });
         }
       });
 
@@ -107,10 +109,10 @@ export default function ProyectoCalendarioClient({ proyecto }: { proyecto: strin
       const qPed = query(collection(db, "pedidos"), where("proyecto", "==", proyecto));
       const snap = await getDocs(qPed);
 
-      const data: Pedido[] = [];
+      const basePedidos: Pedido[] = [];
       snap.forEach((docSnap) => {
         const d = docSnap.data() as any;
-        data.push({
+        basePedidos.push({
           id: docSnap.id,
           titulo: d.titulo || "Sin título",
           proyecto: d.proyecto || "Sin proyecto",
@@ -118,20 +120,38 @@ export default function ProyectoCalendarioClient({ proyecto }: { proyecto: strin
           fechaLimite: d.fechaLimite || "",
           status: d.status || "enviado",
           correoUsuario: d.correoUsuario || "",
-          // usa el mismo formato de nombre que en el calendario general
           nombreUsuario: map[d.correoUsuario] || d.nombreUsuario || d.correoUsuario || "",
           costo: d.costo || "",
           nombreCosto: d.nombreCosto || "",
         });
       });
 
+      // 2b) Sumar subtotal base (cotización viva)
+      const withSubtotals: Pedido[] = await Promise.all(
+        basePedidos.map(async (p) => {
+          try {
+            const linesRef = collection(db, "pedidos", p.id, "quote_live", "live", "lines");
+            const linesSnap = await getDocs(linesRef);
+            let subtotal = 0;
+            linesSnap.forEach((ln) => {
+              const ld = ln.data() as any;
+              const val = Number(ld?.subtotalMXN || 0);
+              if (Number.isFinite(val)) subtotal += val;
+            });
+            return { ...p, subtotalBaseMXN: subtotal };
+          } catch {
+            return { ...p, subtotalBaseMXN: 0 };
+          }
+        })
+      );
+
       setPedidos(
-        data
+        withSubtotals
           .filter((p) => p.fechaEntregaReal && p.fechaEntregaReal.trim() !== "")
           .sort((a, b) => (a.fechaEntregaReal! < b.fechaEntregaReal! ? -1 : 1))
       );
 
-      // 3) Estado de compartición del proyecto
+      // 3) Compartición
       setCargandoShare(true);
       const shareRef = doc(db, "proyectos_shares", proyecto);
       const shareSnap = await getDoc(shareRef);
@@ -149,6 +169,11 @@ export default function ProyectoCalendarioClient({ proyecto }: { proyecto: strin
   }, [isAdmin, proyecto]);
 
   const total = useMemo(() => pedidos.length, [pedidos]);
+
+  const totalProyectoMXN = useMemo(
+    () => pedidos.reduce((acc, p) => acc + (p.subtotalBaseMXN || 0), 0),
+    [pedidos]
+  );
 
   const fileLabel = (p: Pedido) =>
     p.nombreCosto ||
@@ -173,10 +198,7 @@ export default function ProyectoCalendarioClient({ proyecto }: { proyecto: strin
       const shareRef = doc(db, "proyectos_shares", proyecto);
       await setDoc(
         shareRef,
-        {
-          users: Array.from(seleccionados),
-          actualizadoEn: new Date().toISOString(),
-        },
+        { users: Array.from(seleccionados), actualizadoEn: new Date().toISOString() },
         { merge: true }
       );
       setAbiertoCompartir(false);
@@ -213,8 +235,6 @@ export default function ProyectoCalendarioClient({ proyecto }: { proyecto: strin
 
         <div className="flex items-center gap-3">
           <span className="text-sm text-gray-500">{total} pedido{total === 1 ? "" : "s"}</span>
-
-          {/* Botón Compartir proyecto */}
           <button
             onClick={() => setAbiertoCompartir(true)}
             className="px-3 py-1.5 rounded-lg border border-gray-300 hover:bg-gray-50 text-sm"
@@ -225,23 +245,24 @@ export default function ProyectoCalendarioClient({ proyecto }: { proyecto: strin
         </div>
       </div>
 
-      {/* Tabla de pedidos */}
+      {/* Tabla con botón Ver Cotización Viva en lugar de subir archivo */}
       <div className="overflow-x-auto">
-        <table className="min-w-full text-sm bg-white rounded shadow">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="px-4 py-2 text-left">Título</th>
-              <th className="px-4 py-2 text-left">Solicitante</th>
-              <th className="px-4 py-2 text-left">Fecha propuesta</th>
-              <th className="px-4 py-2 text-left">Fecha real</th>
-              <th className="px-4 py-2 text-left">Cotización</th>
-              <th className="px-4 py-2 text-left">Status</th>
-              <th className="px-4 py-2 text-left">Detalles</th>
+        <table className="min-w-full bg-white text-black rounded shadow-md text-sm">
+          <thead>
+            <tr className="bg-gray-100 text-left">
+              <th className="py-2 px-4">Título</th>
+              <th className="py-2 px-4">Solicitante</th>
+              <th className="py-2 px-4">Fecha propuesta</th>
+              <th className="py-2 px-4">Fecha real</th>
+              <th className="py-2 px-4">Costos</th>
+              <th className="py-2 px-4">Cotización</th>
+              <th className="py-2 px-4">Status</th>
+              <th className="py-2 px-4">Detalles</th>
             </tr>
           </thead>
           <tbody>
             {pedidos.map((p) => (
-              <tr key={p.id} className="border-t">
+              <tr key={p.id} className="border-t align-top">
                 <td className="px-4 py-2">{p.titulo}</td>
                 <td className="px-4 py-2">{p.nombreUsuario || p.correoUsuario || "-"}</td>
                 <td className="px-4 py-2">{p.fechaLimite || "-"}</td>
@@ -253,32 +274,23 @@ export default function ProyectoCalendarioClient({ proyecto }: { proyecto: strin
                     className="border px-2 py-1 rounded"
                   />
                 </td>
-                <td className="px-4 py-2">
-                  {p.costo ? (
-                    <div className="flex items-center gap-2">
-                      <a href={p.costo} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
-                        {fileLabel(p)}
-                      </a>
-                      <button
-                        onClick={() => {
-                          actualizarCampo(p.id, "costo", "");
-                          actualizarCampo(p.id, "nombreCosto", "");
-                        }}
-                        className="text-red-600 hover:text-red-800 text-lg"
-                        title="Eliminar archivo"
-                      >
-                        &times;
-                      </button>
-                    </div>
-                  ) : (
-                    <input
-                      type="file"
-                      accept=".pdf,.doc,.docx,.xls,.xlsx"
-                      onChange={(e) => subirArchivoCosto(e, p.id)}
-                      className="text-sm text-black"
-                    />
-                  )}
+
+                {/* Costos */}
+                <td className="px-4 py-2 font-medium">
+                  {formatMoney(p.subtotalBaseMXN)}
                 </td>
+
+                {/* Cotización -> botón Ver Cotización Viva */}
+                <td className="px-4 py-2">
+                  <Link
+                    href={`/solicitudes/listado/${p.id}#cotizacion-viva`}
+                    className="inline-flex items-center justify-center px-3 py-1 rounded bg-black text-white hover:opacity-90"
+                    title="Ver Cotización Viva del pedido"
+                  >
+                    Ver Cotización
+                  </Link>
+                </td>
+
                 <td className="px-4 py-2">
                   <select
                     value={p.status || "enviado"}
@@ -292,6 +304,7 @@ export default function ProyectoCalendarioClient({ proyecto }: { proyecto: strin
                     <option value="cancelado">Cancelado</option>
                   </select>
                 </td>
+
                 <td className="px-4 py-2">
                   <Link href={`/solicitudes/listado/${p.id}`} className="text-blue-600 hover:underline">
                     Ver detalles
@@ -299,27 +312,37 @@ export default function ProyectoCalendarioClient({ proyecto }: { proyecto: strin
                 </td>
               </tr>
             ))}
+
             {pedidos.length === 0 && (
               <tr>
-                <td className="px-4 py-6 text-center text-gray-500" colSpan={7}>
+                <td className="px-4 py-6 text-center text-gray-500" colSpan={8}>
                   No hay pedidos con fecha real en este proyecto.
                 </td>
               </tr>
             )}
           </tbody>
+
+          {pedidos.length > 0 && (
+            <tfoot>
+              <tr className="bg-gray-50 border-t">
+                <td className="px-4 py-2 text-right font-semibold" colSpan={4}>
+                  Total del proyecto:
+                </td>
+                <td className="px-4 py-2 font-bold">{formatMoney(totalProyectoMXN)}</td>
+                <td className="px-4 py-2" colSpan={3}></td>
+              </tr>
+            </tfoot>
+          )}
         </table>
       </div>
 
       {/* MODAL Compartir proyecto */}
       {abiertoCompartir && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
-          {/* Fondo */}
           <div
             className="absolute inset-0 bg-black/40"
             onClick={() => !guardandoShare && setAbiertoCompartir(false)}
           />
-
-          {/* Contenido */}
           <div className="relative bg-white text-black rounded-xl shadow-xl w-full max-w-2xl p-5">
             <div className="flex items-center justify-between gap-3 mb-3">
               <h2 className="text-base font-semibold">Compartir proyecto — {proyecto}</h2>
@@ -397,4 +420,3 @@ export default function ProyectoCalendarioClient({ proyecto }: { proyecto: strin
     </div>
   );
 }
-
