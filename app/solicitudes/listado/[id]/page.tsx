@@ -412,7 +412,7 @@ export default function DetallePedidoPage() {
       const pdfMake = await loadPdfMake();
 
       // Intentar cargar LOGO desde Storage (varias rutas candidatas)
-      const logoCandidates = ["logo", "logo.png", "org/logo", "org/logo.png"];
+      const logoCandidates = ["org/logo.png"];
       const loadLogo = async (): Promise<string | null> => {
         for (const p of logoCandidates) {
           try {
