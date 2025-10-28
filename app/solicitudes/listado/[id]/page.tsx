@@ -884,7 +884,7 @@ export default function DetallePedidoPage() {
       {/* ----- COTIZACIÓN VIVA ----- */}
       <div id="cotizacion-viva" className="bg-white shadow rounded-xl p-6 space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Cotización Viva</h2>
+          <h2 className="text-lg font-semibold">Cotización</h2>
           <button onClick={cargarCotizacionViva} className="px-3 py-1 rounded border hover:bg-gray-100" title="Actualizar">
             Refrescar
           </button>
