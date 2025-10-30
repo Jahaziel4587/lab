@@ -500,49 +500,52 @@ function CotizacionPanel() {
         <div className="space-y-3">
           <h4 className="font-semibold">Parámetros del servicio</h4>
           {selService.fields.map((f) =>
-            f.type === "select" ? (
-              <ServiceSelectInput
-                key={f.key}
-                field={f}
-                value={selects[f.key]}
-                onChange={(val) => {
-                  setSelects((s) => ({ ...s, [f.key]: val }));
-                  // One-hot automático: is_<campo>_<opcion>
-                  const base = `is_${f.key}_`;
-                  setAnswers((prev) => {
-                    const next = { ...prev };
-                    (f.options || []).forEach((opt) => {
-                      next[`${base}${snake(opt)}`] = 0;
-                    });
-                    if (val) next[`${base}${snake(val)}`] = 1;
-                    return next;
-                  });
-                }}
-              />
-            ) : (
-              <ServiceFieldInput
-                key={f.key}
-                field={f}
-                value={answers[f.key]}
-                onChange={(val) => {
-                  if (val === null) {
-                    setAnswers((prev) => {
-                      const { [f.key]: _omit, ...rest } = prev;
-                      return rest;
-                    });
-                    return;
-                  }
-                  const conflict = findConflicts(f.key, [
-                    { where: "tabla", has: f.key in Object(costVars) },
-                    { where: "cotizacion", has: f.key in answers },
-                    { where: "calculadora", has: false },
-                  ]);
-                  if (conflict && !(f.key in answers)) alert(conflict);
-                  setAnswers((a) => ({ ...a, [f.key]: val }));
-                }}
-              />
-            )
-          )}
+  f.type === "select" ? (
+    <ServiceSelectInput
+      key={f.key}
+      field={f}
+      value={selects[f.key]}
+      onChange={(val) => {
+        setSelects((s) => ({ ...s, [f.key]: val }));
+        // one-hot solo para selects
+        const base = `is_${f.key}_`;
+        setAnswers((prev) => {
+          const next = { ...prev };
+          (f.options || []).forEach((opt) => { next[`${base}${snake(opt)}`] = 0; });
+          if (val) next[`${base}${snake(val)}`] = 1;
+          return next;
+        });
+      }}
+    />
+  ) : f.type === "text" ? (
+    <ServiceTextInput
+      key={f.key}
+      field={f}
+      value={selects[f.key]}
+      onChange={(val) => setSelects((s) => ({ ...s, [f.key]: val }))}
+    />
+  ) : (
+    <ServiceFieldInput
+      key={f.key}
+      field={f}
+      value={answers[f.key]}
+      onChange={(val) => {
+        if (val === null) {
+          setAnswers(({ [f.key]: _omit, ...rest }) => rest);
+          return;
+        }
+        const conflict = findConflicts(f.key, [
+          { where: "tabla", has: f.key in Object(costVars) },
+          { where: "cotizacion", has: f.key in answers },
+          { where: "calculadora", has: false },
+        ]);
+        if (conflict && !(f.key in answers)) alert(conflict);
+        setAnswers((a) => ({ ...a, [f.key]: val }));
+      }}
+    />
+  )
+)}
+
         </div>
       )}
 
@@ -668,6 +671,30 @@ function ServiceSelectInput({
           </option>
         ))}
       </select>
+    </div>
+  );
+}
+function ServiceTextInput({
+  field,
+  value,
+  onChange,
+}: {
+  field: ServiceField;
+  value?: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div>
+      <label className="block text-sm font-medium text-neutral-800">
+        {field.label} ({field.key})
+      </label>
+      <input
+        type="text"
+        className="mt-1 border border-neutral-300 rounded-lg px-3 py-2 w-full placeholder-neutral-500 text-neutral-900"
+        value={value ?? ""}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder=""
+      />
     </div>
   );
 }
