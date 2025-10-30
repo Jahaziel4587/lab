@@ -146,10 +146,15 @@ export default function ProyectoCalendarioClient({ proyecto }: { proyecto: strin
       );
 
       setPedidos(
-        withSubtotals
-          .filter((p) => p.fechaEntregaReal && p.fechaEntregaReal.trim() !== "")
-          .sort((a, b) => (a.fechaEntregaReal! < b.fechaEntregaReal! ? -1 : 1))
-      );
+  withSubtotals
+    .filter(p => p.fechaEntregaReal && p.fechaEntregaReal.trim() !== "")
+    .sort((a, b) => {
+      const da = new Date(a.fechaEntregaReal!);
+      const db = new Date(b.fechaEntregaReal!);
+      return db.getTime() - da.getTime(); // más nuevos → más viejos
+    })
+);
+
 
       // 3) Compartición
       setCargandoShare(true);
