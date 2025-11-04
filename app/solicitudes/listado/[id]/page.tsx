@@ -19,6 +19,7 @@ import {
   uploadBytes,
   getDownloadURL,
   getBytes,
+  listAll,                    // ← NUEVO
 } from "firebase/storage";
 import { db, storage } from "@/src/firebase/firebaseConfig";
 import { FiArrowLeft } from "react-icons/fi";
@@ -173,6 +174,10 @@ export default function DetallePedidoPage() {
   // Estado de generación
   const [isGen, setIsGen] = useState(false);
 
+  // --- Archivos adjuntos (Storage) ---
+  const [filesLoading, setFilesLoading] = useState<boolean>(false);                                   // ← NUEVO
+  const [files, setFiles] = useState<Array<{ name: string; url: string }>>([]);                       // ← NUEVO
+
   // --------- Cargar pedido ---------
   useEffect(() => {
     if (!id) return;
@@ -193,6 +198,47 @@ export default function DetallePedidoPage() {
     };
     cargarPedido();
   }, [id, router]);
+
+  // --------- Cargar archivos adjuntos (por ID; fallback por título) ---------
+  useEffect(() => {                                                                                   // ← NUEVO
+    const listarAdjuntos = async () => {
+      if (!id) return;
+      setFilesLoading(true);
+      try {
+        // 1) Ruta nueva por ID
+        const refById = storageRef(storage, `pedidos/${id as string}`);
+        let items = (await listAll(refById)).items;
+
+        // 2) Compatibilidad: si no hay por ID, intenta por título
+        if (items.length === 0 && pedido?.titulo) {
+          try {
+            const refByTitle = storageRef(storage, `pedidos/${pedido.titulo}`);
+            items = (await listAll(refByTitle)).items;
+          } catch {
+            /* ignore */
+          }
+        }
+
+        const out = await Promise.all(
+          items.map(async (it) => {
+            const url = await getDownloadURL(it);
+            // nombre legible como usas en tablas
+            const raw = url.split("/").pop()?.split("?")[0] || it.name;
+            const name = decodeURIComponent(raw).split("%2F").pop() || it.name;
+            return { name, url };
+          })
+        );
+        setFiles(out);
+      } catch (e) {
+        console.warn("No se pudieron listar adjuntos del pedido:", e);
+        setFiles([]);
+      } finally {
+        setFilesLoading(false);
+      }
+    };
+
+    listarAdjuntos();
+  }, [id, pedido?.titulo]);                                                                           // ← NUEVO
 
   // --------- Cargar Cotización Viva ---------
   const cargarCotizacionViva = async () => {
@@ -530,31 +576,29 @@ export default function DetallePedidoPage() {
             margin: [0, 6, 0, 10],
           },
 
-          // Tabla de totales (debajo de servicios)
-      // Tabla de totales (a la derecha)
-{
-  columns: [
-    { width: '*', text: '' },                       // columna "espaciadora"
-    {
-      width: 260,                                   // ancho total aprox. de la tabla (ajusta si cambias widths)
-      table: {
-        widths: [120, 120],
-        body: [
-          [{ text: "Subtotal:", bold: true }, { text: formatMoney(subtotalConGananciaMXN), alignment: "right" }],
-          [{ text: "IVA (16%):", bold: true },     { text: formatMoney(ivaMonto), alignment: "right" }],
-          [{ text: "Envío:", bold: true },         { text: formatMoney(Number(draft.envio) || 0), alignment: "right" }],
-          [
-            { text: "TOTAL:", bold: true },
-            { text: formatMoney(totalFinal), bold: true, alignment: "right" }
-          ],
-        ],
-      },
-      layout: "lightHorizontalLines",
-    }
-  ],
-  margin: [0, 0, 0, 16],
-}
-,
+          // Tabla de totales (a la derecha)
+          {
+            columns: [
+              { width: "*", text: "" },
+              {
+                width: 260,
+                table: {
+                  widths: [120, 120],
+                  body: [
+                    [{ text: "Subtotal:", bold: true }, { text: formatMoney(subtotalConGananciaMXN), alignment: "right" }],
+                    [{ text: "IVA (16%):", bold: true }, { text: formatMoney(ivaMonto), alignment: "right" }],
+                    [{ text: "Envío:", bold: true }, { text: formatMoney(Number(draft.envio) || 0), alignment: "right" }],
+                    [
+                      { text: "TOTAL:", bold: true },
+                      { text: formatMoney(totalFinal), bold: true, alignment: "right" }
+                    ],
+                  ],
+                },
+                layout: "lightHorizontalLines",
+              }
+            ],
+            margin: [0, 0, 0, 16],
+          },
 
           // Bloques informativos con banda verde
           sectionBlock("General Information", generalInfo),
@@ -750,13 +794,14 @@ export default function DetallePedidoPage() {
         }
       };
 
-      const filasServicios = quoteLines.map((ln) => {
-        const d = ln.data;
-        const base = d.subtotalMXN ?? 0;
-        const inflado = base * (1 + (Number(draft.gananciaPct) || 0) / 100);
-        const details = buildDetailsForLine(d);
-        return { servicio: d.serviceName || d.serviceId || "Servicio", detalles: details, total: inflado };
-      });
+     const filasServicios = quoteLines.map((ln) => {
+  const d = ln.data;
+  const base = d.subtotalMXN ?? 0;
+  const inflado = base * (1 + ((Number(draft.gananciaPct) || 0) / 100));
+  const details = buildDetailsForLine(d);
+  return { servicio: d.serviceName || d.serviceId || "Servicio", detalles: details, total: inflado };
+});
+
 
       for (const f of filasServicios) {
         newPageIfNeeded();
@@ -879,7 +924,34 @@ export default function DetallePedidoPage() {
         <p>
           <strong>Status:</strong> {pedido.status || "Enviado"}
         </p>
+{/* Archivos adjuntos (debajo de Status) */}
+<div className="pt-4 mt-2 border-t">
+  <strong>Archivos adjuntos:</strong>{" "}
+  {filesLoading ? (
+    <span>Cargando…</span>
+  ) : files.length === 0 ? (
+    <span className="italic">No hay archivos adjuntos.</span>
+  ) : (
+    <ul className="list-disc pl-6 mt-2 space-y-1">
+      {files.map((f) => (
+        <li key={f.url}>
+          <a
+            href={f.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-blue-600 underline"
+          >
+            {f.name}
+          </a>
+        </li>
+      ))}
+    </ul>
+  )}
+</div>
+
+
       </div>
+
 
       {/* ----- COTIZACIÓN VIVA ----- */}
       <div id="cotizacion-viva" className="bg-white shadow rounded-xl p-6 space-y-4">
@@ -1005,15 +1077,14 @@ export default function DetallePedidoPage() {
             <div className="pt-2">
               <button
                 onClick={async () => {
-  try {
-    setIsGen(true);
-    const ok = await handleGenerarPDF();   // ← siempre el genérico
-    if (ok) await cargarCotizacionViva();
-  } finally {
-    setIsGen(false);
-  }
-}}
-
+                  try {
+                    setIsGen(true);
+                    const ok = await handleGenerarPDF();   // ← siempre el genérico
+                    if (ok) await cargarCotizacionViva();
+                  } finally {
+                    setIsGen(false);
+                  }
+                }}
                 disabled={isGen}
                 className="px-4 py-2 rounded-xl bg-black text-white hover:opacity-90 disabled:opacity-50"
               >
