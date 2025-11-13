@@ -34,12 +34,14 @@ import { FiUser } from "react-icons/fi";
         </Link>
   
         <div className="flex gap-6 items-center text-sm font-light">
+          
           <Link href="/calendario" className="hover:underline">Calendario</Link>
           <Link href="/about" className="hover:underline">Información</Link>
           <Link href="/collection" className="hover:underline">Colección</Link>
           <Link href="/solicitudes" className="hover:underline">Mis proyectos</Link>
           <Link href="/hacer-pedido/proyecto" className="hover:underline">Hacer pedido</Link>
           <Link href="/inventario" className="hover:underline">Inventario</Link>
+          
           {isAdmin && (
             <Link
               href="/cotizador"
@@ -47,8 +49,17 @@ import { FiUser } from "react-icons/fi";
             >
               Cotizador
             </Link>
+           
           )}
-      
+      {isAdmin && (
+            <Link
+              href="/analitica"
+              className="hover:underline"
+            >
+              Análisis
+            </Link>
+           
+          )}
           {user && (
             <span className="text-xs font-semibold text-white mr-1">
               {nombreUsuario}
