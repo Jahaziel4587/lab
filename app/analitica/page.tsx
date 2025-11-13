@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, Fragment } from "react";
 import { db } from "@/src/firebase/firebaseConfig";
 import { collection, getDocs } from "firebase/firestore";
 import { useAuth } from "@/src/Context/AuthContext";
@@ -12,8 +12,6 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
-// Necesario para usar <Fragment> en el tbody
-import { Fragment } from "react";
 
 type ViewKey = "proyecto" | "servicios" | "materiales";
 
@@ -26,25 +24,37 @@ type AnalyticLine = {
   material: string;
 };
 
+type ProyectoServiceInfo = {
+  label: string;
+  count: number;
+  totalMXN: number;
+};
+
+type ProyectoMaterialInfo = {
+  label: string;
+  count: number;
+  totalMXN: number;
+};
+
 type ProyectoStats = {
   proyecto: string;
   pedidosIds: Set<string>;
   fechaMin: Date | null;
   fechaMax: Date | null;
   totalMXN: number;
-  services: Record<string, { count: number; totalMXN: number }>;
-  materials: Record<string, { count: number; totalMXN: number }>;
+  services: Record<string, ProyectoServiceInfo>;   // key = normalizado
+  materials: Record<string, ProyectoMaterialInfo>; // key = normalizado
 };
 
 type ServiceStats = {
-  serviceName: string;
+  serviceName: string; // etiqueta bonita
   totalCount: number;
   totalMXN: number;
   proyectos: { proyecto: string; count: number; totalMXN: number }[];
 };
 
 type MaterialStats = {
-  material: string;
+  material: string; // etiqueta bonita
   totalCount: number;
   totalMXN: number;
   proyectos: { proyecto: string; count: number; totalMXN: number }[];
@@ -61,6 +71,19 @@ function formatDate(d: Date | null) {
   const month = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+// Normalizar para agrupar claves equivalentes
+function normalizeKey(x: string): string {
+  return x
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
+// Capitalizar para mostrar bonito
+function prettyLabel(x: string): string {
+  return x.replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 const PIE_COLORS = [
@@ -102,7 +125,7 @@ export default function AnaliticaPage() {
             const proyecto = d.proyecto || "Sin proyecto";
             const status = d.status || "";
 
-            // Si quieres excluir cancelados:
+            // si quieres excluir cancelados:
             if (status === "cancelado") return;
 
             const fechaStr: string =
@@ -125,22 +148,29 @@ export default function AnaliticaPage() {
 
               linesSnap.forEach((ln) => {
                 const ld = ln.data() as any;
-                const subtotal = Number(ld?.subtotalMXN || 0);
+
+                const subtotal = Number(ld?.subtotalMXN ?? ld?.displayTotal ?? 0);
                 if (!Number.isFinite(subtotal)) return;
 
-                // Tomamos servicio/material desde selects, y si no, caemos al pedido
-                const serviceName =
-                  ld?.selects?.serviceName || d.servicio || "(sin servicio)";
-                const material =
-                  ld?.selects?.material || d.material || "(sin material)";
+                // 👇 SOLO info del cotizador, nada del pedido
+                const rawService: string =
+                  ld?.selects?.serviceName ??
+                  ld?.costGroupName ??
+                  ld?.calcGroupName ??
+                  "(sin servicio)";
+
+                const rawMaterial: string =
+                  ld?.selects?.material ??
+                  ld?.material ?? // por si alguna calc guarda el texto así
+                  "(sin material)";
 
                 allLines.push({
                   pedidoId,
                   proyecto,
                   fecha,
                   subtotalMXN: subtotal,
-                  serviceName,
-                  material,
+                  serviceName: rawService,
+                  material: rawMaterial,
                 });
               });
             } catch (err) {
@@ -162,18 +192,18 @@ export default function AnaliticaPage() {
   }, [isAdmin]);
 
   /* ==========================
-   * Aggregados por proyecto
+   * Aggregado por proyecto
    * ========================== */
 
   const proyectosStats = useMemo(() => {
     const map = new Map<string, ProyectoStats>();
 
     for (const ln of lines) {
-      const key = ln.proyecto || "Sin proyecto";
-      let stats = map.get(key);
+      const keyProyecto = ln.proyecto || "Sin proyecto";
+      let stats = map.get(keyProyecto);
       if (!stats) {
         stats = {
-          proyecto: key,
+          proyecto: keyProyecto,
           pedidosIds: new Set<string>(),
           fechaMin: ln.fecha,
           fechaMax: ln.fecha,
@@ -181,7 +211,7 @@ export default function AnaliticaPage() {
           services: {},
           materials: {},
         };
-        map.set(key, stats);
+        map.set(keyProyecto, stats);
       }
 
       stats.pedidosIds.add(ln.pedidoId);
@@ -196,18 +226,28 @@ export default function AnaliticaPage() {
         }
       }
 
-      // Servicios por proyecto
-      const svcKey = ln.serviceName || "(sin servicio)";
+      // Servicios (solo desde la cotización)
+      const svcLabel = ln.serviceName || "(sin servicio)";
+      const svcKey = normalizeKey(svcLabel);
       if (!stats.services[svcKey]) {
-        stats.services[svcKey] = { count: 0, totalMXN: 0 };
+        stats.services[svcKey] = {
+          label: svcLabel,
+          count: 0,
+          totalMXN: 0,
+        };
       }
       stats.services[svcKey].count += 1;
       stats.services[svcKey].totalMXN += ln.subtotalMXN;
 
-      // Materiales por proyecto
-      const matKey = ln.material || "(sin material)";
+      // Materiales (solo desde la cotización)
+      const matLabel = ln.material || "(sin material)";
+      const matKey = normalizeKey(matLabel);
       if (!stats.materials[matKey]) {
-        stats.materials[matKey] = { count: 0, totalMXN: 0 };
+        stats.materials[matKey] = {
+          label: matLabel,
+          count: 0,
+          totalMXN: 0,
+        };
       }
       stats.materials[matKey].count += 1;
       stats.materials[matKey].totalMXN += ln.subtotalMXN;
@@ -217,13 +257,14 @@ export default function AnaliticaPage() {
   }, [lines]);
 
   /* ==========================
-   * Aggregados por servicio
+   * Aggregado por servicio
    * ========================== */
 
   const serviceStats = useMemo<ServiceStats[]>(() => {
     const map = new Map<
       string,
       {
+        label: string;
         totalCount: number;
         totalMXN: number;
         proyectos: Map<string, { count: number; totalMXN: number }>;
@@ -231,15 +272,18 @@ export default function AnaliticaPage() {
     >();
 
     for (const ln of lines) {
-      const svcKey = ln.serviceName || "(sin servicio)";
-      let s = map.get(svcKey);
+      const lbl = ln.serviceName || "(sin servicio)";
+      const key = normalizeKey(lbl);
+
+      let s = map.get(key);
       if (!s) {
         s = {
+          label: lbl,
           totalCount: 0,
           totalMXN: 0,
           proyectos: new Map(),
         };
-        map.set(svcKey, s);
+        map.set(key, s);
       }
       s.totalCount += 1;
       s.totalMXN += ln.subtotalMXN;
@@ -254,9 +298,9 @@ export default function AnaliticaPage() {
       p.totalMXN += ln.subtotalMXN;
     }
 
-    return Array.from(map.entries())
-      .map(([serviceName, s]) => ({
-        serviceName,
+    return Array.from(map.values())
+      .map((s) => ({
+        serviceName: s.label,
         totalCount: s.totalCount,
         totalMXN: s.totalMXN,
         proyectos: Array.from(s.proyectos.entries())
@@ -267,13 +311,14 @@ export default function AnaliticaPage() {
   }, [lines]);
 
   /* ==========================
-   * Aggregados por material
+   * Aggregado por material
    * ========================== */
 
   const materialStats = useMemo<MaterialStats[]>(() => {
     const map = new Map<
       string,
       {
+        label: string;
         totalCount: number;
         totalMXN: number;
         proyectos: Map<string, { count: number; totalMXN: number }>;
@@ -281,15 +326,18 @@ export default function AnaliticaPage() {
     >();
 
     for (const ln of lines) {
-      const matKey = ln.material || "(sin material)";
-      let m = map.get(matKey);
+      const lbl = ln.material || "(sin material)";
+      const key = normalizeKey(lbl);
+
+      let m = map.get(key);
       if (!m) {
         m = {
+          label: lbl,
           totalCount: 0,
           totalMXN: 0,
           proyectos: new Map(),
         };
-        map.set(matKey, m);
+        map.set(key, m);
       }
       m.totalCount += 1;
       m.totalMXN += ln.subtotalMXN;
@@ -304,9 +352,9 @@ export default function AnaliticaPage() {
       p.totalMXN += ln.subtotalMXN;
     }
 
-    return Array.from(map.entries())
-      .map(([material, m]) => ({
-        material,
+    return Array.from(map.values())
+      .map((m) => ({
+        material: m.label,
         totalCount: m.totalCount,
         totalMXN: m.totalMXN,
         proyectos: Array.from(m.proyectos.entries())
@@ -420,12 +468,10 @@ export default function AnaliticaPage() {
                     <tbody>
                       {proyectosStats.map((p) => {
                         const isOpen = openProyecto === p.proyecto;
-                        const serviciosOrdenados = Object.entries(p.services).sort(
-                          (a, b) => b[1].totalMXN - a[1].totalMXN
-                        );
-                        const materialesOrdenados = Object.entries(
-                          p.materials
-                        ).sort((a, b) => b[1].totalMXN - a[1].totalMXN);
+                        const serviciosOrdenados = Object.values(p.services)
+                          .sort((a, b) => b.totalMXN - a.totalMXN);
+                        const materialesOrdenados = Object.values(p.materials)
+                          .sort((a, b) => b.totalMXN - a.totalMXN);
 
                         return (
                           <Fragment key={p.proyecto}>
@@ -469,7 +515,7 @@ export default function AnaliticaPage() {
                                 >
                                   <div>
                                     <h3 className="text-sm font-semibold mb-2">
-                                      Servicios usados en este proyecto
+                                      Servicios cobrados en este proyecto
                                     </h3>
                                     {serviciosOrdenados.length === 0 ? (
                                       <p className="text-xs text-gray-500">
@@ -492,26 +538,24 @@ export default function AnaliticaPage() {
                                             </tr>
                                           </thead>
                                           <tbody>
-                                            {serviciosOrdenados.map(
-                                              ([svc, info]) => (
-                                                <tr
-                                                  key={svc}
-                                                  className="border-t"
-                                                >
-                                                  <td className="px-3 py-1.5">
-                                                    {svc}
-                                                  </td>
-                                                  <td className="px-3 py-1.5">
-                                                    {info.count}
-                                                  </td>
-                                                  <td className="px-3 py-1.5">
-                                                    {formatMoney(
-                                                      info.totalMXN
-                                                    )}
-                                                  </td>
-                                                </tr>
-                                              )
-                                            )}
+                                            {serviciosOrdenados.map((info) => (
+                                              <tr
+                                                key={info.label}
+                                                className="border-t"
+                                              >
+                                                <td className="px-3 py-1.5">
+                                                  {info.label}
+                                                </td>
+                                                <td className="px-3 py-1.5">
+                                                  {info.count}
+                                                </td>
+                                                <td className="px-3 py-1.5">
+                                                  {formatMoney(
+                                                    info.totalMXN
+                                                  )}
+                                                </td>
+                                              </tr>
+                                            ))}
                                           </tbody>
                                         </table>
                                       </div>
@@ -520,7 +564,7 @@ export default function AnaliticaPage() {
 
                                   <div>
                                     <h3 className="text-sm font-semibold mb-2">
-                                      Materiales usados en este proyecto
+                                      Materiales cobrados en este proyecto
                                     </h3>
                                     {materialesOrdenados.length === 0 ? (
                                       <p className="text-xs text-gray-500">
@@ -543,26 +587,24 @@ export default function AnaliticaPage() {
                                             </tr>
                                           </thead>
                                           <tbody>
-                                            {materialesOrdenados.map(
-                                              ([mat, info]) => (
-                                                <tr
-                                                  key={mat}
-                                                  className="border-t"
-                                                >
-                                                  <td className="px-3 py-1.5">
-                                                    {mat}
-                                                  </td>
-                                                  <td className="px-3 py-1.5">
-                                                    {info.count}
-                                                  </td>
-                                                  <td className="px-3 py-1.5">
-                                                    {formatMoney(
-                                                      info.totalMXN
-                                                    )}
-                                                  </td>
-                                                </tr>
-                                              )
-                                            )}
+                                            {materialesOrdenados.map((info) => (
+                                              <tr
+                                                key={info.label}
+                                                className="border-t"
+                                              >
+                                                <td className="px-3 py-1.5">
+                                                  {info.label}
+                                                </td>
+                                                <td className="px-3 py-1.5">
+                                                  {info.count}
+                                                </td>
+                                                <td className="px-3 py-1.5">
+                                                  {formatMoney(
+                                                    info.totalMXN
+                                                  )}
+                                                </td>
+                                              </tr>
+                                            ))}
                                           </tbody>
                                         </table>
                                       </div>
@@ -598,7 +640,7 @@ export default function AnaliticaPage() {
         {view === "servicios" && (
           <div>
             <h1 className="text-xl font-semibold mb-4">
-              Analítica por servicios
+              Analítica por servicios (basado en cotización)
             </h1>
 
             {loading && (
@@ -611,9 +653,8 @@ export default function AnaliticaPage() {
             {!loading && !error && (
               <>
                 <p className="text-sm text-gray-600 mb-4">
-                  Cada tarjeta muestra un servicio. La gráfica de pastel
-                  reparte las <strong>veces usado</strong> entre proyectos
-                  (puedes ver el proyecto y su total en el tooltip).
+                  Cada tarjeta muestra un servicio cobrado. La gráfica de pastel
+                  reparte las <strong>veces usado</strong> entre proyectos.
                 </p>
 
                 {serviceStats.length === 0 && (
@@ -624,7 +665,7 @@ export default function AnaliticaPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {serviceStats.map((svc, idxSvc) => {
-                    const data = svc.proyectos.map((p, idx) => ({
+                    const data = svc.proyectos.map((p) => ({
                       name: p.proyecto,
                       value: p.count,
                       mxn: p.totalMXN,
@@ -632,7 +673,7 @@ export default function AnaliticaPage() {
 
                     return (
                       <div
-                        key={svc.serviceName}
+                        key={idxSvc}
                         className="border rounded-2xl p-4 bg-gray-50/60"
                       >
                         <div className="flex items-center justify-between mb-2">
@@ -667,7 +708,7 @@ export default function AnaliticaPage() {
                               >
                                 {data.map((entry, index) => (
                                   <Cell
-                                    key={`cell-${index}`}
+                                    key={index}
                                     fill={
                                       PIE_COLORS[
                                         index % PIE_COLORS.length
@@ -677,7 +718,11 @@ export default function AnaliticaPage() {
                                 ))}
                               </Pie>
                               <Tooltip
-                                formatter={(val: any, _name, props: any) => {
+                                formatter={(
+                                  val: number,
+                                  _name: string,
+                                  props: any
+                                ) => {
                                   const payload = props.payload as any;
                                   return [
                                     `${val} usos · ${formatMoney(
@@ -704,7 +749,7 @@ export default function AnaliticaPage() {
         {view === "materiales" && (
           <div>
             <h1 className="text-xl font-semibold mb-4">
-              Analítica por materiales
+              Analítica por materiales (basado en cotización)
             </h1>
 
             {loading && (
@@ -717,8 +762,8 @@ export default function AnaliticaPage() {
             {!loading && !error && (
               <>
                 <p className="text-sm text-gray-600 mb-4">
-                  Cada tarjeta muestra un material. La gráfica de pastel
-                  reparte las <strong>veces que ese material se usó</strong>{" "}
+                  Cada tarjeta muestra un material cobrado. La gráfica de pastel
+                  reparte las <strong>veces que se usó</strong> ese material
                   entre proyectos.
                 </p>
 
@@ -730,7 +775,7 @@ export default function AnaliticaPage() {
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   {materialStats.map((mat, idxMat) => {
-                    const data = mat.proyectos.map((p, idx) => ({
+                    const data = mat.proyectos.map((p) => ({
                       name: p.proyecto,
                       value: p.count,
                       mxn: p.totalMXN,
@@ -738,7 +783,7 @@ export default function AnaliticaPage() {
 
                     return (
                       <div
-                        key={mat.material}
+                        key={idxMat}
                         className="border rounded-2xl p-4 bg-gray-50/60"
                       >
                         <div className="flex items-center justify-between mb-2">
@@ -773,7 +818,7 @@ export default function AnaliticaPage() {
                               >
                                 {data.map((entry, index) => (
                                   <Cell
-                                    key={`cell-${index}`}
+                                    key={index}
                                     fill={
                                       PIE_COLORS[
                                         index % PIE_COLORS.length
@@ -783,7 +828,11 @@ export default function AnaliticaPage() {
                                 ))}
                               </Pie>
                               <Tooltip
-                                formatter={(val: any, _name, props: any) => {
+                                formatter={(
+                                  val: number,
+                                  _name: string,
+                                  props: any
+                                ) => {
                                   const payload = props.payload as any;
                                   return [
                                     `${val} usos · ${formatMoney(
@@ -809,4 +858,3 @@ export default function AnaliticaPage() {
     </div>
   );
 }
-
