@@ -7,9 +7,9 @@ import { FiArrowLeft, FiArrowRight } from "react-icons/fi";
 const MAQUINAS = [
   { nombre: "Láser CO2", imagen: "/laser.jpg", servicio: "corte" },
   { nombre: "Fresadora CNC", imagen: "/corte.jpg", servicio: "corte" },
-  { nombre: "Filamento", imagen: "/filamentos.jpg", servicio: "impresion" },
-  { nombre: "Resina Formlabs 3B", imagen: "/resinas.png", servicio: "impresion" },
-  { nombre: "Resina Formlabs 2B", imagen: "/resinas.png", servicio: "impresion" },
+  { nombre: "Filamento", imagen: "/filamentos.jpg", servicio: "impresión" },
+  { nombre: "Resina Formlabs 3B", imagen: "/resinas.png", servicio: "impresión" },
+  { nombre: "Resina Formlabs 2B", imagen: "/resinas.png", servicio: "impresión" },
  { nombre: "Libre", imagen: "/libre.png", servicio: "fixture" },
   //{ nombre: "BambuLab", imagen: "/bambulab.png", servicio: "impresion" },
  // { nombre: "Mayku", imagen: "/mayku.jpg", servicio: "fixture" },
