@@ -60,6 +60,18 @@ type MaterialStats = {
   proyectos: { proyecto: string; count: number; totalMXN: number }[];
 };
 
+// Lo que se exportará a CSV
+type PedidoExportRow = {
+  pedidoId: string;
+  proyecto: string;
+  titulo: string;
+  fechaPedido: string;
+  fechaFinal: string;
+  servicios: Set<string>;
+  materiales: Set<string>;
+  totalMXN: number;
+};
+
 function formatMoney(n?: number) {
   const v = Number(n || 0);
   return `MXN ${v.toFixed(2)}`;
@@ -81,17 +93,12 @@ function normalizeKey(x: string): string {
     .replace(/\s+/g, " ");
 }
 
-// Capitalizar para mostrar bonito
-function prettyLabel(x: string): string {
-  return x.replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
 const PIE_COLORS = [
   "#111827",
+  "#10B981",
+   "#F59E0B",
   "#4B5563",
   "#9CA3AF",
-  "#F59E0B",
-  "#10B981",
   "#3B82F6",
   "#EC4899",
   "#EF4444",
@@ -108,6 +115,9 @@ export default function AnaliticaPage() {
   const [error, setError] = useState<string | null>(null);
   const [openProyecto, setOpenProyecto] = useState<string | null>(null);
 
+  // para exportar a Excel/CSV
+  const [exportRows, setExportRows] = useState<PedidoExportRow[]>([]);
+
   useEffect(() => {
     if (!isAdmin) return;
 
@@ -118,6 +128,9 @@ export default function AnaliticaPage() {
         const pedidosSnap = await getDocs(collection(db, "pedidos"));
         const allLines: AnalyticLine[] = [];
 
+        // mapa auxiliar por pedido para armar lo que se exportará
+        const exportMap = new Map<string, PedidoExportRow>();
+
         await Promise.all(
           pedidosSnap.docs.map(async (docSnap) => {
             const d = docSnap.data() as any;
@@ -125,14 +138,34 @@ export default function AnaliticaPage() {
             const proyecto = d.proyecto || "Sin proyecto";
             const status = d.status || "";
 
-            // si quieres excluir cancelados:
+            // excluir cancelados si quieres
             if (status === "cancelado") return;
 
-            const fechaStr: string =
-              d.fechaEntregaReal || d.fechaLimite || d.timestamp || "";
+            const fechaPedido: string =
+              d.fechaLimite ||
+              d.fechaEntregaReal ||
+              d.timestamp ||
+              "";
+            const fechaFinal: string = d.fechaEntregaReal || "";
+            const titulo: string = d.titulo || "Sin título";
+
+            // crear entrada base para export, aunque luego no tenga líneas
+            if (!exportMap.has(pedidoId)) {
+              exportMap.set(pedidoId, {
+                pedidoId,
+                proyecto,
+                titulo,
+                fechaPedido,
+                fechaFinal,
+                servicios: new Set<string>(),
+                materiales: new Set<string>(),
+                totalMXN: 0,
+              });
+            }
+
             let fecha: Date | null = null;
-            if (fechaStr && /^\d{4}-\d{2}-\d{2}/.test(fechaStr)) {
-              fecha = new Date(fechaStr);
+            if (fechaPedido && /^\d{4}-\d{2}-\d{2}/.test(fechaPedido)) {
+              fecha = new Date(fechaPedido);
             }
 
             try {
@@ -152,7 +185,7 @@ export default function AnaliticaPage() {
                 const subtotal = Number(ld?.subtotalMXN ?? ld?.displayTotal ?? 0);
                 if (!Number.isFinite(subtotal)) return;
 
-                // 👇 SOLO info del cotizador, nada del pedido
+                // SOLO info del cotizador
                 const rawService: string =
                   ld?.selects?.serviceName ??
                   ld?.costGroupName ??
@@ -161,7 +194,7 @@ export default function AnaliticaPage() {
 
                 const rawMaterial: string =
                   ld?.selects?.material ??
-                  ld?.material ?? // por si alguna calc guarda el texto así
+                  ld?.material ??
                   "(sin material)";
 
                 allLines.push({
@@ -172,6 +205,14 @@ export default function AnaliticaPage() {
                   serviceName: rawService,
                   material: rawMaterial,
                 });
+
+                // actualizar info para export
+                const row = exportMap.get(pedidoId);
+                if (row) {
+                  row.totalMXN += subtotal;
+                  row.servicios.add(rawService);
+                  row.materiales.add(rawMaterial);
+                }
               });
             } catch (err) {
               console.error("Error leyendo lines de", pedidoId, err);
@@ -180,6 +221,7 @@ export default function AnaliticaPage() {
         );
 
         setLines(allLines);
+        setExportRows(Array.from(exportMap.values()));
       } catch (err: any) {
         console.error(err);
         setError("Error al cargar los datos de pedidos.");
@@ -192,7 +234,7 @@ export default function AnaliticaPage() {
   }, [isAdmin]);
 
   /* ==========================
-   * Aggregado por proyecto
+   * Agregado por proyecto
    * ========================== */
 
   const proyectosStats = useMemo(() => {
@@ -369,13 +411,93 @@ export default function AnaliticaPage() {
     [lines]
   );
 
-  if (!isAdmin) {
-    return (
-      <div className="max-w-5xl mx-auto bg-white text-black p-6 rounded-xl shadow mt-6">
-        <p>No autorizado.</p>
-      </div>
-    );
-  }
+  // ==========================
+  // Descargar CSV
+  // ==========================
+  // ===============================
+// Descargar CSV con BOM UTF-8
+// ===============================
+
+// Normalizador de texto (quita acentos, espacios dobles, etc.)
+function normalize(x: string): string {
+  return x
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")      // quitar acentos
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");                // quitar espacios dobles
+}
+
+// Capitalizar nombres bonitos
+function capitalizeWords(str: string): string {
+  return str.replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+const handleDownloadCSV = () => {
+  if (exportRows.length === 0) return;
+
+  const header = [
+    "Proyecto",
+    "Título del pedido",
+    "Fecha de pedido",
+    "Fecha final",
+    "Servicios cotizados",
+    "Costo final del pedido",
+    "Materiales utilizados",
+  ];
+
+  const rows = exportRows.map((r) => {
+    // NORMALIZAR + CAPITALIZAR SERVICIOS
+    const serviciosClean = Array.from(
+      new Set(
+        Array.from(r.servicios).map((s) =>
+          capitalizeWords(normalize(String(s)))
+        )
+      )
+    ).join(", ");
+
+    // NORMALIZAR + CAPITALIZAR MATERIALES
+    const materialesClean = Array.from(
+      new Set(
+        Array.from(r.materiales).map((m) =>
+          capitalizeWords(normalize(String(m)))
+        )
+      )
+    ).join(", ");
+
+    return [
+      r.proyecto,
+      r.titulo,
+      r.fechaPedido,
+      r.fechaFinal,
+      serviciosClean,
+      r.totalMXN.toFixed(2),
+      materialesClean,
+    ];
+  });
+
+  let csv = header.join(",") + "\n";
+
+  csv += rows
+    .map((row) =>
+      row
+        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+        .join(",")
+    )
+    .join("\n");
+
+  // 🌟 UTF-8 BOM para evitar caracteres raros en Excel
+  const blob = new Blob(["\uFEFF" + csv], {
+    type: "text/csv;charset=utf-8",
+  });
+
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "analitica_pedidos.csv";
+  a.click();
+  URL.revokeObjectURL(url);
+};
 
   return (
     <div className="max-w-7xl mx-auto mt-6 flex gap-6 text-black">
@@ -416,10 +538,20 @@ export default function AnaliticaPage() {
 
       {/* Contenido principal */}
       <main className="flex-1 bg-white rounded-2xl shadow p-6">
-        {/* ================== POR PROYECTO ================== */}
+        {/* ================ POR PROYECTO ================ */}
         {view === "proyecto" && (
           <>
-            <h1 className="text-xl font-semibold mb-4">Analítica por proyecto</h1>
+            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
+              <h1 className="text-xl font-semibold">
+                Analítica por proyecto
+              </h1>
+              <button
+                onClick={handleDownloadCSV}
+                className="px-4 py-2 rounded-lg bg-black text-white text-sm hover:opacity-90"
+              >
+                Descargar CSV (todos los pedidos)
+              </button>
+            </div>
 
             {loading && (
               <p className="text-gray-500 text-sm mb-2">Cargando datos…</p>
@@ -468,16 +600,20 @@ export default function AnaliticaPage() {
                     <tbody>
                       {proyectosStats.map((p) => {
                         const isOpen = openProyecto === p.proyecto;
-                        const serviciosOrdenados = Object.values(p.services)
-                          .sort((a, b) => b.totalMXN - a.totalMXN);
-                        const materialesOrdenados = Object.values(p.materials)
-                          .sort((a, b) => b.totalMXN - a.totalMXN);
+                        const serviciosOrdenados = Object.values(p.services).sort(
+                          (a, b) => b.totalMXN - a.totalMXN
+                        );
+                        const materialesOrdenados = Object.values(
+                          p.materials
+                        ).sort((a, b) => b.totalMXN - a.totalMXN);
 
                         return (
                           <Fragment key={p.proyecto}>
                             <tr className="border-t">
                               <td className="px-4 py-2 align-top">
-                                <div className="font-medium">{p.proyecto}</div>
+                                <div className="font-medium">
+                                  {p.proyecto}
+                                </div>
                               </td>
                               <td className="px-4 py-2 align-top">
                                 <div className="font-semibold">
@@ -636,7 +772,7 @@ export default function AnaliticaPage() {
           </>
         )}
 
-        {/* ================== SERVICIOS ================== */}
+        {/* ================ SERVICIOS ================ */}
         {view === "servicios" && (
           <div>
             <h1 className="text-xl font-semibold mb-4">
@@ -706,7 +842,7 @@ export default function AnaliticaPage() {
                                 outerRadius="80%"
                                 paddingAngle={2}
                               >
-                                {data.map((entry, index) => (
+                                {data.map((_entry, index) => (
                                   <Cell
                                     key={index}
                                     fill={
@@ -745,7 +881,7 @@ export default function AnaliticaPage() {
           </div>
         )}
 
-        {/* ================== MATERIALES ================== */}
+        {/* ================ MATERIALES ================ */}
         {view === "materiales" && (
           <div>
             <h1 className="text-xl font-semibold mb-4">
@@ -816,7 +952,7 @@ export default function AnaliticaPage() {
                                 outerRadius="80%"
                                 paddingAngle={2}
                               >
-                                {data.map((entry, index) => (
+                                {data.map((_entry, index) => (
                                   <Cell
                                     key={index}
                                     fill={
