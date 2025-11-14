@@ -12,6 +12,7 @@ import {
   Legend,
   ResponsiveContainer,
 } from "recharts";
+import * as XLSX from "xlsx";
 
 type ViewKey = "proyecto" | "servicios" | "materiales";
 
@@ -42,7 +43,7 @@ type ProyectoStats = {
   fechaMin: Date | null;
   fechaMax: Date | null;
   totalMXN: number;
-  services: Record<string, ProyectoServiceInfo>;   // key = normalizado
+  services: Record<string, ProyectoServiceInfo>; // key = normalizado
   materials: Record<string, ProyectoMaterialInfo>; // key = normalizado
 };
 
@@ -60,7 +61,7 @@ type MaterialStats = {
   proyectos: { proyecto: string; count: number; totalMXN: number }[];
 };
 
-// Lo que se exportará a CSV
+// Lo que se exportará
 type PedidoExportRow = {
   pedidoId: string;
   proyecto: string;
@@ -70,6 +71,13 @@ type PedidoExportRow = {
   servicios: Set<string>;
   materiales: Set<string>;
   totalMXN: number;
+
+  // Campos que llenó el usuario en el pedido
+  servicioSolicitado?: string;
+  materialSolicitado?: string;
+  fechaPropuesta?: string;
+  descripcion?: string;
+  maquina?: string;
 };
 
 function formatMoney(n?: number) {
@@ -96,7 +104,7 @@ function normalizeKey(x: string): string {
 const PIE_COLORS = [
   "#111827",
   "#10B981",
-   "#F59E0B",
+  "#F59E0B",
   "#4B5563",
   "#9CA3AF",
   "#3B82F6",
@@ -115,7 +123,7 @@ export default function AnaliticaPage() {
   const [error, setError] = useState<string | null>(null);
   const [openProyecto, setOpenProyecto] = useState<string | null>(null);
 
-  // para exportar a Excel/CSV
+  // para exportar a Excel
   const [exportRows, setExportRows] = useState<PedidoExportRow[]>([]);
 
   useEffect(() => {
@@ -142,12 +150,16 @@ export default function AnaliticaPage() {
             if (status === "cancelado") return;
 
             const fechaPedido: string =
-              d.fechaLimite ||
-              d.fechaEntregaReal ||
-              d.timestamp ||
-              "";
+              d.fechaLimite || d.fechaEntregaReal || d.timestamp || "";
             const fechaFinal: string = d.fechaEntregaReal || "";
             const titulo: string = d.titulo || "Sin título";
+
+            // Datos que el usuario puso en el formulario del pedido
+            const servicioSolicitado: string = d.servicio || "";
+            const materialSolicitado: string = d.material || "";
+            const fechaPropuesta: string = d.fechaLimite || "";
+            const descripcion: string = d.descripcion || "";
+            const maquina: string = d.maquina || "";
 
             // crear entrada base para export, aunque luego no tenga líneas
             if (!exportMap.has(pedidoId)) {
@@ -160,6 +172,11 @@ export default function AnaliticaPage() {
                 servicios: new Set<string>(),
                 materiales: new Set<string>(),
                 totalMXN: 0,
+                servicioSolicitado,
+                materialSolicitado,
+                fechaPropuesta,
+                descripcion,
+                maquina,
               });
             }
 
@@ -193,9 +210,7 @@ export default function AnaliticaPage() {
                   "(sin servicio)";
 
                 const rawMaterial: string =
-                  ld?.selects?.material ??
-                  ld?.material ??
-                  "(sin material)";
+                  ld?.selects?.material ?? ld?.material ?? "(sin material)";
 
                 allLines.push({
                   pedidoId,
@@ -412,92 +427,139 @@ export default function AnaliticaPage() {
   );
 
   // ==========================
-  // Descargar CSV
+  // Descargar XLSX
   // ==========================
-  // ===============================
-// Descargar CSV con BOM UTF-8
-// ===============================
 
-// Normalizador de texto (quita acentos, espacios dobles, etc.)
-function normalize(x: string): string {
-  return x
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")      // quitar acentos
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, " ");                // quitar espacios dobles
-}
+  // Normalizador de texto (quita acentos, espacios dobles, etc.)
+  function normalizeText(x: string): string {
+    return x
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "") // quitar acentos
+      .trim()
+      .toLowerCase()
+      .replace(/\s+/g, " "); // quitar espacios dobles
+  }
 
-// Capitalizar nombres bonitos
-function capitalizeWords(str: string): string {
-  return str.replace(/\b\w/g, (c) => c.toUpperCase());
-}
+  // Capitalizar nombres bonitos
+  function capitalizeWords(str: string): string {
+    return str.replace(/\b\w/g, (c) => c.toUpperCase());
+  }
 
-const handleDownloadCSV = () => {
-  if (exportRows.length === 0) return;
+  const handleDownloadXLSX = () => {
+    if (exportRows.length === 0) return;
 
-  const header = [
-    "Proyecto",
-    "Título del pedido",
-    "Fecha de pedido",
-    "Fecha final",
-    "Servicios cotizados",
-    "Costo final del pedido",
-    "Materiales utilizados",
-  ];
-
-  const rows = exportRows.map((r) => {
-    // NORMALIZAR + CAPITALIZAR SERVICIOS
-    const serviciosClean = Array.from(
-      new Set(
-        Array.from(r.servicios).map((s) =>
-          capitalizeWords(normalize(String(s)))
-        )
-      )
-    ).join(", ");
-
-    // NORMALIZAR + CAPITALIZAR MATERIALES
-    const materialesClean = Array.from(
-      new Set(
-        Array.from(r.materiales).map((m) =>
-          capitalizeWords(normalize(String(m)))
-        )
-      )
-    ).join(", ");
-
-    return [
-      r.proyecto,
-      r.titulo,
-      r.fechaPedido,
-      r.fechaFinal,
-      serviciosClean,
-      r.totalMXN.toFixed(2),
-      materialesClean,
+    // --- Hoja principal (igual que antes) ---
+    const headerMain = [
+      "Proyecto",
+      "Título del pedido",
+      "Fecha de pedido",
+      "Fecha final",
+      "Servicios cotizados",
+      "Costo final del pedido",
+      "Materiales utilizados",
     ];
-  });
 
-  let csv = header.join(",") + "\n";
+    const makeRowMain = (r: PedidoExportRow) => {
+      const serviciosClean = Array.from(
+        new Set(
+          Array.from(r.servicios).map((s) =>
+            capitalizeWords(normalizeText(String(s)))
+          )
+        )
+      ).join(", ");
 
-  csv += rows
-    .map((row) =>
-      row
-        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
-        .join(",")
-    )
-    .join("\n");
+      const materialesClean = Array.from(
+        new Set(
+          Array.from(r.materiales).map((m) =>
+            capitalizeWords(normalizeText(String(m)))
+          )
+        )
+      ).join(", ");
 
-  // 🌟 UTF-8 BOM para evitar caracteres raros en Excel
-  const blob = new Blob(["\uFEFF" + csv], {
-    type: "text/csv;charset=utf-8",
-  });
+      return [
+        r.proyecto,
+        r.titulo,
+        r.fechaPedido,
+        r.fechaFinal,
+        serviciosClean,
+        r.totalMXN.toFixed(2),
+        materialesClean,
+      ];
+    };
 
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "analitica_pedidos.csv";
-  a.click();
-  URL.revokeObjectURL(url);
-};
+    const wb = XLSX.utils.book_new();
+
+    const mainRows = exportRows.map(makeRowMain);
+    const wsMain = XLSX.utils.aoa_to_sheet([headerMain, ...mainRows]);
+    XLSX.utils.book_append_sheet(wb, wsMain, "Resumen");
+
+    // --- Hojas por proyecto: con comparativa pedido vs cotización ---
+    const headerProyecto = [
+      "Proyecto",
+      "Título del pedido",
+      "Fecha de pedido",
+      "Fecha final",
+      "Servicio solicitado",
+      "Material solicitado",
+      "Fecha propuesta de entrega",
+      "Descripción",
+      "Máquina",
+      "Servicios cotizados",
+      "Costo final del pedido",
+      "Materiales utilizados",
+    ];
+
+    const makeRowProyecto = (r: PedidoExportRow) => {
+      const serviciosClean = Array.from(
+        new Set(
+          Array.from(r.servicios).map((s) =>
+            capitalizeWords(normalizeText(String(s)))
+          )
+        )
+      ).join(", ");
+
+      const materialesClean = Array.from(
+        new Set(
+          Array.from(r.materiales).map((m) =>
+            capitalizeWords(normalizeText(String(m)))
+          )
+        )
+      ).join(", ");
+
+      return [
+        r.proyecto,
+        r.titulo,
+        r.fechaPedido,
+        r.fechaFinal,
+        r.servicioSolicitado || "",
+        r.materialSolicitado || "",
+        r.fechaPropuesta || "",
+        r.descripcion || "",
+        r.maquina || "",
+        serviciosClean,
+        r.totalMXN.toFixed(2),
+        materialesClean,
+      ];
+    };
+
+    const byProject = new Map<string, PedidoExportRow[]>();
+    for (const r of exportRows) {
+      const key = r.proyecto || "Sin proyecto";
+      if (!byProject.has(key)) byProject.set(key, []);
+      byProject.get(key)!.push(r);
+    }
+
+    byProject.forEach((rows, proyecto) => {
+      const data = rows.map(makeRowProyecto);
+      const safeName =
+        (proyecto || "Proyecto").replace(/[\\/?*\[\]:]/g, "").slice(0, 31) ||
+        "Proyecto";
+      const wsProj = XLSX.utils.aoa_to_sheet([headerProyecto, ...data]);
+      XLSX.utils.book_append_sheet(wb, wsProj, safeName);
+    });
+
+    XLSX.writeFile(wb, "analitica_pedidos.xlsx");
+  };
 
   return (
     <div className="max-w-7xl mx-auto mt-6 flex gap-6 text-black">
@@ -546,10 +608,10 @@ const handleDownloadCSV = () => {
                 Analítica por proyecto
               </h1>
               <button
-                onClick={handleDownloadCSV}
+                onClick={handleDownloadXLSX}
                 className="px-4 py-2 rounded-lg bg-black text-white text-sm hover:opacity-90"
               >
-                Descargar CSV (todos los pedidos)
+                Descargar XLSX (todos los pedidos)
               </button>
             </div>
 
@@ -846,9 +908,7 @@ const handleDownloadCSV = () => {
                                   <Cell
                                     key={index}
                                     fill={
-                                      PIE_COLORS[
-                                        index % PIE_COLORS.length
-                                      ]
+                                      PIE_COLORS[index % PIE_COLORS.length]
                                     }
                                   />
                                 ))}
@@ -956,9 +1016,7 @@ const handleDownloadCSV = () => {
                                   <Cell
                                     key={index}
                                     fill={
-                                      PIE_COLORS[
-                                        index % PIE_COLORS.length
-                                      ]
+                                      PIE_COLORS[index % PIE_COLORS.length]
                                     }
                                   />
                                 ))}
