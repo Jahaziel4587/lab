@@ -263,7 +263,7 @@ if (sNorm.includes("necesidad") || sNorm === "need") {
               value={titulo}
               onChange={(e) => setTitulo(e.target.value)}
               className="flex-1 px-3 py-2 text-black outline-none"
-              placeholder="Escribe aquí la parte final del título…"
+              placeholder="Escribe aquí la parte final del título. Evita usar diagonales (/)"
             />
           </div>
           <p className="text-xs text-gray-500 mt-1">
