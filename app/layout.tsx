@@ -5,7 +5,7 @@ import { PedidoProvider } from "../src/Context/PedidoContext"; // 👈 Agregado
 import ClientLayout from "./components/Clientlayout";
 
 export const metadata = {
-  title: "Laboratorio BIOANA",
+  title: "Bioana Prototyping Lab",
   description: "Formulario de registro",
 };
 
