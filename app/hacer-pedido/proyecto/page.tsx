@@ -19,6 +19,7 @@ const proyectos = [
   { nombre: "014.QIK Cap handle", imagen: "/Bioana.jpeg" },
   { nombre: "015.QIK Cap disponible", imagen: "/Bioana.jpeg" },
   { nombre: "016.Portacad shield", imagen: "/Bioana.jpeg" },
+   { nombre: "017.JNM", imagen: "/Bioana.jpeg" },
   { nombre: "027.XSCRUB", imagen: "/XSCRUB.jpeg" },
   { nombre: "029.Zipstich", imagen: "/Bioana.jpeg" },
   { nombre: "030.MUV", imagen: "/Bioana.jpeg" },

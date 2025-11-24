@@ -54,6 +54,7 @@ const proyectosImagenes: { [k: string]: string } = {
   "014.QIK Cap handle": "/Bioana.jpeg",
   "015.QIK Cap disponible": "/Bioana.jpeg",
   "016.Portacad shield": "/Bioana.jpeg",
+  "017.JNM": "/Bioana.jpeg",
   "027.XSCRUB": "/Bioana.jpeg",
   "029.Zipstich": "/Bioana.jpeg",
   "030.MUV": "/Bioana.jpeg",
