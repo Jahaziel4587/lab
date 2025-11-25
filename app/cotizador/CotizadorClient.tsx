@@ -359,6 +359,9 @@ function CotizacionPanel() {
     "rows"
   );
 
+  // >>> NEW: estado para evitar doble click y manejar "loading"
+  const [isAttaching, setIsAttaching] = useState(false);
+
   // Resolver calculadora con prioridad: calc > answers > tabla
   const resolvedCalc = useMemo(() => {
     const result: Record<string, number> = {};
@@ -500,52 +503,53 @@ function CotizacionPanel() {
         <div className="space-y-3">
           <h4 className="font-semibold">Parámetros del servicio</h4>
           {selService.fields.map((f) =>
-  f.type === "select" ? (
-    <ServiceSelectInput
-      key={f.key}
-      field={f}
-      value={selects[f.key]}
-      onChange={(val) => {
-        setSelects((s) => ({ ...s, [f.key]: val }));
-        // one-hot solo para selects
-        const base = `is_${f.key}_`;
-        setAnswers((prev) => {
-          const next = { ...prev };
-          (f.options || []).forEach((opt) => { next[`${base}${snake(opt)}`] = 0; });
-          if (val) next[`${base}${snake(val)}`] = 1;
-          return next;
-        });
-      }}
-    />
-  ) : f.type === "text" ? (
-    <ServiceTextInput
-      key={f.key}
-      field={f}
-      value={selects[f.key]}
-      onChange={(val) => setSelects((s) => ({ ...s, [f.key]: val }))}
-    />
-  ) : (
-    <ServiceFieldInput
-      key={f.key}
-      field={f}
-      value={answers[f.key]}
-      onChange={(val) => {
-        if (val === null) {
-          setAnswers(({ [f.key]: _omit, ...rest }) => rest);
-          return;
-        }
-        const conflict = findConflicts(f.key, [
-          { where: "tabla", has: f.key in Object(costVars) },
-          { where: "cotizacion", has: f.key in answers },
-          { where: "calculadora", has: false },
-        ]);
-        if (conflict && !(f.key in answers)) alert(conflict);
-        setAnswers((a) => ({ ...a, [f.key]: val }));
-      }}
-    />
-  )
-)}
-
+            f.type === "select" ? (
+              <ServiceSelectInput
+                key={f.key}
+                field={f}
+                value={selects[f.key]}
+                onChange={(val) => {
+                  setSelects((s) => ({ ...s, [f.key]: val }));
+                  // one-hot solo para selects
+                  const base = `is_${f.key}_`;
+                  setAnswers((prev) => {
+                    const next = { ...prev };
+                    (f.options || []).forEach((opt) => {
+                      next[`${base}${snake(opt)}`] = 0;
+                    });
+                    if (val) next[`${base}${snake(val)}`] = 1;
+                    return next;
+                  });
+                }}
+              />
+            ) : f.type === "text" ? (
+              <ServiceTextInput
+                key={f.key}
+                field={f}
+                value={selects[f.key]}
+                onChange={(val) => setSelects((s) => ({ ...s, [f.key]: val }))}
+              />
+            ) : (
+              <ServiceFieldInput
+                key={f.key}
+                field={f}
+                value={answers[f.key]}
+                onChange={(val) => {
+                  if (val === null) {
+                    setAnswers(({ [f.key]: _omit, ...rest }) => rest);
+                    return;
+                  }
+                  const conflict = findConflicts(f.key, [
+                    { where: "tabla", has: f.key in Object(costVars) },
+                    { where: "cotizacion", has: f.key in answers },
+                    { where: "calculadora", has: false },
+                  ]);
+                  if (conflict && !(f.key in answers)) alert(conflict);
+                  setAnswers((a) => ({ ...a, [f.key]: val }));
+                }}
+              />
+            )
+          )}
         </div>
       )}
 
@@ -598,46 +602,62 @@ function CotizacionPanel() {
       <div className="flex gap-2">
         <button
           className="px-4 py-2 rounded-xl bg-black text-white hover:opacity-90 disabled:opacity-50"
-          disabled={!pedidoId || !serviceId}
+          disabled={!pedidoId || !serviceId || isAttaching} // >>> NEW
           onClick={async () => {
+            // >>> NEW: guard adicional por si acaso
+            if (isAttaching) return;
             if (!pedidoId || !serviceId || !selService) return;
-            // asegurar contenedor
-            await ensureQuoteLiveDoc(pedidoId, settings);
 
-            const serviceName = selService.name;
-            const calcGroupName =
-              calcGroups.find((g) => g.id === activeCalcGroup)?.data?.name || "";
-            const costGroupName =
-              costTablesGroups.find((g) => g.id === selectedCostGroup)?.data?.name || "";
+            try {
+              setIsAttaching(true); // >>> NEW
 
-            // payload de línea
-            const linePayload = {
-              serviceId,
-              serviceName,
-              calcGroupId: activeCalcGroup || null,
-              calcGroupName,
-              costGroupId: selectedCostGroup || null,
-              costGroupName,
-              answers,
-              selects,
-              resolvedCalc, // útil para auditoría/desglose
-              subtotalMXN: total, // base en MXN
-              displayCurrency: settings?.currency ?? "MXN",
-              displayTotal: displayTotal,
-              createdBy: user?.uid || null,
-              createdAt: serverTimestamp(),
-            };
+              // asegurar contenedor
+              await ensureQuoteLiveDoc(pedidoId, settings);
 
-            await addDoc(
-              collection(db, "pedidos", pedidoId, "quote_live", "live", "lines"),
-              linePayload
-            );
+              const serviceName = selService.name;
+              const calcGroupName =
+                calcGroups.find((g) => g.id === activeCalcGroup)?.data?.name || "";
+              const costGroupName =
+                costTablesGroups.find((g) => g.id === selectedCostGroup)?.data?.name || "";
 
-            // feedback simple
-            alert("Servicio agregado a la Cotización Viva del pedido.");
+              // payload de línea
+              const linePayload = {
+                serviceId,
+                serviceName,
+                calcGroupId: activeCalcGroup || null,
+                calcGroupName,
+                costGroupId: selectedCostGroup || null,
+                costGroupName,
+                answers,
+                selects,
+                resolvedCalc, // útil para auditoría/desglose
+                subtotalMXN: total, // base en MXN
+                displayCurrency: settings?.currency ?? "MXN",
+                displayTotal: displayTotal,
+                createdBy: user?.uid || null,
+                createdAt: serverTimestamp(),
+              };
+
+              await addDoc(
+                collection(db, "pedidos", pedidoId, "quote_live", "live", "lines"),
+                linePayload
+              );
+
+              // >>> NEW: limpiar selección de servicio y parámetros
+              setServiceId("");
+              setAnswers({});
+              setSelects({});
+              setSelectedCostGroup("");
+              setActiveCalcGroup("");
+
+              // feedback simple
+              alert("Servicio agregado a la Cotización Viva del pedido.");
+            } finally {
+              setIsAttaching(false); // >>> NEW
+            }
           }}
         >
-          Adjuntar servicio a la cotización
+          {isAttaching ? "Adjuntando..." : "Adjuntar servicio a la cotización"}
         </button>
       </div>
     </div>
@@ -771,18 +791,18 @@ function ServiciosPanel() {
             onChange={(e) => setName(e.target.value)}
           />
         </div>
-              {newFieldType === "select" && (
-                <div>
-                  <label className="block text-sm font-medium">Opciones (coma separadas)</label>
-                  <input
-                    className="mt-1 border border-neutral-300 rounded-lg px-3 py-2"
-                    placeholder="Ej: PLA, ABS, PETG"
-                    value={newFieldOptions}
-                    onChange={(e) => setNewFieldOptions(e.target.value)}
-                  />
-                </div>
-              )}
-              <button
+        {newFieldType === "select" && (
+          <div>
+            <label className="block text-sm font-medium">Opciones (coma separadas)</label>
+            <input
+              className="mt-1 border border-neutral-300 rounded-lg px-3 py-2"
+              placeholder="Ej: PLA, ABS, PETG"
+              value={newFieldOptions}
+              onChange={(e) => setNewFieldOptions(e.target.value)}
+            />
+          </div>
+        )}
+        <button
           className="px-3 py-2 rounded-lg bg-black text-white hover:opacity-90"
           onClick={async () => {
             const n = name.trim();
@@ -1144,7 +1164,9 @@ function CalculadoraPanel() {
               value={currentRow?.data.expr ?? ""}
               onChange={async (e) => {
                 const v = e.target.value;
-                await updateDoc(doc(db, `${COL_CALCULATORS}/${selected}/rows`, editingRow), { expr: v });
+                await updateDoc(doc(db, `${COL_CALCULATORS}/${selected}/rows`, editingRow), {
+                  expr: v,
+                });
               }}
             />
           </div>
@@ -1157,7 +1179,9 @@ function CalculadoraPanel() {
           <thead className="bg-neutral-100">
             <tr>
               <th className="text-left px-3 py-2 w-1/2 text-neutral-700 font-medium">Variable</th>
-              <th className="text-left px-3 py-2 w-1/2 text-neutral-700 font-medium">Valor (preview)</th>
+              <th className="text-left px-3 py-2 w-1/2 text-neutral-700 font-medium">
+                Valor (preview)
+              </th>
             </tr>
           </thead>
           <tbody className="text-neutral-800">
@@ -1205,7 +1229,11 @@ function CalculadoraPanel() {
       {selected && (
         <div className="flex items-center gap-3">
           <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={inTotal} onChange={(e) => setInTotal(e.target.checked)} />
+            <input
+              type="checkbox"
+              checked={inTotal}
+              onChange={(e) => setInTotal(e.target.checked)}
+            />
             Incluir esta fila en Total
           </label>
 
