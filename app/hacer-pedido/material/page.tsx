@@ -6,7 +6,7 @@ import { FiArrowLeft, FiArrowRight } from "react-icons/fi";
 
 // Diccionario de materiales por máquina
 const MATERIALES_POR_MAQUINA: Record<string, string[]> = {
-  "Filamento": ["PLA 2.85mm (Ultimaker 2+)", "PLA 1.75mm (BambuLab)", "Otro"],
+  "Filamento": ["PLA 2.85mm (Ultimaker 2+)", "PLA 1.75mm (Bambu Lab)", "Nylon 1.75 (Bambu Lab)", "PLA retardante de fuego 1.75mm (Bambu Lab)", "Nylon retardante de fuego 1.75 (Bambu Lab)","Otro"],
   "Resina Formlabs 3B": [
     "Rigid 10K",
     "Black",
@@ -31,14 +31,16 @@ const MATERIALES_POR_MAQUINA: Record<string, string[]> = {
   ],
   "Láser CO2": [
     "Acrílico 2mm",
-    "Acrílico 3mm",
-    "Acrílico 4mm",
+    "Acrílico blanco 3mm",
+    "Acrílico negro 3mm",
+    "Acrílico Transparente 4mm",
+    "MDF 4mm",
     "Cartón",
     "Tela",
     "Papel",
     "Otro",
   ],
-  "Fresadora CNC": ["Madera", "MDF","Otro",],
+  "Fresadora CNC": ["Triplay 12.7mm", "HDPE 6mm", "HDPE 12.7mm", "MDF 18 mm","Otro",],
   "Libre": ["Libre"],
 };
 

@@ -23,6 +23,8 @@ type AnalyticLine = {
   subtotalMXN: number;
   serviceName: string;
   material: string;
+  // >>> NEW: costo de material de esa línea (opcional)
+  materialCostMXN?: number;
 };
 
 type ProyectoServiceInfo = {
@@ -72,6 +74,9 @@ type PedidoExportRow = {
   materiales: Set<string>;
   totalMXN: number;
 
+  // >>> NEW: total de costo de material del pedido (suma de líneas)
+  materialCostMXN: number;
+
   // Campos que llenó el usuario en el pedido
   servicioSolicitado?: string;
   materialSolicitado?: string;
@@ -99,6 +104,22 @@ function normalizeKey(x: string): string {
     .trim()
     .toLowerCase()
     .replace(/\s+/g, " ");
+}
+
+// >>> NEW: extraer costo de material desde resolvedCalc
+function extractMaterialCost(resolvedCalc: Record<string, any>): number {
+  if (!resolvedCalc || typeof resolvedCalc !== "object") return 0;
+
+  const keys = ["costo_material", "costo_materiales", "costo_resina"];
+
+  for (const k of keys) {
+    const v = resolvedCalc[k];
+    if (typeof v === "number" && !isNaN(v)) {
+      return v;
+    }
+  }
+
+  return 0;
 }
 
 const PIE_COLORS = [
@@ -172,6 +193,8 @@ export default function AnaliticaPage() {
                 servicios: new Set<string>(),
                 materiales: new Set<string>(),
                 totalMXN: 0,
+                // >>> NEW: inicializar costo material del pedido
+                materialCostMXN: 0,
                 servicioSolicitado,
                 materialSolicitado,
                 fechaPropuesta,
@@ -202,6 +225,11 @@ export default function AnaliticaPage() {
                 const subtotal = Number(ld?.subtotalMXN ?? ld?.displayTotal ?? 0);
                 if (!Number.isFinite(subtotal)) return;
 
+                // >>> NEW: calcular costo de material desde resolvedCalc
+                const materialCost = extractMaterialCost(
+                  (ld?.resolvedCalc as Record<string, any>) || {}
+                );
+
                 // SOLO info del cotizador
                 const rawService: string =
                   ld?.selects?.serviceName ??
@@ -219,6 +247,8 @@ export default function AnaliticaPage() {
                   subtotalMXN: subtotal,
                   serviceName: rawService,
                   material: rawMaterial,
+                  // >>> NEW
+                  materialCostMXN: materialCost,
                 });
 
                 // actualizar info para export
@@ -227,6 +257,8 @@ export default function AnaliticaPage() {
                   row.totalMXN += subtotal;
                   row.servicios.add(rawService);
                   row.materiales.add(rawMaterial);
+                  // >>> NEW: acumular costo de material del pedido
+                  row.materialCostMXN += materialCost;
                 }
               });
             } catch (err) {
@@ -448,7 +480,7 @@ export default function AnaliticaPage() {
   const handleDownloadXLSX = () => {
     if (exportRows.length === 0) return;
 
-    // --- Hoja principal (igual que antes) ---
+    // --- Hoja principal (igual que antes, + columna de material) ---
     const headerMain = [
       "Proyecto",
       "Título del pedido",
@@ -457,6 +489,8 @@ export default function AnaliticaPage() {
       "Servicios cotizados",
       "Costo final del pedido",
       "Materiales utilizados",
+      // >>> NEW
+      "Costo material (MXN)",
     ];
 
     const makeRowMain = (r: PedidoExportRow) => {
@@ -484,6 +518,8 @@ export default function AnaliticaPage() {
         serviciosClean,
         r.totalMXN.toFixed(2),
         materialesClean,
+        // >>> NEW
+        r.materialCostMXN.toFixed(2),
       ];
     };
 
@@ -507,6 +543,8 @@ export default function AnaliticaPage() {
       "Servicios cotizados",
       "Costo final del pedido",
       "Materiales utilizados",
+      // >>> NEW
+      "Costo material (MXN)",
     ];
 
     const makeRowProyecto = (r: PedidoExportRow) => {
@@ -539,6 +577,8 @@ export default function AnaliticaPage() {
         serviciosClean,
         r.totalMXN.toFixed(2),
         materialesClean,
+        // >>> NEW
+        r.materialCostMXN.toFixed(2),
       ];
     };
 
