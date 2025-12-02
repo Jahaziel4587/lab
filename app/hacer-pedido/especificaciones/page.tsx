@@ -56,6 +56,7 @@ export default function EspecificacionesPage() {
     // intentos suaves con "incluye"
     if (key.includes("2.85") && key.includes("pla")) return "UMKR";
     if (key.includes("1.75") && key.includes("pla")) return "BML";
+    if (key.includes("1.75") && key.includes("Nylon")) return "BML";
     if (key.includes("formlabs") && key.includes("3b")) return "FL3B";
     if (key.includes("formlabs") && key.includes("2b")) return "FL2B";
     if (key.includes("laser") || key.includes("lazer") || key.includes("láser")) return "Láser";
