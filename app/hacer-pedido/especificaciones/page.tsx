@@ -2,15 +2,26 @@
 
 import { useState, useRef, useEffect } from "react";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { collection, doc, setDoc, serverTimestamp } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  setDoc,
+  serverTimestamp,
+  query,
+  where,
+  getDocs,
+} from "firebase/firestore";
 import { auth, db, storage } from "@/src/firebase/firebaseConfig";
 import { useRouter } from "next/navigation";
 import { FiX, FiUpload, FiVideo } from "react-icons/fi";
 
 export default function EspecificacionesPage() {
-  // Sufijo editable por el usuario (lo que va DESPUÉS del prefijo no editable)
+  // Sufijo editable por el usuario
   const [titulo, setTitulo] = useState("");
-  const [prefijoTitulo, setPrefijoTitulo] = useState<string>(""); // p. ej. "FL3B_AB12_"
+  const [prefijoTitulo, setPrefijoTitulo] = useState<string>(""); 
+
+  // ⭐ NUEVO: título final garantizado único
+  const [tituloFinalUnico, setTituloFinalUnico] = useState("");
 
   const [explicacion, setExplicacion] = useState("");
   const [fecha, setFecha] = useState("");
@@ -26,14 +37,14 @@ export default function EspecificacionesPage() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const router = useRouter();
 
-  // ---------- Helpers: normalizar texto y resolver abreviación ----------
+  // ---------- Helpers ----------
   const normalize = (s: string) =>
     (s || "")
       .toString()
       .trim()
       .toLowerCase()
       .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, ""); // quita acentos
+      .replace(/[\u0300-\u036f]/g, "");
 
   const ABBR_MAP: Record<string, string> = {
     "pla 2.85mm": "UMKR",
@@ -50,19 +61,17 @@ export default function EspecificacionesPage() {
   function resolveAbbrFromValue(value: string | null): string | null {
     if (!value) return null;
     const key = normalize(value);
-    // claves tal cual
     if (ABBR_MAP[key]) return ABBR_MAP[key];
 
-    // intentos suaves con "incluye"
     if (key.includes("2.85") && key.includes("pla")) return "UMKR";
     if (key.includes("1.75") && key.includes("pla")) return "BML";
     if (key.includes("1.75") && key.includes("nylon")) return "BML";
     if (key.includes("formlabs") && key.includes("3b")) return "FL3B";
     if (key.includes("formlabs") && key.includes("2b")) return "FL2B";
-    if (key.includes("laser") || key.includes("lazer") || key.includes("láser")) return "Láser";
+    if (key.includes("laser")) return "Láser";
     if (key.includes("cnc")) return "CNC";
     if (key.includes("necesidad") || key === "need") return "Need";
-    if (key.includes("libre") || key.includes("fixture") || key === "fxt") return "FXT";
+    if (key.includes("libre")) return "FXT";
 
     return null;
   }
@@ -70,27 +79,25 @@ export default function EspecificacionesPage() {
   function getProyectoCode(raw: string | null): string {
     const clean = (raw || "")
       .toString()
-      .replace(/[^A-Za-z0-9]/g, "") // solo alfanumérico
+      .replace(/[^A-Za-z0-9]/g, "")
       .toUpperCase()
       .slice(0, 4);
     return clean || "PRJ0";
   }
 
   function computePrefijo(): string {
-    // Leemos posibles selecciones guardadas en pasos previos
     const servicio = localStorage.getItem("servicio");
     const tecnica = localStorage.getItem("tecnica");
     const material = localStorage.getItem("material");
-    const maquina = localStorage.getItem("maquina"); // por si acaso existiera
+    const maquina = localStorage.getItem("maquina");
 
     const sNorm = normalize(servicio || "");
     if (sNorm.includes("necesidad") || sNorm === "need") {
       const proyecto = localStorage.getItem("proyecto");
       const code = getProyectoCode(proyecto);
-      return `Need_${code}_`; // retorna aquí dentro de computePrefijo()
+      return `Need_${code}_`;
     }
 
-    // Prioridad: técnica > material > servicio > máquina
     const abbrCandidate =
       resolveAbbrFromValue(servicio) ||
       resolveAbbrFromValue(tecnica) ||
@@ -104,14 +111,45 @@ export default function EspecificacionesPage() {
     return `${abbrCandidate}_${code}_`;
   }
 
-  // Calcular el prefijo al montar (y cuando cambien dependencias observables)
+  // ---------- NUEVO: generar título único ----------
+  async function generarTituloUnico(tituloBase: string): Promise<string> {
+    let tituloTest = tituloBase;
+    let i = 1;
+
+    while (true) {
+      const q = query(collection(db, "pedidos"), where("titulo", "==", tituloTest));
+      const snap = await getDocs(q);
+      if (snap.empty) return tituloTest;
+
+      tituloTest = `${tituloBase}_${String(i).padStart(2, "0")}`;
+      i++;
+    }
+  }
+
+  // Calcular el prefijo al montar
   useEffect(() => {
     setPrefijoTitulo(computePrefijo());
-    // Nota: si en esta misma página cambiases tecnica/material/servicio en localStorage
-    // y quisieras recomputar dinámicamente, podrías escuchar a "storage" o agregar controles aquí.
   }, []);
 
-  // -------------------- Archivos y video --------------------
+  // ⭐ NUEVO: recalcular título único cada vez que cambie prefijo o título
+  useEffect(() => {
+    const actualizar = async () => {
+      if (!prefijoTitulo) return;
+
+      const base = `${prefijoTitulo}${titulo}`;
+      if (!titulo) {
+        setTituloFinalUnico(base);
+        return;
+      }
+
+      const unico = await generarTituloUnico(base);
+      setTituloFinalUnico(unico);
+    };
+
+    actualizar();
+  }, [titulo, prefijoTitulo]);
+
+  // -------------------- Archivos --------------------
   const handleSelectFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     const nuevosArchivos = Array.from(e.target.files || []);
     setArchivos((prev) => [...prev, ...nuevosArchivos]);
@@ -129,17 +167,11 @@ export default function EspecificacionesPage() {
 
   // -------------------- Upload / Guardado --------------------
   const handleUploadAll = async () => {
-    if (!titulo) return alert("Agrega la parte final del título del pedido.");
+    if (!tituloFinalUnico) return alert("Agrega el título del pedido.");
     if (!fecha) return alert("Selecciona una fecha de entrega.");
 
-    // 🔁 Recalcular el prefijo para evitar usar uno viejo
     const prefijo = computePrefijo();
-    setPrefijoTitulo(prefijo); // opcional: refleja el cambio en la UI
-
-    const tituloFinal = `${prefijo}${titulo}`;
-
-    // 🧹 Sanitizar solo para mostrar/guardar texto, ya NO se usa como carpeta
-    const carpetaTitulo = tituloFinal.replace(/[\/\\#?]/g, "-");
+    setPrefijoTitulo(prefijo);
 
     setSubiendo(true);
 
@@ -150,14 +182,12 @@ export default function EspecificacionesPage() {
       const material = localStorage.getItem("material") || "Sin material";
       const usuario = auth.currentUser?.email || "desconocido";
 
-      // 1) Crear referencia a documento con ID autogenerado (hash)
       const pedidosCol = collection(db, "pedidos");
-      const nuevoDocRef = doc(pedidosCol); // genera ID aleatorio sin escribir aún
-      const carpetaId = nuevoDocRef.id; // 👈 ESTE será el nombre de la carpeta en Storage
+      const nuevoDocRef = doc(pedidosCol);
+      const carpetaId = nuevoDocRef.id;
 
       const archivosSubidos: string[] = [];
 
-      // 2) Subir archivos usando el ID como carpeta en Storage
       for (const archivo of archivos) {
         const archivoRef = ref(storage, `pedidos/${carpetaId}/${archivo.name}`);
         await uploadBytes(archivoRef, archivo);
@@ -173,10 +203,8 @@ export default function EspecificacionesPage() {
         if (!archivos.includes(videoFile)) archivosSubidos.push(urlDelVideo);
       }
 
-      // 3) Guardar el documento en Firestore usando ese mismo ID
       await setDoc(nuevoDocRef, {
-        titulo: tituloFinal, // Prefijo + Sufijo
-        tituloLimpio: carpetaTitulo, // opcional, por si lo quieres conservar
+        titulo: tituloFinalUnico, // ⭐ USAMOS EL TÍTULO ÚNICO
         descripcion: explicacion,
         fechaLimite: fecha,
         proyecto,
@@ -249,9 +277,7 @@ export default function EspecificacionesPage() {
     if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
       videoRef.current.muted = true;
-      videoRef.current
-        .play()
-        .catch((err) => console.warn("Video no pudo reproducirse:", err));
+      videoRef.current.play().catch(() => {});
     }
   }, [stream]);
 
@@ -269,16 +295,13 @@ export default function EspecificacionesPage() {
       </h1>
 
       <div className="bg-white p-4 rounded-xl shadow space-y-4">
-        {/* TÍTULO COMPUESTO: Prefijo fijo + Sufijo editable */}
+        {/* Título final */}
         <div>
           <label className="block font-medium text-black mb-1">
             Título del pedido
           </label>
           <div className="flex items-stretch w-full border border-gray-300 rounded overflow-hidden">
-            <span
-              className="px-3 py-2 bg-gray-100 text-gray-700 border-r border-gray-300 select-none whitespace-nowrap"
-              title="Prefijo automático (no editable)"
-            >
+            <span className="px-3 py-2 bg-gray-100 text-gray-700 border-r border-gray-300 select-none whitespace-nowrap">
               {prefijoTitulo || "GEN_PRJ0_"}
             </span>
             <input
@@ -286,17 +309,17 @@ export default function EspecificacionesPage() {
               value={titulo}
               onChange={(e) => setTitulo(e.target.value)}
               className="flex-1 px-3 py-2 text-black outline-none"
-              placeholder="Escribe aquí la parte final del título. Evita usar diagonales (/)"
+              placeholder="Escribe la parte final del título. Evita usar diagonales(/)"
             />
           </div>
+
           <p className="text-xs text-gray-500 mt-1">
             Se guardará como:{" "}
-            <strong>
-              {(prefijoTitulo || "GEN_PRJ0_") + (titulo || "…")}
-            </strong>
+            <strong>{tituloFinalUnico || "..."}</strong>
           </p>
         </div>
 
+        {/* Explicación */}
         <div>
           <label className="block font-medium text-black mb-1">
             Explicación del pedido
@@ -306,10 +329,11 @@ export default function EspecificacionesPage() {
             value={explicacion}
             onChange={(e) => setExplicacion(e.target.value)}
             className="w-full px-3 py-2 border border-gray-300 rounded text-black"
-            placeholder="Describe el pedido, su función, puntos críticos..."
+            placeholder="Describe el pedido"
           />
         </div>
 
+        {/* Fecha */}
         <div>
           <label className="block font-medium text-black mb-1">
             Fecha Propuesta
@@ -322,6 +346,7 @@ export default function EspecificacionesPage() {
           />
         </div>
 
+        {/* Archivos */}
         <div>
           <label className="block font-medium text-black mb-1">
             Adjuntar archivos
