@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
-import { collection, addDoc, serverTimestamp } from "firebase/firestore";
+import { collection, doc, setDoc, serverTimestamp } from "firebase/firestore";
 import { auth, db, storage } from "@/src/firebase/firebaseConfig";
 import { useRouter } from "next/navigation";
 import { FiX, FiUpload, FiVideo } from "react-icons/fi";
@@ -78,17 +78,17 @@ export default function EspecificacionesPage() {
 
   function computePrefijo(): string {
     // Leemos posibles selecciones guardadas en pasos previos
-     const servicio = localStorage.getItem("servicio");
+    const servicio = localStorage.getItem("servicio");
     const tecnica = localStorage.getItem("tecnica");
     const material = localStorage.getItem("material");
     const maquina = localStorage.getItem("maquina"); // por si acaso existiera
 
-const sNorm = normalize(servicio || "");
-if (sNorm.includes("necesidad") || sNorm === "need") {
-  const proyecto = localStorage.getItem("proyecto");
-  const code = getProyectoCode(proyecto);
-  return `Need_${code}_`; // retorna aquí dentro de computePrefijo()
-}
+    const sNorm = normalize(servicio || "");
+    if (sNorm.includes("necesidad") || sNorm === "need") {
+      const proyecto = localStorage.getItem("proyecto");
+      const code = getProyectoCode(proyecto);
+      return `Need_${code}_`; // retorna aquí dentro de computePrefijo()
+    }
 
     // Prioridad: técnica > material > servicio > máquina
     const abbrCandidate =
@@ -128,21 +128,20 @@ if (sNorm.includes("necesidad") || sNorm === "need") {
   };
 
   // -------------------- Upload / Guardado --------------------
- const handleUploadAll = async () => {
-  if (!titulo) return alert("Agrega la parte final del título del pedido.");
-  if (!fecha) return alert("Selecciona una fecha de entrega.");
+  const handleUploadAll = async () => {
+    if (!titulo) return alert("Agrega la parte final del título del pedido.");
+    if (!fecha) return alert("Selecciona una fecha de entrega.");
 
-  // 🔁 Recalcular el prefijo para evitar usar uno viejo
-  const prefijo = computePrefijo();
-  setPrefijoTitulo(prefijo); // opcional: refleja el cambio en la UI
+    // 🔁 Recalcular el prefijo para evitar usar uno viejo
+    const prefijo = computePrefijo();
+    setPrefijoTitulo(prefijo); // opcional: refleja el cambio en la UI
 
-  const tituloFinal = `${prefijo}${titulo}`;
+    const tituloFinal = `${prefijo}${titulo}`;
 
-  // 🧹 Sanitizar para usarlo como carpeta en Storage
-  const carpetaTitulo = tituloFinal.replace(/[\/\\#?]/g, "-");
+    // 🧹 Sanitizar solo para mostrar/guardar texto, ya NO se usa como carpeta
+    const carpetaTitulo = tituloFinal.replace(/[\/\\#?]/g, "-");
 
-  setSubiendo(true);
-
+    setSubiendo(true);
 
     try {
       const proyecto = localStorage.getItem("proyecto") || "Sin proyecto";
@@ -151,10 +150,16 @@ if (sNorm.includes("necesidad") || sNorm === "need") {
       const material = localStorage.getItem("material") || "Sin material";
       const usuario = auth.currentUser?.email || "desconocido";
 
+      // 1) Crear referencia a documento con ID autogenerado (hash)
+      const pedidosCol = collection(db, "pedidos");
+      const nuevoDocRef = doc(pedidosCol); // genera ID aleatorio sin escribir aún
+      const carpetaId = nuevoDocRef.id; // 👈 ESTE será el nombre de la carpeta en Storage
+
       const archivosSubidos: string[] = [];
 
+      // 2) Subir archivos usando el ID como carpeta en Storage
       for (const archivo of archivos) {
-        const archivoRef = ref(storage, `pedidos/${carpetaTitulo}/${archivo.name}`);
+        const archivoRef = ref(storage, `pedidos/${carpetaId}/${archivo.name}`);
         await uploadBytes(archivoRef, archivo);
         const url = await getDownloadURL(archivoRef);
         archivosSubidos.push(url);
@@ -162,14 +167,16 @@ if (sNorm.includes("necesidad") || sNorm === "need") {
 
       let urlDelVideo = "";
       if (videoFile) {
-        const videoStorageRef = ref(storage, `pedidos/${carpetaTitulo}/${videoFile.name}`);
+        const videoStorageRef = ref(storage, `pedidos/${carpetaId}/${videoFile.name}`);
         await uploadBytes(videoStorageRef, videoFile);
         urlDelVideo = await getDownloadURL(videoStorageRef);
         if (!archivos.includes(videoFile)) archivosSubidos.push(urlDelVideo);
       }
 
-      await addDoc(collection(db, "pedidos"), {
+      // 3) Guardar el documento en Firestore usando ese mismo ID
+      await setDoc(nuevoDocRef, {
         titulo: tituloFinal, // Prefijo + Sufijo
+        tituloLimpio: carpetaTitulo, // opcional, por si lo quieres conservar
         descripcion: explicacion,
         fechaLimite: fecha,
         proyecto,
@@ -195,14 +202,19 @@ if (sNorm.includes("necesidad") || sNorm === "need") {
 
   // -------------------- Grabación de video --------------------
   const iniciarGrabacion = async () => {
-    const mediaStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+    const mediaStream = await navigator.mediaDevices.getUserMedia({
+      video: true,
+      audio: true,
+    });
     const recorder = new MediaRecorder(mediaStream);
     const chunks: Blob[] = [];
 
     recorder.ondataavailable = (e) => chunks.push(e.data);
     recorder.onstop = () => {
       const blob = new Blob(chunks, { type: "video/mp4" });
-      const archivo = new File([blob], `grabacion-${Date.now()}.mp4`, { type: "video/mp4" });
+      const archivo = new File([blob], `grabacion-${Date.now()}.mp4`, {
+        type: "video/mp4",
+      });
       setVideoFile(archivo);
       setArchivos((prev) => [...prev, archivo]);
       if (videoRef.current) videoRef.current.srcObject = null;
@@ -237,22 +249,31 @@ if (sNorm.includes("necesidad") || sNorm === "need") {
     if (videoRef.current && stream) {
       videoRef.current.srcObject = stream;
       videoRef.current.muted = true;
-      videoRef.current.play().catch((err) => console.warn("Video no pudo reproducirse:", err));
+      videoRef.current
+        .play()
+        .catch((err) => console.warn("Video no pudo reproducirse:", err));
     }
   }, [stream]);
 
   return (
     <div className="max-w-2xl mx-auto p-4 space-y-4">
-      <button className="bg-white text-black px-4 py-2 rounded" onClick={() => router.back()}>
+      <button
+        className="bg-white text-black px-4 py-2 rounded"
+        onClick={() => router.back()}
+      >
         ← Regresar
       </button>
 
-      <h1 className="text-xl font-bold text-center text-white">Especificaciones del pedido</h1>
+      <h1 className="text-xl font-bold text-center text-white">
+        Especificaciones del pedido
+      </h1>
 
       <div className="bg-white p-4 rounded-xl shadow space-y-4">
         {/* TÍTULO COMPUESTO: Prefijo fijo + Sufijo editable */}
         <div>
-          <label className="block font-medium text-black mb-1">Título del pedido</label>
+          <label className="block font-medium text-black mb-1">
+            Título del pedido
+          </label>
           <div className="flex items-stretch w-full border border-gray-300 rounded overflow-hidden">
             <span
               className="px-3 py-2 bg-gray-100 text-gray-700 border-r border-gray-300 select-none whitespace-nowrap"
@@ -269,12 +290,17 @@ if (sNorm.includes("necesidad") || sNorm === "need") {
             />
           </div>
           <p className="text-xs text-gray-500 mt-1">
-            Se guardará como: <strong>{(prefijoTitulo || "GEN_PRJ0_") + (titulo || "…")}</strong>
+            Se guardará como:{" "}
+            <strong>
+              {(prefijoTitulo || "GEN_PRJ0_") + (titulo || "…")}
+            </strong>
           </p>
         </div>
 
         <div>
-          <label className="block font-medium text-black mb-1">Explicación del pedido</label>
+          <label className="block font-medium text-black mb-1">
+            Explicación del pedido
+          </label>
           <textarea
             rows={4}
             value={explicacion}
@@ -285,7 +311,9 @@ if (sNorm.includes("necesidad") || sNorm === "need") {
         </div>
 
         <div>
-          <label className="block font-medium text-black mb-1">Fecha Propuesta</label>
+          <label className="block font-medium text-black mb-1">
+            Fecha Propuesta
+          </label>
           <input
             type="date"
             value={fecha}
@@ -295,7 +323,9 @@ if (sNorm.includes("necesidad") || sNorm === "need") {
         </div>
 
         <div>
-          <label className="block font-medium text-black mb-1">Adjuntar archivos</label>
+          <label className="block font-medium text-black mb-1">
+            Adjuntar archivos
+          </label>
 
           <div className="flex gap-2 mb-2">
             <button
@@ -349,7 +379,11 @@ if (sNorm.includes("necesidad") || sNorm === "need") {
                     </button>
                   </div>
                   {file.type.startsWith("video") && (
-                    <video controls src={URL.createObjectURL(file)} className="mt-2 rounded" />
+                    <video
+                      controls
+                      src={URL.createObjectURL(file)}
+                      className="mt-2 rounded"
+                    />
                   )}
                 </li>
               ))}
