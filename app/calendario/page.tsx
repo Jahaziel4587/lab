@@ -145,25 +145,7 @@ export default function CalendarioPage() {
     }
   };
 
-  const subirArchivoCosto = async (
-    e: React.ChangeEvent<HTMLInputElement>,
-    id: string
-  ) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    try {
-      const fileRef = storageRef(storage, `costos/${id}/${file.name}`);
-      await uploadBytes(fileRef, file);
-      const url = await getDownloadURL(fileRef);
-
-      await actualizarCampo(id, "costo", url);
-      await actualizarCampo(id, "nombreCosto", file.name);
-    } catch (err) {
-      console.error("Error subiendo archivo de costo:", err);
-      alert("No se pudo subir el archivo.");
-    }
-  };
+ 
 
   // 1) Tabla "Todos los pedidos" -> SOLO los que NO tienen fechaEntregaReal
   const pedidosSinFecha = useMemo(
@@ -265,7 +247,7 @@ export default function CalendarioPage() {
                   <th className="px-4 py-2">Solicitante</th>
                   <th className="px-4 py-2">Fecha propuesta</th>
                   <th className="px-4 py-2">Fecha real</th>
-                  <th className="px-4 py-2">Cotización</th>
+                
                   <th className="px-4 py-2">Status</th>
                   <th className="px-4 py-2">Detalles</th>
                 </tr>
@@ -288,36 +270,7 @@ export default function CalendarioPage() {
                         className="border px-2 py-1 rounded"
                       />
                     </td>
-                    <td className="px-4 py-2">
-                      {p.costo && p.nombreCosto ? (
-                        <div className="flex items-center gap-2">
-                          <a
-                            href={p.costo}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 underline"
-                          >
-                            {p.nombreCosto}
-                          </a>
-                          <button
-                            onClick={() => {
-                              actualizarCampo(p.id, "costo", "");
-                              actualizarCampo(p.id, "nombreCosto", "");
-                            }}
-                            className="text-red-600 hover:text-red-800 text-lg"
-                          >
-                            &times;
-                          </button>
-                        </div>
-                      ) : (
-                        <input
-                          type="file"
-                          accept=".pdf,.doc,.docx,.xls,.xlsx"
-                          onChange={(e) => subirArchivoCosto(e, p.id)}
-                          className="text-sm text-black"
-                        />
-                      )}
-                    </td>
+                   
                     <td className="px-4 py-2">
                       <select
                         value={p.status || "enviado"}

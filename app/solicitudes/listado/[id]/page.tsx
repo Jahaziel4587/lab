@@ -880,7 +880,7 @@ export default function DetallePedidoPage() {
         <FiArrowLeft /> Regresar
       </button>
 
-      <h1 className="text-xl font-bold">Detalles del pedido</h1>
+      <h1 className="text-white text-xl text-center font-bold">Detalles del pedido</h1>
 
       {/* ----- Datos base del pedido ----- */}
       <div className="bg-white shadow rounded-xl p-6 space-y-4">
@@ -909,17 +909,7 @@ export default function DetallePedidoPage() {
           <strong>Fecha de entrega real:</strong> {pedido.fechaEntregaReal || "No definida"}
         </p>
 
-        {/* Archivo legacy */}
-        <p>
-          <strong>Cotización (legacy):</strong>{" "}
-          {pedido.costo && pedido.nombreCosto ? (
-            <a href={pedido.costo} target="_blank" rel="noopener noreferrer" className="text-blue-600 underline">
-              {pedido.nombreCosto}
-            </a>
-          ) : (
-            "No definido"
-          )}
-        </p>
+        
 
         <p>
           <strong>Status:</strong> {pedido.status || "Enviado"}
