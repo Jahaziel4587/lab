@@ -11,8 +11,7 @@ const MAQUINAS = [
   { nombre: "Resina Formlabs 3B", imagen: "/resinas.png", servicio: "impresión" },
   { nombre: "Resina Formlabs 2B", imagen: "/resinas.png", servicio: "impresión" },
  { nombre: "Libre", imagen: "/libre.png", servicio: "fixture" },
-  //{ nombre: "BambuLab", imagen: "/bambulab.png", servicio: "impresion" },
- // { nombre: "Mayku", imagen: "/mayku.jpg", servicio: "fixture" },
+  
 ];
 
 export default function MaquinasPage() {

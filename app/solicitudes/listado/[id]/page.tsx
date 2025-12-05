@@ -19,11 +19,14 @@ import {
   uploadBytes,
   getDownloadURL,
   getBytes,
-  listAll,                    // ← NUEVO
+  listAll, // ← NUEVO
 } from "firebase/storage";
 import { db, storage } from "@/src/firebase/firebaseConfig";
 import { FiArrowLeft } from "react-icons/fi";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+
+// >>> NUEVO: para saber si es admin
+import { useAuth } from "@/src/Context/AuthContext";
 
 // ---- Tipos ----
 type QuoteMeta = {
@@ -148,6 +151,9 @@ export default function DetallePedidoPage() {
   const { id } = useParams();
   const router = useRouter();
 
+  // >>> NUEVO: info de auth (para saber si es admin)
+  const { isAdmin } = useAuth();
+
   const [pedido, setPedido] = useState<any>(null);
 
   // Cotización Viva
@@ -175,8 +181,8 @@ export default function DetallePedidoPage() {
   const [isGen, setIsGen] = useState(false);
 
   // --- Archivos adjuntos (Storage) ---
-  const [filesLoading, setFilesLoading] = useState<boolean>(false);                                   // ← NUEVO
-  const [files, setFiles] = useState<Array<{ name: string; url: string }>>([]);                       // ← NUEVO
+  const [filesLoading, setFilesLoading] = useState<boolean>(false); // ← NUEVO
+  const [files, setFiles] = useState<Array<{ name: string; url: string }>>([]); // ← NUEVO
 
   // --------- Cargar pedido ---------
   useEffect(() => {
@@ -200,7 +206,7 @@ export default function DetallePedidoPage() {
   }, [id, router]);
 
   // --------- Cargar archivos adjuntos (por ID; fallback por título) ---------
-  useEffect(() => {                                                                                   // ← NUEVO
+  useEffect(() => {
     const listarAdjuntos = async () => {
       if (!id) return;
       setFilesLoading(true);
@@ -238,7 +244,7 @@ export default function DetallePedidoPage() {
     };
 
     listarAdjuntos();
-  }, [id, pedido?.titulo]);                                                                           // ← NUEVO
+  }, [id, pedido?.titulo]);
 
   // --------- Cargar Cotización Viva ---------
   const cargarCotizacionViva = async () => {
@@ -585,17 +591,23 @@ export default function DetallePedidoPage() {
                 table: {
                   widths: [120, 120],
                   body: [
-                    [{ text: "Subtotal:", bold: true }, { text: formatMoney(subtotalConGananciaMXN), alignment: "right" }],
+                    [
+                      { text: "Subtotal:", bold: true },
+                      { text: formatMoney(subtotalConGananciaMXN), alignment: "right" },
+                    ],
                     [{ text: "IVA (16%):", bold: true }, { text: formatMoney(ivaMonto), alignment: "right" }],
-                    [{ text: "Envío:", bold: true }, { text: formatMoney(Number(draft.envio) || 0), alignment: "right" }],
+                    [
+                      { text: "Envío:", bold: true },
+                      { text: formatMoney(Number(draft.envio) || 0), alignment: "right" },
+                    ],
                     [
                       { text: "TOTAL:", bold: true },
-                      { text: formatMoney(totalFinal), bold: true, alignment: "right" }
+                      { text: formatMoney(totalFinal), bold: true, alignment: "right" },
                     ],
                   ],
                 },
                 layout: "lightHorizontalLines",
-              }
+              },
             ],
             margin: [0, 0, 0, 16],
           },
@@ -794,14 +806,13 @@ export default function DetallePedidoPage() {
         }
       };
 
-     const filasServicios = quoteLines.map((ln) => {
-  const d = ln.data;
-  const base = d.subtotalMXN ?? 0;
-  const inflado = base * (1 + ((Number(draft.gananciaPct) || 0) / 100));
-  const details = buildDetailsForLine(d);
-  return { servicio: d.serviceName || d.serviceId || "Servicio", detalles: details, total: inflado };
-});
-
+      const filasServicios = quoteLines.map((ln) => {
+        const d = ln.data;
+        const base = d.subtotalMXN ?? 0;
+        const inflado = base * (1 + ((Number(draft.gananciaPct) || 0) / 100));
+        const details = buildDetailsForLine(d);
+        return { servicio: d.serviceName || d.serviceId || "Servicio", detalles: details, total: inflado };
+      });
 
       for (const f of filasServicios) {
         newPageIfNeeded();
@@ -909,39 +920,52 @@ export default function DetallePedidoPage() {
           <strong>Fecha de entrega real:</strong> {pedido.fechaEntregaReal || "No definida"}
         </p>
 
-        
-
         <p>
           <strong>Status:</strong> {pedido.status || "Enviado"}
         </p>
-{/* Archivos adjuntos (debajo de Status) */}
-<div className="pt-4 mt-2 border-t">
-  <strong>Archivos adjuntos:</strong>{" "}
-  {filesLoading ? (
-    <span>Cargando…</span>
-  ) : files.length === 0 ? (
-    <span className="italic">No hay archivos adjuntos.</span>
-  ) : (
-    <ul className="list-disc pl-6 mt-2 space-y-1">
-      {files.map((f) => (
-        <li key={f.url}>
-          <a
-            href={f.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-600 underline"
-          >
-            {f.name}
-          </a>
-        </li>
-      ))}
-    </ul>
-  )}
-</div>
 
+        {/* Archivos adjuntos (debajo de Status) */}
+        <div className="pt-4 mt-2 border-t">
+          <strong>Archivos adjuntos:</strong>{" "}
+          {filesLoading ? (
+            <span>Cargando…</span>
+          ) : files.length === 0 ? (
+            <span className="italic">No hay archivos adjuntos.</span>
+          ) : (
+            <ul className="list-disc pl-6 mt-2 space-y-1">
+              {files.map((f) => (
+                <li key={f.url}>
+                  <a
+                    href={f.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 underline"
+                  >
+                    {f.name}
+                  </a>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
 
+        {/* >>> NUEVO: Botón para admins – Cotizar servicio */}
+        {isAdmin && (
+          <div className="pt-4 mt-4 border-t">
+            <button
+              onClick={() => {
+                const proyecto = encodeURIComponent(pedido.proyecto || "");
+                const titulo = encodeURIComponent(pedido.titulo || "");
+                // Si luego quieres también pasar pedidoId, se puede agregar aquí
+                router.push(`/cotizador?proyecto=${proyecto}&titulo=${titulo}`);
+              }}
+              className="px-4 py-2 rounded-xl bg-black text-white hover:opacity-90"
+            >
+              Cotizar servicio
+            </button>
+          </div>
+        )}
       </div>
-
 
       {/* ----- COTIZACIÓN VIVA ----- */}
       <div id="cotizacion-viva" className="bg-white shadow rounded-xl p-6 space-y-4">
@@ -955,9 +979,7 @@ export default function DetallePedidoPage() {
         {loadingQuote ? (
           <p>Cargando cotización…</p>
         ) : quoteLines.length === 0 ? (
-          <p className="text-gray-600">
-            No se han adjuntado servicios a esta cotización.
-          </p>
+          <p className="text-gray-600">No se han adjuntado servicios a esta cotización.</p>
         ) : (
           <>
             {/* Meta informativa */}
@@ -1069,7 +1091,7 @@ export default function DetallePedidoPage() {
                 onClick={async () => {
                   try {
                     setIsGen(true);
-                    const ok = await handleGenerarPDF();   // ← siempre el genérico
+                    const ok = await handleGenerarPDF(); // ← siempre el genérico
                     if (ok) await cargarCotizacionViva();
                   } finally {
                     setIsGen(false);

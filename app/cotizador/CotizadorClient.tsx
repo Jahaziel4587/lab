@@ -294,6 +294,11 @@ function CotizacionPanel() {
   // >>> NEW
   const { user } = useAuth?.() ?? { user: null };
 
+  // >>> NEW: leer parámetros de la URL para preseleccionar proyecto/pedido
+  const search = useSearchParams();
+  const proyectoParam = search.get("proyecto") || "";
+  const tituloParam = search.get("titulo") || "";
+
   // Crea/lee settings default
   useEffect(() => {
     const ref = doc(db, COL_SETTINGS, "default");
@@ -325,10 +330,37 @@ function CotizacionPanel() {
     });
   }, [pedidos, project]);
 
+  // >>> NEW: preseleccionar proyecto si viene en query y aún no se ha elegido
+  useEffect(() => {
+    if (!project && proyectoParam) {
+      setProject(proyectoParam);
+    }
+  }, [project, proyectoParam]);
+
+  const [pedidoId, setPedidoId] = useState<string>("");
+
+  // >>> NEW: preseleccionar pedido por título (y proyecto si aplica)
+  useEffect(() => {
+    if (!pedidoId && tituloParam && pedidos.length) {
+      let found =
+        pedidos.find((p) => {
+          const projName = p.data.proyecto || p.data.titulo || "Sin nombre";
+          return (
+            p.data.titulo === tituloParam &&
+            (!proyectoParam || projName === proyectoParam)
+          );
+        }) ||
+        pedidos.find((p) => p.data.titulo === tituloParam);
+
+      if (found) {
+        setPedidoId(found.id);
+      }
+    }
+  }, [pedidoId, tituloParam, proyectoParam, pedidos]);
+
   // Servicios disponibles
   const services = useColl<ServiceDoc>(COL_SERVICES);
 
-  const [pedidoId, setPedidoId] = useState<string>("");
   const [serviceId, setServiceId] = useState<string>("");
 
   // Respuestas (variables) de cotización

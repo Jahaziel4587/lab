@@ -20,7 +20,7 @@ export default function EspecificacionesPage() {
   const [titulo, setTitulo] = useState("");
   const [prefijoTitulo, setPrefijoTitulo] = useState<string>(""); 
 
-  // ⭐ NUEVO: título final garantizado único
+  // NUEVO: título final garantizado único
   const [tituloFinalUnico, setTituloFinalUnico] = useState("");
 
   const [explicacion, setExplicacion] = useState("");
@@ -131,7 +131,7 @@ export default function EspecificacionesPage() {
     setPrefijoTitulo(computePrefijo());
   }, []);
 
-  // ⭐ NUEVO: recalcular título único cada vez que cambie prefijo o título
+  // NUEVO: recalcular título único cada vez que cambie prefijo o título
   useEffect(() => {
     const actualizar = async () => {
       if (!prefijoTitulo) return;
@@ -204,7 +204,7 @@ export default function EspecificacionesPage() {
       }
 
       await setDoc(nuevoDocRef, {
-        titulo: tituloFinalUnico, // ⭐ USAMOS EL TÍTULO ÚNICO
+        titulo: tituloFinalUnico, // USAMOS EL TÍTULO ÚNICO
         descripcion: explicacion,
         fechaLimite: fecha,
         proyecto,
