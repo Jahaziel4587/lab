@@ -394,6 +394,30 @@ function CotizacionPanel() {
   // >>> NEW: estado para evitar doble click y manejar "loading"
   const [isAttaching, setIsAttaching] = useState(false);
 
+  // >>> NEW: sincronizar automáticamente tabla de costos y calculadora con el servicio seleccionado
+  useEffect(() => {
+    if (!serviceId) return;
+    const svc = services.find((s) => s.id === serviceId)?.data;
+    if (!svc) return;
+
+    const costMatch = costTablesGroups.find((g) => g.data.name === svc.name);
+    if (costMatch && costMatch.id !== selectedCostGroup) {
+      setSelectedCostGroup(costMatch.id);
+    }
+
+    const calcMatch = calcGroups.find((g) => g.data.name === svc.name);
+    if (calcMatch && calcMatch.id !== activeCalcGroup) {
+      setActiveCalcGroup(calcMatch.id);
+    }
+  }, [
+    serviceId,
+    services,
+    costTablesGroups,
+    calcGroups,
+    selectedCostGroup,
+    activeCalcGroup,
+  ]);
+
   // Resolver calculadora con prioridad: calc > answers > tabla
   const resolvedCalc = useMemo(() => {
     const result: Record<string, number> = {};
