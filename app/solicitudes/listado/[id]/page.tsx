@@ -229,29 +229,32 @@ export default function DetallePedidoPage() {
       setFilesLoading(true);
       try {
         // 1) Ruta nueva por ID
-        const refById = storageRef(storage, `pedidos/${id as string}`);
-        let items = (await listAll(refById)).items;
+const refById = storageRef(storage, `pedidos/${id as string}`);
+let items = (await listAll(refById)).items;
 
-        // 2) Compatibilidad: si no hay por ID, intenta por título
-        if (items.length === 0 && pedido?.titulo) {
-          try {
-            const refByTitle = storageRef(storage, `pedidos/${pedido.titulo}`);
-            items = (await listAll(refByTitle)).items;
-          } catch {
-            /* ignore */
-          }
-        }
+// 2) Compatibilidad: si no hay por ID, intenta por título
+if (items.length === 0 && pedido?.titulo) {
+  try {
+    const refByTitle = storageRef(storage, `pedidos/${pedido.titulo}`);
+    items = (await listAll(refByTitle)).items;
+  } catch {
+    /* ignore */
+  }
+}
 
-        const out = await Promise.all(
-          items.map(async (it) => {
-            const url = await getDownloadURL(it);
-            // nombre legible como usas en tablas
-            const raw = url.split("/").pop()?.split("?")[0] || it.name;
-            const name = decodeURIComponent(raw).split("%2F").pop() || it.name;
-            return { name, url };
-          })
-        );
-        setFiles(out);
+// 👉 FILTRAR archivos de versiones (spec_v...)
+items = items.filter((it) => !it.name.startsWith("spec_v"));
+
+const out = await Promise.all(
+  items.map(async (it) => {
+    const url = await getDownloadURL(it);
+    const raw = url.split("/").pop()?.split("?")[0] || it.name;
+    const name = decodeURIComponent(raw).split("%2F").pop() || it.name;
+    return { name, url };
+  })
+);
+setFiles(out);
+
       } catch (e) {
         console.warn("No se pudieron listar adjuntos del pedido:", e);
         setFiles([]);
@@ -1094,7 +1097,7 @@ export default function DetallePedidoPage() {
                 >
                   <div className="flex items-center justify-between mb-1">
                     <span className="font-semibold">
-                      Versión {s.version} (cambio sobre los archivos/detalles originales)
+                      Versión {s.version} (sobre los archivos/detalles originales)
                     </span>
                     <span className="text-xs text-gray-500">
                       {fecha ? fecha.toLocaleString() : "Fecha no disponible"}
@@ -1105,7 +1108,7 @@ export default function DetallePedidoPage() {
                   )}
                   {s.archivos && s.archivos.length > 0 && (
                     <div>
-                      <span className="font-medium">Archivos de esta versión:</span>
+                      <span className="font-medium">Archivos adjuntos de esta versión:</span>
                       <ul className="list-disc pl-5 mt-1 space-y-1">
                         {s.archivos.map((a) => (
                           <li key={a.url}>
