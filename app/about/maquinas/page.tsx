@@ -10,6 +10,8 @@ const maquinas = [
   { nombre: "BambuLab", ruta: "bambulab", imagen: "/bambulab.png" },
   { nombre: "Avid CNC Benchtop 24x24", ruta: "avidcnc", imagen: "/cnc.jpg" },
   { nombre: "Mayku Formbox", ruta: "mayku", imagen: "/mayku.jpg" },
+  { nombre: "Form Cure", ruta: "formcure", imagen: "/formcure.jpg" },
+  { nombre: "Form Wash", ruta: "formwash", imagen: "/formwash.jpg" },
 ];
 
 export default function MaquinasPage() {

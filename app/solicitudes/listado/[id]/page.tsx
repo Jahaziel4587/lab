@@ -13,14 +13,14 @@ import {
   updateDoc,
   runTransaction,
   serverTimestamp,
-  addDoc, // ← NUEVO
+  addDoc, 
 } from "firebase/firestore";
 import {
   ref as storageRef,
   uploadBytes,
   getDownloadURL,
   getBytes,
-  listAll, // ← NUEVO
+  listAll,
 } from "firebase/storage";
 import { db, storage } from "@/src/firebase/firebaseConfig";
 import { FiArrowLeft } from "react-icons/fi";
