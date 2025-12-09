@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, FormEvent } from "react";
 import { useParams, useRouter } from "next/navigation";
 import {
   doc,
@@ -13,6 +13,7 @@ import {
   updateDoc,
   runTransaction,
   serverTimestamp,
+  addDoc, // ← NUEVO
 } from "firebase/firestore";
 import {
   ref as storageRef,
@@ -85,6 +86,15 @@ type PdfCoords = {
   };
 };
 type PdfTemplateConf = { templatePath: string; coords: PdfCoords };
+
+// >>> NUEVO: tipo para las versiones de especificaciones
+type SpecUpdate = {
+  id: string;
+  version: number;
+  descripcion: string;
+  createdAt?: any;
+  archivos?: { name: string; url: string }[];
+};
 
 // ---- Utils ----
 function prettyKey(k: string) {
@@ -181,8 +191,15 @@ export default function DetallePedidoPage() {
   const [isGen, setIsGen] = useState(false);
 
   // --- Archivos adjuntos (Storage) ---
-  const [filesLoading, setFilesLoading] = useState<boolean>(false); // ← NUEVO
-  const [files, setFiles] = useState<Array<{ name: string; url: string }>>([]); // ← NUEVO
+  const [filesLoading, setFilesLoading] = useState<boolean>(false);
+  const [files, setFiles] = useState<Array<{ name: string; url: string }>>([]);
+
+  // >>> NUEVO: estado para versiones de especificaciones
+  const [specUpdates, setSpecUpdates] = useState<SpecUpdate[]>([]);
+  const [showSpecForm, setShowSpecForm] = useState(false);
+  const [specDesc, setSpecDesc] = useState("");
+  const [specFiles, setSpecFiles] = useState<File[]>([]);
+  const [savingSpec, setSavingSpec] = useState(false);
 
   // --------- Cargar pedido ---------
   useEffect(() => {
@@ -390,6 +407,36 @@ export default function DetallePedidoPage() {
     loadVersions();
   }, [id]);
 
+  // --------- Cargar versiones de especificaciones ---------
+  const loadSpecUpdates = async () => {
+    if (!id) return;
+    try {
+      const qSpecs = query(
+        collection(db, "pedidos", id as string, "spec_updates"),
+        orderBy("createdAt", "asc")
+      );
+      const snap = await getDocs(qSpecs);
+      const arr: SpecUpdate[] = [];
+      snap.forEach((d) => {
+        const data = d.data() as any;
+        arr.push({
+          id: d.id,
+          version: data.version ?? 2,
+          descripcion: data.descripcion || "",
+          createdAt: data.createdAt,
+          archivos: (data.archivos || []) as { name: string; url: string }[],
+        });
+      });
+      setSpecUpdates(arr);
+    } catch (e) {
+      console.error("No se pudieron cargar especificaciones adicionales:", e);
+    }
+  };
+
+  useEffect(() => {
+    loadSpecUpdates();
+  }, [id]);
+
   // --------- Cálculos (base MXN) ---------
   const subtotalBaseMXN = useMemo(
     () => quoteLines.reduce((acc, r) => acc + (r.data.subtotalMXN || 0), 0),
@@ -507,13 +554,39 @@ export default function DetallePedidoPage() {
         "If the price is in US dollars, the exchange rate of Banorte on the day the payment is made will be applied.",
       ];
 
-      // Construcción del documento
-      const headerLeftStack: any[] = [];
-      if (logoDataUrl) {
-        headerLeftStack.push({ image: logoDataUrl, width: 120, margin: [0, 0, 0, 6] });
+      // helper para secciones con banda verde
+      function sectionBlock(title: string, items: string[]) {
+        return {
+          table: {
+            widths: ["*"],
+            body: [
+              [
+                {
+                  text: title,
+                  color: "white",
+                  margin: [6, 3, 6, 3],
+                },
+              ],
+              [
+                {
+                  ul: items,
+                  margin: [6, 6, 6, 6],
+                  fontSize: 8.5,
+                },
+              ],
+            ],
+          },
+          layout: {
+            fillColor: (rowIndex: number) => (rowIndex === 0 ? "#1ABC80" : null),
+            hLineWidth: () => 0.6,
+            vLineWidth: () => 0.6,
+            hLineColor: () => "#e5e7eb",
+            vLineColor: () => "#e5e7eb",
+          },
+        };
       }
-      headerLeftStack.push({ text: company, bold: true, fontSize: 12 });
 
+      // Construcción del documento
       const cotizadoPor = "Manuel García"; // puedes cambiarlo por el PM logueado si luego lo tienes
 
       const docDefinition: any = {
@@ -524,7 +597,15 @@ export default function DetallePedidoPage() {
           // Encabezado
           {
             columns: [
-              { width: "*", stack: headerLeftStack },
+              {
+                width: "*",
+                stack: [
+                  ...(logoDataUrl
+                    ? [{ image: logoDataUrl, width: 120, margin: [0, 0, 0, 6] }]
+                    : []),
+                  { text: company, bold: true, fontSize: 12 },
+                ],
+              },
               {
                 width: 220,
                 table: {
@@ -652,38 +733,6 @@ export default function DetallePedidoPage() {
         },
         defaultStyle: { fontSize: 10 },
       };
-
-      // helper para secciones con banda verde
-      function sectionBlock(title: string, items: string[]) {
-        return {
-          table: {
-            widths: ["*"],
-            body: [
-              [
-                {
-                  text: title,
-                  color: "white",
-                  margin: [6, 3, 6, 3],
-                },
-              ],
-              [
-                {
-                  ul: items,
-                  margin: [6, 6, 6, 6],
-                  fontSize: 8.5,
-                },
-              ],
-            ],
-          },
-          layout: {
-            fillColor: (rowIndex: number) => (rowIndex === 0 ? "#1ABC80" : null),
-            hLineWidth: () => 0.6,
-            vLineWidth: () => 0.6,
-            hLineColor: () => "#e5e7eb",
-            vLineColor: () => "#e5e7eb",
-          },
-        };
-      }
 
       // Generar blob
       const pdfBlob: Blob = await new Promise((resolve) => {
@@ -880,6 +929,56 @@ export default function DetallePedidoPage() {
     }
   };
 
+  // --------- Guardar nueva versión de especificaciones ---------
+  const handleSpecSubmit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!id) return;
+    if (!specDesc.trim() && specFiles.length === 0) {
+      alert("Agrega una descripción o al menos un archivo.");
+      return;
+    }
+    try {
+      setSavingSpec(true);
+
+      // versión siguiente (v2, v3, etc.). Asumimos que la versión 1 es el pedido original.
+      const currentMax =
+        specUpdates.length === 0
+          ? 1
+          : specUpdates.reduce((max, s) => (s.version > max ? s.version : max), 1);
+      const nextVersion = currentMax + 1;
+
+      const uploaded: { name: string; url: string }[] = [];
+      for (const file of specFiles) {
+        const safeName = file.name.replace(/\s+/g, "_");
+        const path = `pedidos/${id}/spec_v${nextVersion}_${Date.now()}_${safeName}`;
+        const ref = storageRef(storage, path);
+        await uploadBytes(ref, file);
+        const url = await getDownloadURL(ref);
+        uploaded.push({ name: file.name, url });
+      }
+
+      await addDoc(collection(db, "pedidos", id as string, "spec_updates"), {
+        version: nextVersion,
+        descripcion: specDesc.trim(),
+        archivos: uploaded,
+        createdAt: serverTimestamp(),
+      });
+
+      // refrescar lista
+      await loadSpecUpdates();
+
+      // limpiar formulario
+      setSpecDesc("");
+      setSpecFiles([]);
+      setShowSpecForm(false);
+    } catch (err) {
+      console.error("Error al guardar especificaciones adicionales:", err);
+      alert("No se pudo guardar las especificaciones adicionales.");
+    } finally {
+      setSavingSpec(false);
+    }
+  };
+
   if (!pedido) return <p className="text-black p-4">Cargando...</p>;
 
   return (
@@ -956,7 +1055,6 @@ export default function DetallePedidoPage() {
               onClick={() => {
                 const proyecto = encodeURIComponent(pedido.proyecto || "");
                 const titulo = encodeURIComponent(pedido.titulo || "");
-                // Si luego quieres también pasar pedidoId, se puede agregar aquí
                 router.push(`/cotizador?proyecto=${proyecto}&titulo=${titulo}`);
               }}
               className="px-4 py-2 rounded-xl bg-black text-white hover:opacity-90"
@@ -967,11 +1065,137 @@ export default function DetallePedidoPage() {
         )}
       </div>
 
+      {/* ----- NUEVO: Especificaciones adicionales / cambios de versión ----- */}
+      <div className="bg-white shadow rounded-xl p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Especificaciones adicionales / versiones</h2>
+          <button
+            type="button"
+            onClick={() => setShowSpecForm((prev) => !prev)}
+            className="px-3 py-1 rounded-xl border border-gray-300 bg-gray-50 hover:bg-gray-100 text-sm"
+          >
+            {showSpecForm ? "Cerrar" : "Agregar especificaciones"}
+          </button>
+        </div>
+
+        {specUpdates.length === 0 ? (
+          <p className="text-sm text-gray-600">
+            Aún no se han registrado cambios de especificaciones. La versión 1 corresponde al pedido original.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {specUpdates.map((s) => {
+              const fecha =
+                s.createdAt?.toDate?.() instanceof Date ? s.createdAt.toDate() : null;
+              return (
+                <div
+                  key={s.id}
+                  className="border border-gray-200 rounded-lg p-3 text-sm bg-gray-50"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-semibold">
+                      Versión {s.version} (cambio sobre los archivos/detalles originales)
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {fecha ? fecha.toLocaleString() : "Fecha no disponible"}
+                    </span>
+                  </div>
+                  {s.descripcion && (
+                    <p className="mb-2 whitespace-pre-wrap">{s.descripcion}</p>
+                  )}
+                  {s.archivos && s.archivos.length > 0 && (
+                    <div>
+                      <span className="font-medium">Archivos de esta versión:</span>
+                      <ul className="list-disc pl-5 mt-1 space-y-1">
+                        {s.archivos.map((a) => (
+                          <li key={a.url}>
+                            <a
+                              href={a.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 underline"
+                            >
+                              {a.name}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {showSpecForm && (
+          <form onSubmit={handleSpecSubmit} className="mt-4 space-y-3 border-t pt-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Descripción del cambio / especificaciones nuevas
+              </label>
+              <textarea
+                className="w-full border rounded-md px-3 py-2 text-sm"
+                rows={3}
+                value={specDesc}
+                onChange={(e) => setSpecDesc(e.target.value)}
+                placeholder="Ejemplo: Se actualiza el archivo de diseño por versión con más grosor en la pared lateral. Justificación del cambio..."
+              />
+            </div>
+            <div>
+  <label className="block text-sm font-medium mb-1">
+    Adjuntar archivos
+  </label>
+
+  <label className="inline-flex items-center px-4 py-2 rounded-xl bg-black text-white text-sm cursor-pointer hover:opacity-90">
+    {/* Iconito simple de subir (puedes cambiarlo por uno real de react-icons si quieres) */}
+    <span className="mr-2">⬆</span>
+    Seleccionar archivos
+    <input
+      type="file"
+      multiple
+      className="hidden"
+      onChange={(e) => {
+        const list = e.target.files;
+        if (!list) {
+          setSpecFiles([]);
+          return;
+        }
+        setSpecFiles(Array.from(list));
+      }}
+    />
+  </label>
+
+  {specFiles.length > 0 && (
+    <p className="mt-1 text-xs text-gray-500">
+      {specFiles.length} archivo(s) seleccionados.
+    </p>
+  )}
+</div>
+
+            <button
+              type="submit"
+              disabled={savingSpec}
+              className="px-4 py-2 rounded-xl bg-black text-white text-sm hover:opacity-90 disabled:opacity-50"
+            >
+              {savingSpec ? "Guardando…" : "Guardar como nueva versión"}
+            </button>
+            <p className="text-xs text-gray-500 mt-1">
+              Esta nueva entrada se registrará como la versión siguiente (v2, v3, etc.) con fecha automática.
+            </p>
+          </form>
+        )}
+      </div>
+
       {/* ----- COTIZACIÓN VIVA ----- */}
       <div id="cotizacion-viva" className="bg-white shadow rounded-xl p-6 space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold">Cotización</h2>
-          <button onClick={cargarCotizacionViva} className="px-3 py-1 rounded border hover:bg-gray-100" title="Actualizar">
+          <button
+            onClick={cargarCotizacionViva}
+            className="px-3 py-1 rounded border hover:bg-gray-100"
+            title="Actualizar"
+          >
             Refrescar
           </button>
         </div>
@@ -1058,7 +1282,8 @@ export default function DetallePedidoPage() {
               </div>
 
               <div>
-                <span className="font-medium">Subtotal con ganancia:</span> {formatMoney(subtotalConGananciaMXN)}
+                <span className="font-medium">Subtotal con ganancia:</span>{" "}
+                {formatMoney(subtotalConGananciaMXN)}
               </div>
               <div>
                 <span className="font-medium">IVA (16%):</span> {formatMoney(ivaMonto)}
@@ -1141,7 +1366,9 @@ export default function DetallePedidoPage() {
           </div>
         </div>
 
-        <p className="text-xs text-gray-600">Este draft se guarda automáticamente y alimentará el PDF final.</p>
+        <p className="text-xs text-gray-600">
+          Este draft se guarda automáticamente y alimentará el PDF final.
+        </p>
       </div>
 
       {/* ----- Versiones generadas ----- */}
@@ -1158,10 +1385,16 @@ export default function DetallePedidoPage() {
                   <div>
                     <div className="font-medium">{v.id}</div>
                     <div className="text-xs text-gray-600">
-                      {fecha ? fecha.toLocaleString() : "—"} · Total: {formatMoney(v.total || 0)}
+                      {fecha ? fecha.toLocaleString() : "—"} · Total:{" "}
+                      {formatMoney(v.total || 0)}
                     </div>
                   </div>
-                  <a className="text-blue-600 underline" href={v.url} target="_blank" rel="noopener noreferrer">
+                  <a
+                    className="text-blue-600 underline"
+                    href={v.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
                     Ver PDF
                   </a>
                 </li>
