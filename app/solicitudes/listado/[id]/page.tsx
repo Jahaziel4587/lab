@@ -1206,7 +1206,7 @@ return (
             Mensajes entre administradores y usuarios sobre este pedido.
           </p>
 
-         <div className="flex-1 mt-2 border rounded-lg p-2 overflow-y-auto space-y-2 text-sm bg-gray-50 min-h-[260px] max-h-[540px]">
+         <div className="flex-1  mt-2 border rounded-lg p-2 overflow-y-auto space-y-2 text-sm bg-gray-50 min-h-[380px] max-h-[380px]">
            {chatMessages.length === 0 ? (
   <p className="text-gray-500 text-sm text-center mt-4">
     Aún no hay mensajes en este pedido.
