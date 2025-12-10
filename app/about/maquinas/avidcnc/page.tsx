@@ -2,39 +2,35 @@
 
 import { useEffect, useState } from "react";
 import { db } from "@/src/firebase/firebaseConfig";
-import {
-  doc,
-  getDoc,
-  updateDoc,
-  setDoc,
-} from "firebase/firestore";
+import { doc, getDoc, updateDoc, setDoc} from "firebase/firestore";
 import { useAuth } from "@/src/Context/AuthContext";
 import { FiArrowLeft } from "react-icons/fi";
 
-export default function avidcncPage() {
-  const [materiales, setMateriales] = useState<string[]>([]);
-  const [nuevoMaterial, setNuevoMaterial] = useState("");
-  const [qsURL, setQsURL] = useState("");
-  const { user } = useAuth();
-  //const esAdmin = user?.email === "jahaziel@bioana.com" || user?.email === "manuel@bioana.com";
-  const {isAdmin} = useAuth();
-  const fetchData = async () => {
-  const ref = doc(db, "maquinas", "avidcnc");
-  const snap = await getDoc(ref);
-  if (snap.exists()) {
-    const data = snap.data();
-    setMateriales(data.materiales || []);
-    setQsURL(data.qs || "");
-  } else {
-    // Creamos el documento con campos vacíos
-    await setDoc(ref, {
-      materiales: [],
-      qs: ""
-    });
-    setMateriales([]);
-    setQsURL("");
-  }
-};
+  export default function avidcncPage() {
+    const [materiales, setMateriales] = useState<string[]>([]);
+    const [nuevoMaterial, setNuevoMaterial] = useState("");
+    const [qsURL, setQsURL] = useState("");
+    const { user } = useAuth();
+    const {isAdmin} = useAuth();
+    const fetchData = async () => {
+    const ref = doc(db, "maquinas", "avidcnc");
+    const snap = await getDoc(ref);
+
+          if (snap.exists()) {
+          const data = snap.data();
+          setMateriales(data.materiales || []);
+          setQsURL(data.qs || "");
+          } 
+          else {
+            // Creamos el documento con campos vacíos
+            await setDoc(ref, {
+              materiales: [],
+              qs: ""
+            });
+            setMateriales([]);
+            setQsURL("");
+        }
+        };
 
   useEffect(() => {
     fetchData();

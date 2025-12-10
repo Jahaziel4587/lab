@@ -13,7 +13,8 @@ import {
   updateDoc,
   runTransaction,
   serverTimestamp,
-  addDoc, 
+  addDoc,
+  onSnapshot, // <<< NUEVO
 } from "firebase/firestore";
 import {
   ref as storageRef,
@@ -26,7 +27,7 @@ import { db, storage } from "@/src/firebase/firebaseConfig";
 import { FiArrowLeft } from "react-icons/fi";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
-// >>> NUEVO: para saber si es admin
+// >>> para saber si es admin / usuario actual
 import { useAuth } from "@/src/Context/AuthContext";
 
 // ---- Tipos ----
@@ -87,13 +88,24 @@ type PdfCoords = {
 };
 type PdfTemplateConf = { templatePath: string; coords: PdfCoords };
 
-// >>> NUEVO: tipo para las versiones de especificaciones
+// tipo para las versiones de especificaciones
 type SpecUpdate = {
   id: string;
   version: number;
   descripcion: string;
   createdAt?: any;
   archivos?: { name: string; url: string }[];
+};
+
+// <<< NUEVO: tipo para mensajes de chat
+type ChatMessage = {
+  id: string;
+  text: string;
+  createdAt?: any;
+  userId?: string | null;
+  userName?: string | null;
+  userEmail?: string;
+  isAdmin?: boolean;
 };
 
 // ---- Utils ----
@@ -161,8 +173,8 @@ export default function DetallePedidoPage() {
   const { id } = useParams();
   const router = useRouter();
 
-  // >>> NUEVO: info de auth (para saber si es admin)
-  const { isAdmin } = useAuth();
+  // info de auth
+  const { isAdmin, user } = useAuth() as any;
 
   const [pedido, setPedido] = useState<any>(null);
 
@@ -194,13 +206,46 @@ export default function DetallePedidoPage() {
   const [filesLoading, setFilesLoading] = useState<boolean>(false);
   const [files, setFiles] = useState<Array<{ name: string; url: string }>>([]);
 
-  // >>> NUEVO: estado para versiones de especificaciones
+  // versiones de especificaciones
   const [specUpdates, setSpecUpdates] = useState<SpecUpdate[]>([]);
   const [showSpecForm, setShowSpecForm] = useState(false);
   const [specDesc, setSpecDesc] = useState("");
   const [specFiles, setSpecFiles] = useState<File[]>([]);
   const [savingSpec, setSavingSpec] = useState(false);
 
+  // <<< NUEVO: estado de chat
+  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
+  const [newMessage, setNewMessage] = useState("");
+  const chatEndRef = useRef<HTMLDivElement | null>(null);
+
+  const [nameByEmail, setNameByEmail] = useState<Record<string, string>>({});
+
+
+useEffect(() => {
+  const loadUsers = async () => {
+    try {
+      const snap = await getDocs(collection(db, "users"));
+      const map: Record<string, string> = {};
+      snap.forEach((d) => {
+        const data = d.data() as any;
+        const email = data.email as string | undefined;
+        const nombre = data.nombre as string | undefined;
+        const apellido = data.apellido as string | undefined;
+
+        if (email && nombre) {
+          map[email] = apellido ? `${nombre} ${apellido}` : nombre;
+        }
+      });
+      setNameByEmail(map);
+    } catch (e) {
+      console.error("No se pudieron cargar los usuarios para el chat:", e);
+    }
+  };
+
+  loadUsers();
+}, []);
+
+  
   // --------- Cargar pedido ---------
   useEffect(() => {
     if (!id) return;
@@ -229,32 +274,31 @@ export default function DetallePedidoPage() {
       setFilesLoading(true);
       try {
         // 1) Ruta nueva por ID
-const refById = storageRef(storage, `pedidos/${id as string}`);
-let items = (await listAll(refById)).items;
+        const refById = storageRef(storage, `pedidos/${id as string}`);
+        let items = (await listAll(refById)).items;
 
-// 2) Compatibilidad: si no hay por ID, intenta por título
-if (items.length === 0 && pedido?.titulo) {
-  try {
-    const refByTitle = storageRef(storage, `pedidos/${pedido.titulo}`);
-    items = (await listAll(refByTitle)).items;
-  } catch {
-    /* ignore */
-  }
-}
+        // 2) Compatibilidad: si no hay por ID, intenta por título
+        if (items.length === 0 && pedido?.titulo) {
+          try {
+            const refByTitle = storageRef(storage, `pedidos/${pedido.titulo}`);
+            items = (await listAll(refByTitle)).items;
+          } catch {
+            /* ignore */
+          }
+        }
 
-// 👉 FILTRAR archivos de versiones (spec_v...)
-items = items.filter((it) => !it.name.startsWith("spec_v"));
+        // FILTRAR archivos de versiones (spec_v...)
+        items = items.filter((it) => !it.name.startsWith("spec_v"));
 
-const out = await Promise.all(
-  items.map(async (it) => {
-    const url = await getDownloadURL(it);
-    const raw = url.split("/").pop()?.split("?")[0] || it.name;
-    const name = decodeURIComponent(raw).split("%2F").pop() || it.name;
-    return { name, url };
-  })
-);
-setFiles(out);
-
+        const out = await Promise.all(
+          items.map(async (it) => {
+            const url = await getDownloadURL(it);
+            const raw = url.split("/").pop()?.split("?")[0] || it.name;
+            const name = decodeURIComponent(raw).split("%2F").pop() || it.name;
+            return { name, url };
+          })
+        );
+        setFiles(out);
       } catch (e) {
         console.warn("No se pudieron listar adjuntos del pedido:", e);
         setFiles([]);
@@ -414,10 +458,7 @@ setFiles(out);
   const loadSpecUpdates = async () => {
     if (!id) return;
     try {
-      const qSpecs = query(
-        collection(db, "pedidos", id as string, "spec_updates"),
-        orderBy("createdAt", "asc")
-      );
+      const qSpecs = query(collection(db, "pedidos", id as string, "spec_updates"), orderBy("createdAt", "asc"));
       const snap = await getDocs(qSpecs);
       const arr: SpecUpdate[] = [];
       snap.forEach((d) => {
@@ -440,6 +481,50 @@ setFiles(out);
     loadSpecUpdates();
   }, [id]);
 
+  // --------- CHAT: suscripción en tiempo real ---------
+  // --------- CHAT: suscripción en tiempo real ---------
+useEffect(() => {
+  if (!id) return;
+
+  const qChat = query(
+    collection(db, "pedidos", id as string, "chat"),
+    orderBy("createdAt", "asc")
+  );
+
+  const unsub = onSnapshot(
+    qChat,
+    (snap) => {
+      const arr: ChatMessage[] = [];
+      snap.forEach((d) => {
+        const data = d.data() as any;
+        arr.push({
+          id: d.id,
+          text: data.text || "",
+          createdAt: data.createdAt,
+          userId: data.userId,
+          userName: data.userName,
+          userEmail: data.userEmail ?? data.userName ?? null, // 👈 importante
+          isAdmin: data.isAdmin,
+        });
+      });
+      setChatMessages(arr);
+    },
+    (err) => {
+      console.error("Error escuchando chat:", err);
+    }
+  );
+
+  return () => unsub();
+}, [id]);
+
+
+  // scroll a último mensaje
+  useEffect(() => {
+    if (chatEndRef.current) {
+      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [chatMessages.length]);
+
   // --------- Cálculos (base MXN) ---------
   const subtotalBaseMXN = useMemo(
     () => quoteLines.reduce((acc, r) => acc + (r.data.subtotalMXN || 0), 0),
@@ -449,10 +534,7 @@ setFiles(out);
     () => subtotalBaseMXN * ((Number(draft.gananciaPct) || 0) / 100),
     [subtotalBaseMXN, draft.gananciaPct]
   );
-  const subtotalConGananciaMXN = useMemo(
-    () => subtotalBaseMXN + gananciaMonto,
-    [subtotalBaseMXN, gananciaMonto]
-  );
+  const subtotalConGananciaMXN = useMemo(() => subtotalBaseMXN + gananciaMonto, [subtotalBaseMXN, gananciaMonto]);
   const IVA_PORC = 0.16;
   const ivaMonto = useMemo(() => subtotalConGananciaMXN * IVA_PORC, [subtotalConGananciaMXN]);
   const totalFinal = useMemo(
@@ -603,9 +685,7 @@ setFiles(out);
               {
                 width: "*",
                 stack: [
-                  ...(logoDataUrl
-                    ? [{ image: logoDataUrl, width: 120, margin: [0, 0, 0, 6] }]
-                    : []),
+                  ...(logoDataUrl ? [{ image: logoDataUrl, width: 120, margin: [0, 0, 0, 6] }] : []),
                   { text: company, bold: true, fontSize: 12 },
                 ],
               },
@@ -675,10 +755,7 @@ setFiles(out);
                 table: {
                   widths: [120, 120],
                   body: [
-                    [
-                      { text: "Subtotal:", bold: true },
-                      { text: formatMoney(subtotalConGananciaMXN), alignment: "right" },
-                    ],
+                    [{ text: "Subtotal:", bold: true }, { text: formatMoney(subtotalConGananciaMXN), alignment: "right" }],
                     [{ text: "IVA (16%):", bold: true }, { text: formatMoney(ivaMonto), alignment: "right" }],
                     [
                       { text: "Envío:", bold: true },
@@ -861,7 +938,7 @@ setFiles(out);
       const filasServicios = quoteLines.map((ln) => {
         const d = ln.data;
         const base = d.subtotalMXN ?? 0;
-        const inflado = base * (1 + ((Number(draft.gananciaPct) || 0) / 100));
+        const inflado = base * (1 + (Number(draft.gananciaPct) || 0) / 100);
         const details = buildDetailsForLine(d);
         return { servicio: d.serviceName || d.serviceId || "Servicio", detalles: details, total: inflado };
       });
@@ -982,21 +1059,61 @@ setFiles(out);
     }
   };
 
+  // --------- Enviar mensaje de chat ---------
+ // --------- Enviar mensaje de chat ---------
+const handleSendMessage = async (e: FormEvent) => {
+  e.preventDefault();
+  if (!id || !user) return;
+
+  const text = newMessage.trim();
+  if (!text) return;
+
+  try {
+    const displayName =
+      user.displayName ||
+      (user as any).name ||
+      user.email ||
+      "Usuario";
+
+    await addDoc(
+      collection(db, "pedidos", id as string, "chat"),
+      {
+        text,
+        createdAt: serverTimestamp(),
+        userId: user.uid,
+        userEmail: user.email,       // 👈 correo real
+        userName: displayName,       // 👈 nombre “bonito”
+        isAdmin,
+      }
+    );
+
+    setNewMessage("");
+  } catch (err) {
+    console.error("Error al enviar mensaje de chat:", err);
+    alert("No se pudo enviar el mensaje.");
+  }
+};
+
+
   if (!pedido) return <p className="text-black p-4">Cargando...</p>;
 
-  return (
-    <div className="max-w-3xl mx-auto p-4 text-black space-y-6">
-      <button
-        onClick={() => router.back()}
-        className="bg-white text-black px-4 py-2 rounded hover:bg-gray-200 flex items-center gap-2"
-      >
-        <FiArrowLeft /> Regresar
-      </button>
+return (
+  <div className="max-w-5xl mx-auto p-4 text-black space-y-6">
+    <button
+      onClick={() => router.back()}
+      className="bg-white text-black px-4 py-2 rounded hover:bg-gray-200 flex items-center gap-2"
+    >
+      <FiArrowLeft /> Regresar
+    </button>
 
-      <h1 className="text-white text-xl text-center font-bold">Detalles del pedido</h1>
+    <h1 className="text-white text-xl text-center font-bold">Detalles del pedido</h1>
 
-      {/* ----- Datos base del pedido ----- */}
-      <div className="bg-white shadow rounded-xl p-6 space-y-4">
+    {/* ----- Layout principal: detalles + chat lateral ----- */}
+    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-stretch">
+
+      {/* Columna izquierda: datos del pedido */}
+     <div className="bg-white shadow rounded-xl p-6 space-y-4 lg:col-span-2 h-full">
+
         <p>
           <strong>Título:</strong> {pedido.titulo || "Sin título"}
         </p>
@@ -1026,7 +1143,7 @@ setFiles(out);
           <strong>Status:</strong> {pedido.status || "Enviado"}
         </p>
 
-        {/* Archivos adjuntos (debajo de Status) */}
+        {/* Archivos adjuntos */}
         <div className="pt-4 mt-2 border-t">
           <strong>Archivos adjuntos:</strong>{" "}
           {filesLoading ? (
@@ -1051,7 +1168,6 @@ setFiles(out);
           )}
         </div>
 
-        {/* >>> NUEVO: Botón para admins – Cotizar servicio */}
         {isAdmin && (
           <div className="pt-4 mt-4 border-t">
             <button
@@ -1068,344 +1184,439 @@ setFiles(out);
         )}
       </div>
 
-      {/* ----- NUEVO: Especificaciones adicionales / cambios de versión ----- */}
-      <div className="bg-white shadow rounded-xl p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Especificaciones adicionales / versiones</h2>
-          <button
-            type="button"
-            onClick={() => setShowSpecForm((prev) => !prev)}
-            className="px-3 py-1 rounded-xl border border-gray-300 bg-gray-50 hover:bg-gray-100 text-sm"
-          >
-            {showSpecForm ? "Cerrar" : "Agregar especificaciones"}
-          </button>
-        </div>
+     {/* Columna derecha: CANAL DE COMUNICACIÓN */}
+<div className="bg-white shadow rounded-xl p-6 space-y-4 lg:col-span-2 h-full flex flex-col">
+  <div className="w-full flex flex-col h-full">
 
-        {specUpdates.length === 0 ? (
-          <p className="text-sm text-gray-600">
-            Aún no se han registrado cambios de especificaciones. La versión 1 corresponde al pedido original.
-          </p>
-        ) : (
-          <div className="space-y-3">
-            {specUpdates.map((s) => {
-              const fecha =
-                s.createdAt?.toDate?.() instanceof Date ? s.createdAt.toDate() : null;
-              return (
-                <div
-                  key={s.id}
-                  className="border border-gray-200 rounded-lg p-3 text-sm bg-gray-50"
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-semibold">
-                      Versión {s.version} (sobre los archivos/detalles originales)
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      {fecha ? fecha.toLocaleString() : "Fecha no disponible"}
-                    </span>
-                  </div>
-                  {s.descripcion && (
-                    <p className="mb-2 whitespace-pre-wrap">{s.descripcion}</p>
-                  )}
-                  {s.archivos && s.archivos.length > 0 && (
-                    <div>
-                      <span className="font-medium">Archivos adjuntos de esta versión:</span>
-                      <ul className="list-disc pl-5 mt-1 space-y-1">
-                        {s.archivos.map((a) => (
-                          <li key={a.url}>
-                            <a
-                              href={a.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 underline"
-                            >
-                              {a.name}
-                            </a>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+
+          <div className="flex items-center justify-between px-4 py-3 border-b">
+            <h2 className="text-sm font-semibold">Canal de comunicación</h2>
+           
           </div>
-        )}
 
-        {showSpecForm && (
-          <form onSubmit={handleSpecSubmit} className="mt-4 space-y-3 border-t pt-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                Descripción del cambio / especificaciones nuevas
-              </label>
-              <textarea
-                className="w-full border rounded-md px-3 py-2 text-sm"
-                rows={3}
-                value={specDesc}
-                onChange={(e) => setSpecDesc(e.target.value)}
-                placeholder="Ejemplo: Se actualiza el archivo de diseño por versión con más grosor en la pared lateral. Justificación del cambio..."
-              />
-            </div>
-            <div>
-  <label className="block text-sm font-medium mb-1">
-    Adjuntar archivos
-  </label>
+         <p className="px-4 pt-2 text-sm text-gray-500">
 
-  <label className="inline-flex items-center px-4 py-2 rounded-xl bg-black text-white text-sm cursor-pointer hover:opacity-90">
-    {/* Iconito simple de subir (puedes cambiarlo por uno real de react-icons si quieres) */}
-    <span className="mr-2">⬆</span>
-    Seleccionar archivos
-    <input
-      type="file"
-      multiple
-      className="hidden"
-      onChange={(e) => {
-        const list = e.target.files;
-        if (!list) {
-          setSpecFiles([]);
-          return;
-        }
-        setSpecFiles(Array.from(list));
-      }}
-    />
-  </label>
+            Mensajes entre administradores y usuarios sobre este pedido.
+          </p>
 
-  {specFiles.length > 0 && (
-    <p className="mt-1 text-xs text-gray-500">
-      {specFiles.length} archivo(s) seleccionados.
-    </p>
-  )}
-</div>
+          <div className="flex-1 m-3 mt-2 border rounded-lg p-2 overflow-y-auto space-y-2 text-sm bg-gray-50">
+           {chatMessages.length === 0 ? (
+  <p className="text-gray-500 text-sm text-center mt-4">
+    Aún no hay mensajes en este pedido.
+  </p>
+) : (
+  chatMessages.map((m) => {
+    const fecha =
+      m.createdAt?.toDate?.() instanceof Date
+        ? m.createdAt.toDate()
+        : null;
 
+    const isMine = user && m.userId && m.userId === user.uid;
+
+    // 👇 obtenemos correo y nombre bonito
+    const email = m.userEmail || m.userName || undefined;
+    const friendlyName =
+      (email && nameByEmail[email]) ||      // nombre desde colección "users"
+      m.userName ||                         // lo que se guardó en el mensaje
+      (m.isAdmin ? "Admin" : "Usuario");    // fallback
+
+    return (
+      <div
+        key={m.id}
+        className={`flex ${isMine ? "justify-end" : "justify-start"}`}
+      >
+        <div
+          className={`max-w-[85%] rounded-xl px-3 py-2 shadow-sm ${
+            isMine ? "bg-black text-white" : "bg-white text-black"
+          }`}
+        >
+          <div className="flex items-center justify-between gap-2 mb-1">
+            <span className="text-[11px] font-semibold">
+              {friendlyName}
+              {m.isAdmin ? " · Admin" : ""}
+            </span>
+            {fecha && (
+              <span className="text-[9px] opacity-70">
+                {fecha.toLocaleDateString()}{" "}
+                {fecha.toLocaleTimeString([], {
+                  hour: "2-digit",
+                  minute: "2-digit",
+                })}
+              </span>
+            )}
+          </div>
+
+          <p className="whitespace-pre-wrap text-sm">{m.text}</p>
+        </div>
+      </div>
+    );
+  })
+)}
+<div ref={chatEndRef} />
+
+          </div>
+
+          <form
+            onSubmit={handleSendMessage}
+            className="border-t px-3 py-2 flex flex-col gap-2"
+          >
+            <textarea
+              className="w-full border rounded-lg px-2 py-1 text-sm resize-none"
+              rows={2}
+              placeholder="Escribe un mensaje..."
+              value={newMessage}
+              onChange={(e) => setNewMessage(e.target.value)}
+            />
             <button
               type="submit"
-              disabled={savingSpec}
-              className="px-4 py-2 rounded-xl bg-black text-white text-sm hover:opacity-90 disabled:opacity-50"
+            className="self-end px-4 py-1.5 rounded-xl bg-black text-white text-sm hover:opacity-90 disabled:opacity-50"
+
+              disabled={!newMessage.trim()}
             >
-              {savingSpec ? "Guardando…" : "Guardar como nueva versión"}
+              Enviar
             </button>
-            <p className="text-xs text-gray-500 mt-1">
-              Esta nueva entrada se registrará como la versión siguiente (v2, v3, etc.) con fecha automática.
-            </p>
           </form>
-        )}
-      </div>
-
-      {/* ----- COTIZACIÓN VIVA ----- */}
-      <div id="cotizacion-viva" className="bg-white shadow rounded-xl p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Cotización</h2>
-          <button
-            onClick={cargarCotizacionViva}
-            className="px-3 py-1 rounded border hover:bg-gray-100"
-            title="Actualizar"
-          >
-            Refrescar
-          </button>
         </div>
-
-        {loadingQuote ? (
-          <p>Cargando cotización…</p>
-        ) : quoteLines.length === 0 ? (
-          <p className="text-gray-600">No se han adjuntado servicios a esta cotización.</p>
-        ) : (
-          <>
-            {/* Meta informativa */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-              <div>
-                <span className="font-medium">Moneda base:</span> MXN
-              </div>
-              <div>
-                <span className="font-medium">Tasa USD→MXN:</span> {quoteMeta?.exchangeRate ?? 17}
-              </div>
-              <div>
-                <span className="font-medium">IVA (default):</span> 16.00%
-              </div>
-            </div>
-
-            {/* Tabla de servicios */}
-            <div className="border border-gray-200 rounded-xl overflow-hidden">
-              <table className="min-w-full text-sm">
-                <thead className="bg-gray-100">
-                  <tr>
-                    <th className="text-left px-3 py-2">Servicio</th>
-                    <th className="text-left px-3 py-2">TÍTULO DEL PEDIDO</th>
-                    <th className="text-left px-3 py-2">Total</th>
-                    <th className="text-left px-3 py-2">Detalles del servicio</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {quoteLines.map((ln) => {
-                    const d = ln.data;
-                    const base = d.subtotalMXN ?? 0;
-                    const inflado = base * (1 + (Number(draft.gananciaPct) || 0) / 100);
-                    const details = buildDetailsForLine(d);
-                    return (
-                      <tr key={ln.id} className="border-t align-top">
-                        <td className="px-3 py-2">
-                          <div className="font-medium">{d.serviceName || d.serviceId || "—"}</div>
-                        </td>
-                        <td className="px-3 py-2">{pedido.titulo || "Sin título"}</td>
-                        <td className="px-3 py-2">MXN {inflado.toFixed(2)}</td>
-                        <td className="px-3 py-2">
-                          {details.length === 0 ? (
-                            <span className="text-gray-500">—</span>
-                          ) : (
-                            <ul className="list-disc pl-5 space-y-0.5">
-                              {details.map((txt, i) => (
-                                <li key={i}>{txt}</li>
-                              ))}
-                            </ul>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-
-            {/* Resumen de totales */}
-            <div className="space-y-2 text-right">
-              <div className="font-semibold">Subtotal sin ganancia: {formatMoney(subtotalBaseMXN)}</div>
-
-              <div className="flex items-center justify-end gap-2">
-                <label className="text-sm" htmlFor="gananciaPct">
-                  Ganancia (%):
-                </label>
-                <input
-                  id="gananciaPct"
-                  type="number"
-                  step="10"
-                  min="0"
-                  value={draft.gananciaPct}
-                  onChange={(e) => scheduleSave({ ...draft, gananciaPct: Number(e.target.value) })}
-                  className="w-24 px-2 py-1 border rounded text-right"
-                />
-                <span className="ml-2">{formatMoney(gananciaMonto)}</span>
-              </div>
-
-              <div>
-                <span className="font-medium">Subtotal con ganancia:</span>{" "}
-                {formatMoney(subtotalConGananciaMXN)}
-              </div>
-              <div>
-                <span className="font-medium">IVA (16%):</span> {formatMoney(ivaMonto)}
-              </div>
-
-              <div className="flex items-center justify-end gap-2">
-                <label className="text-sm" htmlFor="envio">
-                  Envío (MXN):
-                </label>
-                <input
-                  id="envio"
-                  type="number"
-                  step="10"
-                  min="0"
-                  value={draft.envio ?? 0}
-                  onChange={(e) => scheduleSave({ ...draft, envio: Number(e.target.value) })}
-                  className="w-32 px-2 py-1 border rounded text-right"
-                />
-              </div>
-
-              <div className="text-lg font-bold">TOTAL: {formatMoney(totalFinal)}</div>
-            </div>
-
-            <div className="text-xs text-gray-600">
-              * El PDF mostrará los importes por servicio <strong>ya con ganancia</strong>, sin revelar el %.
-            </div>
-
-            <div className="pt-2">
-              <button
-                onClick={async () => {
-                  try {
-                    setIsGen(true);
-                    const ok = await handleGenerarPDF(); // ← siempre el genérico
-                    if (ok) await cargarCotizacionViva();
-                  } finally {
-                    setIsGen(false);
-                  }
-                }}
-                disabled={isGen}
-                className="px-4 py-2 rounded-xl bg-black text-white hover:opacity-90 disabled:opacity-50"
-              >
-                {isGen ? "Generando…" : "Generar PDF"}
-              </button>
-            </div>
-          </>
-        )}
-      </div>
-
-      {/* ----- Panel Draft (PM) ----- */}
-      <div className="bg-white shadow rounded-xl p-6 space-y-4">
-        <h2 className="text-lg font-semibold">Datos de cotización (draft)</h2>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm font-medium">Cliente</label>
-            <input
-              className="mt-1 w-full border rounded px-3 py-2"
-              value={draft.cliente ?? ""}
-              onChange={(e) => scheduleSave({ ...draft, cliente: e.target.value })}
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium">Atención a</label>
-            <input
-              className="mt-1 w-full border rounded px-3 py-2"
-              value={draft.atencionA ?? ""}
-              onChange={(e) => scheduleSave({ ...draft, atencionA: e.target.value })}
-            />
-          </div>
-
-          <div className="sm:col-span-2">
-            <label className="block text-sm font-medium">Notas</label>
-            <textarea
-              className="mt-1 w-full border rounded px-3 py-2"
-              rows={3}
-              value={draft.notas ?? ""}
-              onChange={(e) => scheduleSave({ ...draft, notas: e.target.value })}
-            />
-          </div>
-        </div>
-
-        <p className="text-xs text-gray-600">
-          Este draft se guarda automáticamente y alimentará el PDF final.
-        </p>
-      </div>
-
-      {/* ----- Versiones generadas ----- */}
-      <div className="bg-white shadow rounded-xl p-6 space-y-3">
-        <h2 className="text-lg font-semibold">Versiones generadas</h2>
-        {versions.length === 0 ? (
-          <p className="text-gray-600">Aún no hay versiones.</p>
-        ) : (
-          <ul className="space-y-2">
-            {versions.map((v) => {
-              const fecha = v.createdAt?.toDate?.() instanceof Date ? v.createdAt.toDate() : null;
-              return (
-                <li key={v.id} className="flex items-center justify-between border rounded p-2">
-                  <div>
-                    <div className="font-medium">{v.id}</div>
-                    <div className="text-xs text-gray-600">
-                      {fecha ? fecha.toLocaleString() : "—"} · Total:{" "}
-                      {formatMoney(v.total || 0)}
-                    </div>
-                  </div>
-                  <a
-                    className="text-blue-600 underline"
-                    href={v.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                  >
-                    Ver PDF
-                  </a>
-                </li>
-              );
-            })}
-          </ul>
-        )}
       </div>
     </div>
-  );
+
+    {/* ----- Especificaciones adicionales / cambios de versión ----- */}
+    <div className="bg-white shadow rounded-xl p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Especificaciones adicionales / versiones</h2>
+        <button
+          type="button"
+          onClick={() => setShowSpecForm((prev) => !prev)}
+          className="px-3 py-1 rounded-xl border border-gray-300 bg-gray-50 hover:bg-gray-100 text-sm"
+        >
+          {showSpecForm ? "Cerrar" : "Agregar especificaciones"}
+        </button>
+      </div>
+
+      {specUpdates.length === 0 ? (
+        <p className="text-sm text-gray-600">
+          Aún no se han registrado cambios de especificaciones. La versión 1 corresponde al pedido
+          original.
+        </p>
+      ) : (
+        <div className="space-y-3">
+          {specUpdates.map((s) => {
+            const fecha = s.createdAt?.toDate?.() instanceof Date ? s.createdAt.toDate() : null;
+            return (
+              <div
+                key={s.id}
+                className="border border-gray-200 rounded-lg p-3 text-sm bg-gray-50"
+              >
+                <div className="flex items-center justify-between mb-1">
+                  <span className="font-semibold">
+                    Versión {s.version} (sobre los archivos/detalles originales)
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    {fecha ? fecha.toLocaleString() : "Fecha no disponible"}
+                  </span>
+                </div>
+                {s.descripcion && (
+                  <p className="mb-2 whitespace-pre-wrap">{s.descripcion}</p>
+                )}
+                {s.archivos && s.archivos.length > 0 && (
+                  <div>
+                    <span className="font-medium">Archivos adjuntos de esta versión:</span>
+                    <ul className="list-disc pl-5 mt-1 space-y-1">
+                      {s.archivos.map((a) => (
+                        <li key={a.url}>
+                          <a
+                            href={a.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 underline"
+                          >
+                            {a.name}
+                          </a>
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {showSpecForm && (
+        <form onSubmit={handleSpecSubmit} className="mt-4 space-y-3 border-t pt-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">
+              Descripción del cambio / especificaciones nuevas
+            </label>
+            <textarea
+              className="w-full border rounded-md px-3 py-2 text-sm"
+              rows={3}
+              value={specDesc}
+              onChange={(e) => setSpecDesc(e.target.value)}
+              placeholder="Ejemplo: Se actualiza el archivo de diseño por versión con más grosor en la pared lateral. Justificación del cambio..."
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Adjuntar archivos</label>
+
+            <label className="inline-flex items-center px-4 py-2 rounded-xl bg-black text-white text-sm cursor-pointer hover:opacity-90">
+              <span className="mr-2">⬆</span>
+              Seleccionar archivos
+              <input
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) => {
+                  const list = e.target.files;
+                  if (!list) {
+                    setSpecFiles([]);
+                    return;
+                  }
+                  setSpecFiles(Array.from(list));
+                }}
+              />
+            </label>
+
+            {specFiles.length > 0 && (
+              <p className="mt-1 text-xs text-gray-500">
+                {specFiles.length} archivo(s) seleccionados.
+              </p>
+            )}
+          </div>
+
+          <button
+            type="submit"
+            disabled={savingSpec}
+            className="px-4 py-2 rounded-xl bg-black text-white text-sm hover:opacity-90 disabled:opacity-50"
+          >
+            {savingSpec ? "Guardando…" : "Guardar como nueva versión"}
+          </button>
+          <p className="text-xs text-gray-500 mt-1">
+            Esta nueva entrada se registrará como la versión siguiente (v2, v3, etc.) con fecha
+            automática.
+          </p>
+        </form>
+      )}
+    </div>
+
+    {/* ----- COTIZACIÓN VIVA ----- */}
+    <div id="cotizacion-viva" className="bg-white shadow rounded-xl p-6 space-y-4">
+      <div className="flex items-center justify-between">
+        <h2 className="text-lg font-semibold">Cotización</h2>
+        <button
+          onClick={cargarCotizacionViva}
+          className="px-3 py-1 rounded border hover:bg-gray-100"
+          title="Actualizar"
+        >
+          Refrescar
+        </button>
+      </div>
+
+      {loadingQuote ? (
+        <p>Cargando cotización…</p>
+      ) : quoteLines.length === 0 ? (
+        <p className="text-gray-600">No se han adjuntado servicios a esta cotización.</p>
+      ) : (
+        <>
+          {/* Meta informativa */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+            <div>
+              <span className="font-medium">Moneda base:</span> MXN
+            </div>
+            <div>
+              <span className="font-medium">Tasa USD→MXN:</span> {quoteMeta?.exchangeRate ?? 17}
+            </div>
+            <div>
+              <span className="font-medium">IVA (default):</span> 16.00%
+            </div>
+          </div>
+
+          {/* Tabla de servicios */}
+          <div className="border border-gray-200 rounded-xl overflow-hidden">
+            <table className="min-w-full text-sm">
+              <thead className="bg-gray-100">
+                <tr>
+                  <th className="text-left px-3 py-2">Servicio</th>
+                  <th className="text-left px-3 py-2">TÍTULO DEL PEDIDO</th>
+                  <th className="text-left px-3 py-2">Total</th>
+                  <th className="text-left px-3 py-2">Detalles del servicio</th>
+                </tr>
+              </thead>
+              <tbody>
+                {quoteLines.map((ln) => {
+                  const d = ln.data;
+                  const base = d.subtotalMXN ?? 0;
+                  const inflado = base * (1 + (Number(draft.gananciaPct) || 0) / 100);
+                  const details = buildDetailsForLine(d);
+                  return (
+                    <tr key={ln.id} className="border-t align-top">
+                      <td className="px-3 py-2">
+                        <div className="font-medium">{d.serviceName || d.serviceId || "—"}</div>
+                      </td>
+                      <td className="px-3 py-2">{pedido.titulo || "Sin título"}</td>
+                      <td className="px-3 py-2">MXN {inflado.toFixed(2)}</td>
+                      <td className="px-3 py-2">
+                        {details.length === 0 ? (
+                          <span className="text-gray-500">—</span>
+                        ) : (
+                          <ul className="list-disc pl-5 space-y-0.5">
+                            {details.map((txt, i) => (
+                              <li key={i}>{txt}</li>
+                            ))}
+                          </ul>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Resumen de totales */}
+          <div className="space-y-2 text-right">
+            <div className="font-semibold">Subtotal sin ganancia: {formatMoney(subtotalBaseMXN)}</div>
+
+            <div className="flex items-center justify-end gap-2">
+              <label className="text-sm" htmlFor="gananciaPct">
+                Ganancia (%):
+              </label>
+              <input
+                id="gananciaPct"
+                type="number"
+                step="10"
+                min="0"
+                value={draft.gananciaPct}
+                onChange={(e) => scheduleSave({ ...draft, gananciaPct: Number(e.target.value) })}
+                className="w-24 px-2 py-1 border rounded text-right"
+              />
+              <span className="ml-2">{formatMoney(gananciaMonto)}</span>
+            </div>
+
+            <div>
+              <span className="font-medium">Subtotal con ganancia:</span>{" "}
+              {formatMoney(subtotalConGananciaMXN)}
+            </div>
+            <div>
+              <span className="font-medium">IVA (16%):</span> {formatMoney(ivaMonto)}
+            </div>
+
+            <div className="flex items-center justify-end gap-2">
+              <label className="text-sm" htmlFor="envio">
+                Envío (MXN):
+              </label>
+              <input
+                id="envio"
+                type="number"
+                step="10"
+                min="0"
+                value={draft.envio ?? 0}
+                onChange={(e) => scheduleSave({ ...draft, envio: Number(e.target.value) })}
+                className="w-32 px-2 py-1 border rounded text-right"
+              />
+            </div>
+
+            <div className="text-lg font-bold">TOTAL: {formatMoney(totalFinal)}</div>
+          </div>
+
+          <div className="text-xs text-gray-600">
+            * El PDF mostrará los importes por servicio <strong>ya con ganancia</strong>, sin revelar el
+            %.
+          </div>
+
+          <div className="pt-2">
+            <button
+              onClick={async () => {
+                try {
+                  setIsGen(true);
+                  const ok = await handleGenerarPDF(); // ← siempre el genérico
+                  if (ok) await cargarCotizacionViva();
+                } finally {
+                  setIsGen(false);
+                }
+              }}
+              disabled={isGen}
+              className="px-4 py-2 rounded-xl bg-black text-white hover:opacity-90 disabled:opacity-50"
+            >
+              {isGen ? "Generando…" : "Generar PDF"}
+            </button>
+          </div>
+        </>
+      )}
+    </div>
+
+    {/* ----- Panel Draft (PM) ----- */}
+    <div className="bg-white shadow rounded-xl p-6 space-y-4">
+      <h2 className="text-lg font-semibold">Datos de cotización (draft)</h2>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium">Cliente</label>
+          <input
+            className="mt-1 w-full border rounded px-3 py-2"
+            value={draft.cliente ?? ""}
+            onChange={(e) => scheduleSave({ ...draft, cliente: e.target.value })}
+          />
+        </div>
+
+        <div>
+          <label className="block text-sm font-medium">Atención a</label>
+          <input
+            className="mt-1 w-full border rounded px-3 py-2"
+            value={draft.atencionA ?? ""}
+            onChange={(e) => scheduleSave({ ...draft, atencionA: e.target.value })}
+          />
+        </div>
+
+        <div className="sm:col-span-2">
+          <label className="block text-sm font-medium">Notas</label>
+          <textarea
+            className="mt-1 w-full border rounded px-3 py-2"
+            rows={3}
+            value={draft.notas ?? ""}
+            onChange={(e) => scheduleSave({ ...draft, notas: e.target.value })}
+          />
+        </div>
+      </div>
+
+      <p className="text-xs text-gray-600">
+        Este draft se guarda automáticamente y alimentará el PDF final.
+      </p>
+    </div>
+
+    {/* ----- Versiones generadas ----- */}
+    <div className="bg-white shadow rounded-xl p-6 space-y-3">
+      <h2 className="text-lg font-semibold">Versiones generadas</h2>
+      {versions.length === 0 ? (
+        <p className="text-gray-600">Aún no hay versiones.</p>
+      ) : (
+        <ul className="space-y-2">
+          {versions.map((v) => {
+            const fecha = v.createdAt?.toDate?.() instanceof Date ? v.createdAt.toDate() : null;
+            return (
+              <li key={v.id} className="flex items-center justify-between border rounded p-2">
+                <div>
+                  <div className="font-medium">{v.id}</div>
+                  <div className="text-xs text-gray-600">
+                    {fecha ? fecha.toLocaleString() : "—"} · Total: {formatMoney(v.total || 0)}
+                  </div>
+                </div>
+                <a
+                  className="text-blue-600 underline"
+                  href={v.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  Ver PDF
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </div>
+  </div>
+);
+
 }
