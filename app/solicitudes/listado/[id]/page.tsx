@@ -519,11 +519,18 @@ useEffect(() => {
 
 
   // scroll a último mensaje
-  useEffect(() => {
-    if (chatEndRef.current) {
-      chatEndRef.current.scrollIntoView({ behavior: "smooth" });
-    }
-  }, [chatMessages.length]);
+  // scroll a último mensaje SOLO dentro del recuadro de chat
+useEffect(() => {
+  if (!chatEndRef.current) return;
+  const parent = chatEndRef.current.parentElement;
+  if (!parent) return;
+
+  parent.scrollTo({
+    top: parent.scrollHeight,
+    behavior: "smooth",
+  });
+}, [chatMessages.length]);
+
 
   // --------- Cálculos (base MXN) ---------
   const subtotalBaseMXN = useMemo(
@@ -1199,7 +1206,7 @@ return (
             Mensajes entre administradores y usuarios sobre este pedido.
           </p>
 
-          <div className="flex-1 m-3 mt-2 border rounded-lg p-2 overflow-y-auto space-y-2 text-sm bg-gray-50">
+         <div className="flex-1 mt-2 border rounded-lg p-2 overflow-y-auto space-y-2 text-sm bg-gray-50 min-h-[260px] max-h-[540px]">
            {chatMessages.length === 0 ? (
   <p className="text-gray-500 text-sm text-center mt-4">
     Aún no hay mensajes en este pedido.
@@ -1261,12 +1268,19 @@ return (
             className="border-t px-3 py-2 flex flex-col gap-2"
           >
             <textarea
-              className="w-full border rounded-lg px-2 py-1 text-sm resize-none"
-              rows={2}
-              placeholder="Escribe un mensaje..."
-              value={newMessage}
-              onChange={(e) => setNewMessage(e.target.value)}
-            />
+  className="w-full border rounded-lg px-2 py-1 text-sm resize-none"
+  rows={2}
+  placeholder="Escribe un mensaje..."
+  value={newMessage}
+  onChange={(e) => setNewMessage(e.target.value)}
+  onKeyDown={(e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();          // no haga salto de línea
+      handleSendMessage(e as any); // manda el mensaje
+    }
+  }}
+/>
+
             <button
               type="submit"
             className="self-end px-4 py-1.5 rounded-xl bg-black text-white text-sm hover:opacity-90 disabled:opacity-50"
