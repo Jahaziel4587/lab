@@ -250,7 +250,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                             ? n.createdAt.toDate()
                             : null;
                         const href = n.pedidoId
-                          ? `/solicitudes/detalle/${n.pedidoId}`
+                          ? `/solicitudes/listado/${n.pedidoId}`
                           : undefined;
 
                         const contenido = (
