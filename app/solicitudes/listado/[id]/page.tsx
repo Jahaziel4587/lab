@@ -106,6 +106,9 @@ type ChatMessage = {
   userName?: string | null;
   userEmail?: string;
   isAdmin?: boolean;
+  vistoPorUser?: boolean;
+  vistoPorAdmin?: boolean;
+  notificacionCreada?: boolean;
 };
 
 // ---- Utils ----
@@ -220,32 +223,35 @@ export default function DetallePedidoPage() {
 
   const [nameByEmail, setNameByEmail] = useState<Record<string, string>>({});
 
+  // === helper: dueño del pedido (para notificaciones al usuario, por correo) ===
+const ownerEmail: string | null =
+  pedido?.correoUsuario || pedido?.usuario || null;
 
-useEffect(() => {
-  const loadUsers = async () => {
-    try {
-      const snap = await getDocs(collection(db, "users"));
-      const map: Record<string, string> = {};
-      snap.forEach((d) => {
-        const data = d.data() as any;
-        const email = data.email as string | undefined;
-        const nombre = data.nombre as string | undefined;
-        const apellido = data.apellido as string | undefined;
+  // === Carga de usuarios para nombres bonitos en el chat ===
+  useEffect(() => {
+    const loadUsers = async () => {
+      try {
+        const snap = await getDocs(collection(db, "users"));
+        const map: Record<string, string> = {};
+        snap.forEach((d) => {
+          const data = d.data() as any;
+          const email = data.email as string | undefined;
+          const nombre = data.nombre as string | undefined;
+          const apellido = data.apellido as string | undefined;
 
-        if (email && nombre) {
-          map[email] = apellido ? `${nombre} ${apellido}` : nombre;
-        }
-      });
-      setNameByEmail(map);
-    } catch (e) {
-      console.error("No se pudieron cargar los usuarios para el chat:", e);
-    }
-  };
+          if (email && nombre) {
+            map[email] = apellido ? `${nombre} ${apellido}` : nombre;
+          }
+        });
+        setNameByEmail(map);
+      } catch (e) {
+        console.error("No se pudieron cargar los usuarios para el chat:", e);
+      }
+    };
 
-  loadUsers();
-}, []);
+    loadUsers();
+  }, []);
 
-  
   // --------- Cargar pedido ---------
   useEffect(() => {
     if (!id) return;
@@ -482,55 +488,86 @@ useEffect(() => {
   }, [id]);
 
   // --------- CHAT: suscripción en tiempo real ---------
-  // --------- CHAT: suscripción en tiempo real ---------
-useEffect(() => {
-  if (!id) return;
+  useEffect(() => {
+    if (!id) return;
 
-  const qChat = query(
-    collection(db, "pedidos", id as string, "chat"),
-    orderBy("createdAt", "asc")
-  );
+    const qChat = query(
+      collection(db, "pedidos", id as string, "chat"),
+      orderBy("createdAt", "asc")
+    );
 
-  const unsub = onSnapshot(
-    qChat,
-    (snap) => {
-      const arr: ChatMessage[] = [];
-      snap.forEach((d) => {
-        const data = d.data() as any;
-        arr.push({
-          id: d.id,
-          text: data.text || "",
-          createdAt: data.createdAt,
-          userId: data.userId,
-          userName: data.userName,
-          userEmail: data.userEmail ?? data.userName ?? null, // 👈 importante
-          isAdmin: data.isAdmin,
+    const unsub = onSnapshot(
+      qChat,
+      (snap) => {
+        const arr: ChatMessage[] = [];
+        snap.forEach((d) => {
+          const data = d.data() as any;
+          arr.push({
+            id: d.id,
+            text: data.text || "",
+            createdAt: data.createdAt,
+            userId: data.userId,
+            userName: data.userName,
+            userEmail: data.userEmail ?? data.userName ?? null,
+            isAdmin: data.isAdmin,
+            vistoPorUser: data.vistoPorUser ?? false,
+            vistoPorAdmin: data.vistoPorAdmin ?? false,
+            notificacionCreada: data.notificacionCreada ?? false,
+          });
         });
-      });
-      setChatMessages(arr);
-    },
-    (err) => {
-      console.error("Error escuchando chat:", err);
+        setChatMessages(arr);
+      },
+      (err) => {
+        console.error("Error escuchando chat:", err);
+      }
+    );
+
+    return () => unsub();
+  }, [id]);
+
+  // --------- CHAT: marcar mensajes como "visto" cuando se abre la página ---------
+  useEffect(() => {
+    if (!id || !user) return;
+    if (chatMessages.length === 0) return;
+
+    const updates: Promise<void>[] = [];
+
+    chatMessages.forEach((m) => {
+      const esMio = m.userId === user.uid;
+
+      if (isAdmin) {
+        // Admin ve mensajes de usuario
+        if (!esMio && !m.vistoPorAdmin) {
+          const ref = doc(db, "pedidos", id as string, "chat", m.id);
+          updates.push(updateDoc(ref, { vistoPorAdmin: true }));
+        }
+      } else {
+        // Usuario ve mensajes de admin
+        if (!esMio && !m.vistoPorUser) {
+          const ref = doc(db, "pedidos", id as string, "chat", m.id);
+          updates.push(updateDoc(ref, { vistoPorUser: true }));
+        }
+      }
+    });
+
+    if (updates.length > 0) {
+      Promise.all(updates).catch((err) =>
+        console.error("Error al marcar mensajes como vistos:", err)
+      );
     }
-  );
+  }, [chatMessages, id, isAdmin, user]);
 
-  return () => unsub();
-}, [id]);
-
-
-  // scroll a último mensaje
   // scroll a último mensaje SOLO dentro del recuadro de chat
-useEffect(() => {
-  if (!chatEndRef.current) return;
-  const parent = chatEndRef.current.parentElement;
-  if (!parent) return;
+  useEffect(() => {
+    if (!chatEndRef.current) return;
+    const parent = chatEndRef.current.parentElement;
+    if (!parent) return;
 
-  parent.scrollTo({
-    top: parent.scrollHeight,
-    behavior: "smooth",
-  });
-}, [chatMessages.length]);
-
+    parent.scrollTo({
+      top: parent.scrollHeight,
+      behavior: "smooth",
+    });
+  }, [chatMessages.length]);
 
   // --------- Cálculos (base MXN) ---------
   const subtotalBaseMXN = useMemo(
@@ -1051,6 +1088,33 @@ useEffect(() => {
         createdAt: serverTimestamp(),
       });
 
+      // <<< NUEVO: notificación por nueva especificación
+      const titulo = pedido?.titulo || "Sin título";
+
+      if (isAdmin) {
+  // Especificación creada por admin -> notificación al dueño del pedido
+  if (ownerEmail) {
+    await addDoc(collection(db, "notifications"), {
+      userEmail: ownerEmail,
+      pedidoId: id,
+      tipo: "spec_nueva_admin",
+      mensaje: `Tu pedido "${titulo}" tiene una nueva especificación.`,
+      createdAt: serverTimestamp(),
+      leido: false,
+    });
+  }
+} else {
+  // Especificación creada por usuario -> notificación para todos los admins (bandeja admin)
+  await addDoc(collection(db, "notifications_admin"), {
+    pedidoId: id,
+    tipo: "spec_nueva_usuario",
+    mensaje: `El pedido "${titulo}" tiene una nueva especificación.`,
+    createdAt: serverTimestamp(),
+    leido: false,
+  });
+}
+
+
       // refrescar lista
       await loadSpecUpdates();
 
@@ -1067,570 +1131,614 @@ useEffect(() => {
   };
 
   // --------- Enviar mensaje de chat ---------
- // --------- Enviar mensaje de chat ---------
-const handleSendMessage = async (e: FormEvent) => {
-  e.preventDefault();
-  if (!id || !user) return;
+  const handleSendMessage = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!id || !user) return;
 
-  const text = newMessage.trim();
-  if (!text) return;
+    const text = newMessage.trim();
+    if (!text) return;
 
-  try {
-    const displayName =
-      user.displayName ||
-      (user as any).name ||
-      user.email ||
-      "Usuario";
+    try {
+      const displayName =
+        user.displayName ||
+        (user as any).name ||
+        user.email ||
+        "Usuario";
 
-    await addDoc(
-      collection(db, "pedidos", id as string, "chat"),
-      {
+      const chatColRef = collection(db, "pedidos", id as string, "chat");
+
+      // Mensaje con flags de visto según quién lo manda
+      const msgData = {
         text,
         createdAt: serverTimestamp(),
         userId: user.uid,
-        userEmail: user.email,       // 👈 correo real
-        userName: displayName,       // 👈 nombre “bonito”
+        userEmail: user.email,
+        userName: displayName,
         isAdmin,
-      }
-    );
+        // flags de lectura
+        vistoPorAdmin: !!isAdmin,
+        vistoPorUser: !isAdmin,
+        notificacionCreada: false,
+      };
 
-    setNewMessage("");
-  } catch (err) {
-    console.error("Error al enviar mensaje de chat:", err);
-    alert("No se pudo enviar el mensaje.");
+      const msgRef = await addDoc(chatColRef, msgData);
+
+      // Limpiar campo de texto inmediatamente
+      setNewMessage("");
+
+      // <<< NUEVO: programar notificación 1 minuto después,
+      // solo si el mensaje sigue sin ser leído por el otro lado
+      setTimeout(async () => {
+        try {
+          const snap = await getDoc(msgRef);
+          if (!snap.exists()) return;
+          const data = snap.data() as any;
+
+          // si ya se creó notificación para este mensaje, no hacemos nada
+          if (data.notificacionCreada) return;
+
+          const sigueSinLeer = isAdmin
+            ? !data.vistoPorUser
+            : !data.vistoPorAdmin;
+
+          if (!sigueSinLeer) return;
+
+          const titulo = pedido?.titulo || "Sin título";
+
+          if (isAdmin) {
+  // Mensaje de admin -> notificación al dueño del pedido (por correo)
+  if (ownerEmail) {
+    await addDoc(collection(db, "notifications"), {
+      userEmail: ownerEmail,
+      pedidoId: id,
+      tipo: "chat_msg_para_usuario",
+      mensaje: `Tu pedido "${titulo}" tiene un mensaje nuevo.`,
+      createdAt: serverTimestamp(),
+      leido: false,
+    });
   }
-};
+} else {
+  // Mensaje de usuario -> notificación para admins (bandeja general de admins)
+  await addDoc(collection(db, "notifications_admin"), {
+    pedidoId: id,
+    tipo: "chat_msg_para_admin",
+    mensaje: `El pedido "${titulo}" tiene un mensaje nuevo.`,
+    createdAt: serverTimestamp(),
+    leido: false,
+  });
+}
 
+          // marcar que ya generó notificación
+          await updateDoc(msgRef, { notificacionCreada: true });
+        } catch (err) {
+          console.error("Error al evaluar notificación de chat:", err);
+        }
+      }, 60_000);
+    } catch (err) {
+      console.error("Error al enviar mensaje de chat:", err);
+      alert("No se pudo enviar el mensaje.");
+    }
+  };
 
   if (!pedido) return <p className="text-black p-4">Cargando...</p>;
 
-return (
-  <div className="max-w-5xl mx-auto p-4 text-black space-y-6">
-    <button
-      onClick={() => router.back()}
-      className="bg-white text-black px-4 py-2 rounded hover:bg-gray-200 flex items-center gap-2"
-    >
-      <FiArrowLeft /> Regresar
-    </button>
+  return (
+    <div className="max-w-5xl mx-auto p-4 text-black space-y-6">
+      <button
+        onClick={() => router.back()}
+        className="bg-white text-black px-4 py-2 rounded hover:bg-gray-200 flex items-center gap-2"
+      >
+        <FiArrowLeft /> Regresar
+      </button>
 
-    <h1 className="text-white text-xl text-center font-bold">Detalles del pedido</h1>
+      <h1 className="text-white text-xl text-center font-bold">Detalles del pedido</h1>
 
-    {/* ----- Layout principal: detalles + chat lateral ----- */}
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-stretch">
+      {/* ----- Layout principal: detalles + chat lateral ----- */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-stretch">
+        {/* Columna izquierda: datos del pedido */}
+        <div className="bg-white shadow rounded-xl p-6 space-y-4 lg:col-span-2 h-full">
+          <p>
+            <strong>Título:</strong> {pedido.titulo || "Sin título"}
+          </p>
+          <p>
+            <strong>Proyecto:</strong> {pedido.proyecto}
+          </p>
+          <p>
+            <strong>Servicio:</strong> {pedido.servicio}
+          </p>
+          <p>
+            <strong>Máquina:</strong> {pedido.maquina}
+          </p>
+          <p>
+            <strong>Material:</strong> {pedido.material}
+          </p>
+          <p>
+            <strong>Descripción:</strong> {pedido.descripcion}
+          </p>
+          <p>
+            <strong>Fecha de entrega propuesta:</strong> {pedido.fechaLimite}
+          </p>
+          <p>
+            <strong>Fecha de entrega real:</strong> {pedido.fechaEntregaReal || "No definida"}
+          </p>
 
-      {/* Columna izquierda: datos del pedido */}
-     <div className="bg-white shadow rounded-xl p-6 space-y-4 lg:col-span-2 h-full">
+          <p>
+            <strong>Status:</strong> {pedido.status || "Enviado"}
+          </p>
 
-        <p>
-          <strong>Título:</strong> {pedido.titulo || "Sin título"}
-        </p>
-        <p>
-          <strong>Proyecto:</strong> {pedido.proyecto}
-        </p>
-        <p>
-          <strong>Servicio:</strong> {pedido.servicio}
-        </p>
-        <p>
-          <strong>Máquina:</strong> {pedido.maquina}
-        </p>
-        <p>
-          <strong>Material:</strong> {pedido.material}
-        </p>
-        <p>
-          <strong>Descripción:</strong> {pedido.descripcion}
-        </p>
-        <p>
-          <strong>Fecha de entrega propuesta:</strong> {pedido.fechaLimite}
-        </p>
-        <p>
-          <strong>Fecha de entrega real:</strong> {pedido.fechaEntregaReal || "No definida"}
-        </p>
+          {/* Archivos adjuntos */}
+          <div className="pt-4 mt-2 border-t">
+            <strong>Archivos adjuntos:</strong>{" "}
+            {filesLoading ? (
+              <span>Cargando…</span>
+            ) : files.length === 0 ? (
+              <span className="italic">No hay archivos adjuntos.</span>
+            ) : (
+              <ul className="list-disc pl-6 mt-2 space-y-1">
+                {files.map((f) => (
+                  <li key={f.url}>
+                    <a
+                      href={f.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-blue-600 underline"
+                    >
+                      {f.name}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
 
-        <p>
-          <strong>Status:</strong> {pedido.status || "Enviado"}
-        </p>
-
-        {/* Archivos adjuntos */}
-        <div className="pt-4 mt-2 border-t">
-          <strong>Archivos adjuntos:</strong>{" "}
-          {filesLoading ? (
-            <span>Cargando…</span>
-          ) : files.length === 0 ? (
-            <span className="italic">No hay archivos adjuntos.</span>
-          ) : (
-            <ul className="list-disc pl-6 mt-2 space-y-1">
-              {files.map((f) => (
-                <li key={f.url}>
-                  <a
-                    href={f.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-blue-600 underline"
-                  >
-                    {f.name}
-                  </a>
-                </li>
-              ))}
-            </ul>
+          {isAdmin && (
+            <div className="pt-4 mt-4 border-t">
+              <button
+                onClick={() => {
+                  const proyecto = encodeURIComponent(pedido.proyecto || "");
+                  const titulo = encodeURIComponent(pedido.titulo || "");
+                  router.push(`/cotizador?proyecto=${proyecto}&titulo=${titulo}`);
+                }}
+                className="px-4 py-2 rounded-xl bg-black text-white hover:opacity-90"
+              >
+                Cotizar servicio
+              </button>
+            </div>
           )}
         </div>
 
-        {isAdmin && (
-          <div className="pt-4 mt-4 border-t">
-            <button
-              onClick={() => {
-                const proyecto = encodeURIComponent(pedido.proyecto || "");
-                const titulo = encodeURIComponent(pedido.titulo || "");
-                router.push(`/cotizador?proyecto=${proyecto}&titulo=${titulo}`);
-              }}
-              className="px-4 py-2 rounded-xl bg-black text-white hover:opacity-90"
+        {/* Columna derecha: CANAL DE COMUNICACIÓN */}
+        <div className="bg-white shadow rounded-xl p-6 space-y-4 lg:col-span-2 h-full flex flex-col">
+          <div className="w-full flex flex-col h-full">
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <h2 className="text-sm font-semibold">Canal de comunicación</h2>
+            </div>
+
+            <p className="px-4 pt-2 text-sm text-gray-500">
+              Mensajes entre administradores y usuarios sobre este pedido.
+            </p>
+
+            <div className="flex-1 mt-2 border rounded-lg p-2 overflow-y-auto space-y-2 text-sm bg-gray-50 min-h-[380px] max-h-[380px]">
+              {chatMessages.length === 0 ? (
+                <p className="text-gray-500 text-sm text-center mt-4">
+                  Aún no hay mensajes en este pedido.
+                </p>
+              ) : (
+                chatMessages.map((m) => {
+                  const fecha =
+                    m.createdAt?.toDate?.() instanceof Date
+                      ? m.createdAt.toDate()
+                      : null;
+
+                  const isMine = user && m.userId && m.userId === user.uid;
+
+                  const email = m.userEmail || m.userName || undefined;
+                  const friendlyName =
+                    (email && nameByEmail[email]) ||
+                    m.userName ||
+                    (m.isAdmin ? "Admin" : "Usuario");
+
+                  return (
+                    <div
+                      key={m.id}
+                      className={`flex ${isMine ? "justify-end" : "justify-start"}`}
+                    >
+                      <div
+                        className={`max-w-[85%] rounded-xl px-3 py-2 shadow-sm ${
+                          isMine ? "bg-black text-white" : "bg-white text-black"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <span className="text-[11px] font-semibold">
+                            {friendlyName}
+                            {m.isAdmin ? " · Admin" : ""}
+                          </span>
+                          {fecha && (
+                            <span className="text-[9px] opacity-70">
+                              {fecha.toLocaleDateString()}{" "}
+                              {fecha.toLocaleTimeString([], {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </span>
+                          )}
+                        </div>
+
+                        <p className="whitespace-pre-wrap text-sm">{m.text}</p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
+              <div ref={chatEndRef} />
+            </div>
+
+            <form
+              onSubmit={handleSendMessage}
+              className="border-t px-3 py-2 flex flex-col gap-2"
             >
-              Cotizar servicio
-            </button>
+              <textarea
+                className="w-full border rounded-lg px-2 py-1 text-sm resize-none"
+                rows={2}
+                placeholder="Escribe un mensaje..."
+                value={newMessage}
+                onChange={(e) => setNewMessage(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSendMessage(e as any);
+                  }
+                }}
+              />
+
+              <button
+                type="submit"
+                className="self-end px-4 py-1.5 rounded-xl bg-black text-white text-sm hover:opacity-90 disabled:opacity-50"
+                disabled={!newMessage.trim()}
+              >
+                Enviar
+              </button>
+            </form>
           </div>
-        )}
-      </div>
-
-     {/* Columna derecha: CANAL DE COMUNICACIÓN */}
-<div className="bg-white shadow rounded-xl p-6 space-y-4 lg:col-span-2 h-full flex flex-col">
-  <div className="w-full flex flex-col h-full">
-
-
-          <div className="flex items-center justify-between px-4 py-3 border-b">
-            <h2 className="text-sm font-semibold">Canal de comunicación</h2>
-           
-          </div>
-
-         <p className="px-4 pt-2 text-sm text-gray-500">
-
-            Mensajes entre administradores y usuarios sobre este pedido.
-          </p>
-
-         <div className="flex-1  mt-2 border rounded-lg p-2 overflow-y-auto space-y-2 text-sm bg-gray-50 min-h-[380px] max-h-[380px]">
-           {chatMessages.length === 0 ? (
-  <p className="text-gray-500 text-sm text-center mt-4">
-    Aún no hay mensajes en este pedido.
-  </p>
-) : (
-  chatMessages.map((m) => {
-    const fecha =
-      m.createdAt?.toDate?.() instanceof Date
-        ? m.createdAt.toDate()
-        : null;
-
-    const isMine = user && m.userId && m.userId === user.uid;
-
-    // 👇 obtenemos correo y nombre bonito
-    const email = m.userEmail || m.userName || undefined;
-    const friendlyName =
-      (email && nameByEmail[email]) ||      // nombre desde colección "users"
-      m.userName ||                         // lo que se guardó en el mensaje
-      (m.isAdmin ? "Admin" : "Usuario");    // fallback
-
-    return (
-      <div
-        key={m.id}
-        className={`flex ${isMine ? "justify-end" : "justify-start"}`}
-      >
-        <div
-          className={`max-w-[85%] rounded-xl px-3 py-2 shadow-sm ${
-            isMine ? "bg-black text-white" : "bg-white text-black"
-          }`}
-        >
-          <div className="flex items-center justify-between gap-2 mb-1">
-            <span className="text-[11px] font-semibold">
-              {friendlyName}
-              {m.isAdmin ? " · Admin" : ""}
-            </span>
-            {fecha && (
-              <span className="text-[9px] opacity-70">
-                {fecha.toLocaleDateString()}{" "}
-                {fecha.toLocaleTimeString([], {
-                  hour: "2-digit",
-                  minute: "2-digit",
-                })}
-              </span>
-            )}
-          </div>
-
-          <p className="whitespace-pre-wrap text-sm">{m.text}</p>
         </div>
       </div>
-    );
-  })
-)}
-<div ref={chatEndRef} />
 
-          </div>
-
-          <form
-            onSubmit={handleSendMessage}
-            className="border-t px-3 py-2 flex flex-col gap-2"
+      {/* ----- Especificaciones adicionales / cambios de versión ----- */}
+      <div className="bg-white shadow rounded-xl p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Especificaciones adicionales / versiones</h2>
+          <button
+            type="button"
+            onClick={() => setShowSpecForm((prev) => !prev)}
+            className="px-3 py-1 rounded-xl border border-gray-300 bg-gray-50 hover:bg-gray-100 text-sm"
           >
-            <textarea
-  className="w-full border rounded-lg px-2 py-1 text-sm resize-none"
-  rows={2}
-  placeholder="Escribe un mensaje..."
-  value={newMessage}
-  onChange={(e) => setNewMessage(e.target.value)}
-  onKeyDown={(e) => {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();          // no haga salto de línea
-      handleSendMessage(e as any); // manda el mensaje
-    }
-  }}
-/>
+            {showSpecForm ? "Cerrar" : "Agregar especificaciones"}
+          </button>
+        </div>
+
+        {specUpdates.length === 0 ? (
+          <p className="text-sm text-gray-600">
+            Aún no se han registrado cambios de especificaciones. La versión 1 corresponde al pedido
+            original.
+          </p>
+        ) : (
+          <div className="space-y-3">
+            {specUpdates.map((s) => {
+              const fecha = s.createdAt?.toDate?.() instanceof Date ? s.createdAt.toDate() : null;
+              return (
+                <div
+                  key={s.id}
+                  className="border border-gray-200 rounded-lg p-3 text-sm bg-gray-50"
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="font-semibold">
+                      Versión {s.version} (sobre los archivos/detalles originales)
+                    </span>
+                    <span className="text-xs text-gray-500">
+                      {fecha ? fecha.toLocaleString() : "Fecha no disponible"}
+                    </span>
+                  </div>
+                  {s.descripcion && (
+                    <p className="mb-2 whitespace-pre-wrap">{s.descripcion}</p>
+                  )}
+                  {s.archivos && s.archivos.length > 0 && (
+                    <div>
+                      <span className="font-medium">Archivos adjuntos de esta versión:</span>
+                      <ul className="list-disc pl-5 mt-1 space-y-1">
+                        {s.archivos.map((a) => (
+                          <li key={a.url}>
+                            <a
+                              href={a.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-blue-600 underline"
+                            >
+                              {a.name}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+        {showSpecForm && (
+          <form onSubmit={handleSpecSubmit} className="mt-4 space-y-3 border-t pt-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">
+                Descripción del cambio / especificaciones nuevas
+              </label>
+              <textarea
+                className="w-full border rounded-md px-3 py-2 text-sm"
+                rows={3}
+                value={specDesc}
+                onChange={(e) => setSpecDesc(e.target.value)}
+                placeholder="Ejemplo: Se actualiza el archivo de diseño por versión con más grosor en la pared lateral. Justificación del cambio..."
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Adjuntar archivos</label>
+
+              <label className="inline-flex items-center px-4 py-2 rounded-xl bg-black text-white text-sm cursor-pointer hover:opacity-90">
+                <span className="mr-2">⬆</span>
+                Seleccionar archivos
+                <input
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => {
+                    const list = e.target.files;
+                    if (!list) {
+                      setSpecFiles([]);
+                      return;
+                    }
+                    setSpecFiles(Array.from(list));
+                  }}
+                />
+              </label>
+
+              {specFiles.length > 0 && (
+                <p className="mt-1 text-xs text-gray-500">
+                  {specFiles.length} archivo(s) seleccionados.
+                </p>
+              )}
+            </div>
 
             <button
               type="submit"
-            className="self-end px-4 py-1.5 rounded-xl bg-black text-white text-sm hover:opacity-90 disabled:opacity-50"
-
-              disabled={!newMessage.trim()}
+              disabled={savingSpec}
+              className="px-4 py-2 rounded-xl bg-black text-white text-sm hover:opacity-90 disabled:opacity-50"
             >
-              Enviar
+              {savingSpec ? "Guardando…" : "Guardar como nueva versión"}
             </button>
+            <p className="text-xs text-gray-500 mt-1">
+              Esta nueva entrada se registrará como la versión siguiente (v2, v3, etc.) con fecha
+              automática.
+            </p>
           </form>
+        )}
+      </div>
+
+      {/* ----- COTIZACIÓN VIVA ----- */}
+      <div id="cotizacion-viva" className="bg-white shadow rounded-xl p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Cotización</h2>
+          <button
+            onClick={cargarCotizacionViva}
+            className="px-3 py-1 rounded border hover:bg-gray-100"
+            title="Actualizar"
+          >
+            Refrescar
+          </button>
         </div>
-      </div>
-    </div>
 
-    {/* ----- Especificaciones adicionales / cambios de versión ----- */}
-    <div className="bg-white shadow rounded-xl p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Especificaciones adicionales / versiones</h2>
-        <button
-          type="button"
-          onClick={() => setShowSpecForm((prev) => !prev)}
-          className="px-3 py-1 rounded-xl border border-gray-300 bg-gray-50 hover:bg-gray-100 text-sm"
-        >
-          {showSpecForm ? "Cerrar" : "Agregar especificaciones"}
-        </button>
-      </div>
-
-      {specUpdates.length === 0 ? (
-        <p className="text-sm text-gray-600">
-          Aún no se han registrado cambios de especificaciones. La versión 1 corresponde al pedido
-          original.
-        </p>
-      ) : (
-        <div className="space-y-3">
-          {specUpdates.map((s) => {
-            const fecha = s.createdAt?.toDate?.() instanceof Date ? s.createdAt.toDate() : null;
-            return (
-              <div
-                key={s.id}
-                className="border border-gray-200 rounded-lg p-3 text-sm bg-gray-50"
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="font-semibold">
-                    Versión {s.version} (sobre los archivos/detalles originales)
-                  </span>
-                  <span className="text-xs text-gray-500">
-                    {fecha ? fecha.toLocaleString() : "Fecha no disponible"}
-                  </span>
-                </div>
-                {s.descripcion && (
-                  <p className="mb-2 whitespace-pre-wrap">{s.descripcion}</p>
-                )}
-                {s.archivos && s.archivos.length > 0 && (
-                  <div>
-                    <span className="font-medium">Archivos adjuntos de esta versión:</span>
-                    <ul className="list-disc pl-5 mt-1 space-y-1">
-                      {s.archivos.map((a) => (
-                        <li key={a.url}>
-                          <a
-                            href={a.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 underline"
-                          >
-                            {a.name}
-                          </a>
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
+        {loadingQuote ? (
+          <p>Cargando cotización…</p>
+        ) : quoteLines.length === 0 ? (
+          <p className="text-gray-600">No se han adjuntado servicios a esta cotización.</p>
+        ) : (
+          <>
+            {/* Meta informativa */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
+              <div>
+                <span className="font-medium">Moneda base:</span> MXN
               </div>
-            );
-          })}
-        </div>
-      )}
+              <div>
+                <span className="font-medium">Tasa USD→MXN:</span> {quoteMeta?.exchangeRate ?? 17}
+              </div>
+              <div>
+                <span className="font-medium">IVA (default):</span> 16.00%
+              </div>
+            </div>
 
-      {showSpecForm && (
-        <form onSubmit={handleSpecSubmit} className="mt-4 space-y-3 border-t pt-4">
+            {/* Tabla de servicios */}
+            <div className="border border-gray-200 rounded-xl overflow-hidden">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-100">
+                  <tr>
+                    <th className="text-left px-3 py-2">Servicio</th>
+                    <th className="text-left px-3 py-2">TÍTULO DEL PEDIDO</th>
+                    <th className="text-left px-3 py-2">Total</th>
+                    <th className="text-left px-3 py-2">Detalles del servicio</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {quoteLines.map((ln) => {
+                    const d = ln.data;
+                    const base = d.subtotalMXN ?? 0;
+                    const inflado = base * (1 + (Number(draft.gananciaPct) || 0) / 100);
+                    const details = buildDetailsForLine(d);
+                    return (
+                      <tr key={ln.id} className="border-t align-top">
+                        <td className="px-3 py-2">
+                          <div className="font-medium">{d.serviceName || d.serviceId || "—"}</div>
+                        </td>
+                        <td className="px-3 py-2">{pedido.titulo || "Sin título"}</td>
+                        <td className="px-3 py-2">MXN {inflado.toFixed(2)}</td>
+                        <td className="px-3 py-2">
+                          {details.length === 0 ? (
+                            <span className="text-gray-500">—</span>
+                          ) : (
+                            <ul className="list-disc pl-5 space-y-0.5">
+                              {details.map((txt, i) => (
+                                <li key={i}>{txt}</li>
+                              ))}
+                            </ul>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Resumen de totales */}
+            <div className="space-y-2 text-right">
+              <div className="font-semibold">Subtotal sin ganancia: {formatMoney(subtotalBaseMXN)}</div>
+
+              <div className="flex items-center justify-end gap-2">
+                <label className="text-sm" htmlFor="gananciaPct">
+                  Ganancia (%):
+                </label>
+                <input
+                  id="gananciaPct"
+                  type="number"
+                  step="10"
+                  min="0"
+                  value={draft.gananciaPct}
+                  onChange={(e) => scheduleSave({ ...draft, gananciaPct: Number(e.target.value) })}
+                  className="w-24 px-2 py-1 border rounded text-right"
+                />
+                <span className="ml-2">{formatMoney(gananciaMonto)}</span>
+              </div>
+
+              <div>
+                <span className="font-medium">Subtotal con ganancia:</span>{" "}
+                {formatMoney(subtotalConGananciaMXN)}
+              </div>
+              <div>
+                <span className="font-medium">IVA (16%):</span> {formatMoney(ivaMonto)}
+              </div>
+
+              <div className="flex items-center justify-end gap-2">
+                <label className="text-sm" htmlFor="envio">
+                  Envío (MXN):
+                </label>
+                <input
+                  id="envio"
+                  type="number"
+                  step="10"
+                  min="0"
+                  value={draft.envio ?? 0}
+                  onChange={(e) => scheduleSave({ ...draft, envio: Number(e.target.value) })}
+                  className="w-32 px-2 py-1 border rounded text-right"
+                />
+              </div>
+
+              <div className="text-lg font-bold">TOTAL: {formatMoney(totalFinal)}</div>
+            </div>
+
+            <div className="text-xs text-gray-600">
+              * El PDF mostrará los importes por servicio <strong>ya con ganancia</strong>, sin revelar el
+              %.
+            </div>
+
+            <div className="pt-2">
+              <button
+                onClick={async () => {
+                  try {
+                    setIsGen(true);
+                    const ok = await handleGenerarPDF(); // ← siempre el genérico
+                    if (ok) await cargarCotizacionViva();
+                  } finally {
+                    setIsGen(false);
+                  }
+                }}
+                disabled={isGen}
+                className="px-4 py-2 rounded-xl bg-black text-white hover:opacity-90 disabled:opacity-50"
+              >
+                {isGen ? "Generando…" : "Generar PDF"}
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* ----- Panel Draft (PM) ----- */}
+      <div className="bg-white shadow rounded-xl p-6 space-y-4">
+        <h2 className="text-lg font-semibold">Datos de cotización (draft)</h2>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium mb-1">
-              Descripción del cambio / especificaciones nuevas
-            </label>
-            <textarea
-              className="w-full border rounded-md px-3 py-2 text-sm"
-              rows={3}
-              value={specDesc}
-              onChange={(e) => setSpecDesc(e.target.value)}
-              placeholder="Ejemplo: Se actualiza el archivo de diseño por versión con más grosor en la pared lateral. Justificación del cambio..."
+            <label className="block text-sm font-medium">Cliente</label>
+            <input
+              className="mt-1 w-full border rounded px-3 py-2"
+              value={draft.cliente ?? ""}
+              onChange={(e) => scheduleSave({ ...draft, cliente: e.target.value })}
             />
           </div>
+
           <div>
-            <label className="block text-sm font-medium mb-1">Adjuntar archivos</label>
-
-            <label className="inline-flex items-center px-4 py-2 rounded-xl bg-black text-white text-sm cursor-pointer hover:opacity-90">
-              <span className="mr-2">⬆</span>
-              Seleccionar archivos
-              <input
-                type="file"
-                multiple
-                className="hidden"
-                onChange={(e) => {
-                  const list = e.target.files;
-                  if (!list) {
-                    setSpecFiles([]);
-                    return;
-                  }
-                  setSpecFiles(Array.from(list));
-                }}
-              />
-            </label>
-
-            {specFiles.length > 0 && (
-              <p className="mt-1 text-xs text-gray-500">
-                {specFiles.length} archivo(s) seleccionados.
-              </p>
-            )}
+            <label className="block text-sm font-medium">Atención a</label>
+            <input
+              className="mt-1 w-full border rounded px-3 py-2"
+              value={draft.atencionA ?? ""}
+              onChange={(e) => scheduleSave({ ...draft, atencionA: e.target.value })}
+            />
           </div>
 
-          <button
-            type="submit"
-            disabled={savingSpec}
-            className="px-4 py-2 rounded-xl bg-black text-white text-sm hover:opacity-90 disabled:opacity-50"
-          >
-            {savingSpec ? "Guardando…" : "Guardar como nueva versión"}
-          </button>
-          <p className="text-xs text-gray-500 mt-1">
-            Esta nueva entrada se registrará como la versión siguiente (v2, v3, etc.) con fecha
-            automática.
-          </p>
-        </form>
-      )}
-    </div>
+          <div className="sm:col-span-2">
+            <label className="block text-sm font-medium">Notas</label>
+            <textarea
+              className="mt-1 w-full border rounded px-3 py-2"
+              rows={3}
+              value={draft.notas ?? ""}
+              onChange={(e) => scheduleSave({ ...draft, notas: e.target.value })}
+            />
+          </div>
+        </div>
 
-    {/* ----- COTIZACIÓN VIVA ----- */}
-    <div id="cotizacion-viva" className="bg-white shadow rounded-xl p-6 space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Cotización</h2>
-        <button
-          onClick={cargarCotizacionViva}
-          className="px-3 py-1 rounded border hover:bg-gray-100"
-          title="Actualizar"
-        >
-          Refrescar
-        </button>
+        <p className="text-xs text-gray-600">
+          Este draft se guarda automáticamente y alimentará el PDF final.
+        </p>
       </div>
 
-      {loadingQuote ? (
-        <p>Cargando cotización…</p>
-      ) : quoteLines.length === 0 ? (
-        <p className="text-gray-600">No se han adjuntado servicios a esta cotización.</p>
-      ) : (
-        <>
-          {/* Meta informativa */}
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-            <div>
-              <span className="font-medium">Moneda base:</span> MXN
-            </div>
-            <div>
-              <span className="font-medium">Tasa USD→MXN:</span> {quoteMeta?.exchangeRate ?? 17}
-            </div>
-            <div>
-              <span className="font-medium">IVA (default):</span> 16.00%
-            </div>
-          </div>
-
-          {/* Tabla de servicios */}
-          <div className="border border-gray-200 rounded-xl overflow-hidden">
-            <table className="min-w-full text-sm">
-              <thead className="bg-gray-100">
-                <tr>
-                  <th className="text-left px-3 py-2">Servicio</th>
-                  <th className="text-left px-3 py-2">TÍTULO DEL PEDIDO</th>
-                  <th className="text-left px-3 py-2">Total</th>
-                  <th className="text-left px-3 py-2">Detalles del servicio</th>
-                </tr>
-              </thead>
-              <tbody>
-                {quoteLines.map((ln) => {
-                  const d = ln.data;
-                  const base = d.subtotalMXN ?? 0;
-                  const inflado = base * (1 + (Number(draft.gananciaPct) || 0) / 100);
-                  const details = buildDetailsForLine(d);
-                  return (
-                    <tr key={ln.id} className="border-t align-top">
-                      <td className="px-3 py-2">
-                        <div className="font-medium">{d.serviceName || d.serviceId || "—"}</div>
-                      </td>
-                      <td className="px-3 py-2">{pedido.titulo || "Sin título"}</td>
-                      <td className="px-3 py-2">MXN {inflado.toFixed(2)}</td>
-                      <td className="px-3 py-2">
-                        {details.length === 0 ? (
-                          <span className="text-gray-500">—</span>
-                        ) : (
-                          <ul className="list-disc pl-5 space-y-0.5">
-                            {details.map((txt, i) => (
-                              <li key={i}>{txt}</li>
-                            ))}
-                          </ul>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-
-          {/* Resumen de totales */}
-          <div className="space-y-2 text-right">
-            <div className="font-semibold">Subtotal sin ganancia: {formatMoney(subtotalBaseMXN)}</div>
-
-            <div className="flex items-center justify-end gap-2">
-              <label className="text-sm" htmlFor="gananciaPct">
-                Ganancia (%):
-              </label>
-              <input
-                id="gananciaPct"
-                type="number"
-                step="10"
-                min="0"
-                value={draft.gananciaPct}
-                onChange={(e) => scheduleSave({ ...draft, gananciaPct: Number(e.target.value) })}
-                className="w-24 px-2 py-1 border rounded text-right"
-              />
-              <span className="ml-2">{formatMoney(gananciaMonto)}</span>
-            </div>
-
-            <div>
-              <span className="font-medium">Subtotal con ganancia:</span>{" "}
-              {formatMoney(subtotalConGananciaMXN)}
-            </div>
-            <div>
-              <span className="font-medium">IVA (16%):</span> {formatMoney(ivaMonto)}
-            </div>
-
-            <div className="flex items-center justify-end gap-2">
-              <label className="text-sm" htmlFor="envio">
-                Envío (MXN):
-              </label>
-              <input
-                id="envio"
-                type="number"
-                step="10"
-                min="0"
-                value={draft.envio ?? 0}
-                onChange={(e) => scheduleSave({ ...draft, envio: Number(e.target.value) })}
-                className="w-32 px-2 py-1 border rounded text-right"
-              />
-            </div>
-
-            <div className="text-lg font-bold">TOTAL: {formatMoney(totalFinal)}</div>
-          </div>
-
-          <div className="text-xs text-gray-600">
-            * El PDF mostrará los importes por servicio <strong>ya con ganancia</strong>, sin revelar el
-            %.
-          </div>
-
-          <div className="pt-2">
-            <button
-              onClick={async () => {
-                try {
-                  setIsGen(true);
-                  const ok = await handleGenerarPDF(); // ← siempre el genérico
-                  if (ok) await cargarCotizacionViva();
-                } finally {
-                  setIsGen(false);
-                }
-              }}
-              disabled={isGen}
-              className="px-4 py-2 rounded-xl bg-black text-white hover:opacity-90 disabled:opacity-50"
-            >
-              {isGen ? "Generando…" : "Generar PDF"}
-            </button>
-          </div>
-        </>
-      )}
-    </div>
-
-    {/* ----- Panel Draft (PM) ----- */}
-    <div className="bg-white shadow rounded-xl p-6 space-y-4">
-      <h2 className="text-lg font-semibold">Datos de cotización (draft)</h2>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium">Cliente</label>
-          <input
-            className="mt-1 w-full border rounded px-3 py-2"
-            value={draft.cliente ?? ""}
-            onChange={(e) => scheduleSave({ ...draft, cliente: e.target.value })}
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium">Atención a</label>
-          <input
-            className="mt-1 w-full border rounded px-3 py-2"
-            value={draft.atencionA ?? ""}
-            onChange={(e) => scheduleSave({ ...draft, atencionA: e.target.value })}
-          />
-        </div>
-
-        <div className="sm:col-span-2">
-          <label className="block text-sm font-medium">Notas</label>
-          <textarea
-            className="mt-1 w-full border rounded px-3 py-2"
-            rows={3}
-            value={draft.notas ?? ""}
-            onChange={(e) => scheduleSave({ ...draft, notas: e.target.value })}
-          />
-        </div>
-      </div>
-
-      <p className="text-xs text-gray-600">
-        Este draft se guarda automáticamente y alimentará el PDF final.
-      </p>
-    </div>
-
-    {/* ----- Versiones generadas ----- */}
-    <div className="bg-white shadow rounded-xl p-6 space-y-3">
-      <h2 className="text-lg font-semibold">Versiones generadas</h2>
-      {versions.length === 0 ? (
-        <p className="text-gray-600">Aún no hay versiones.</p>
-      ) : (
-        <ul className="space-y-2">
-          {versions.map((v) => {
-            const fecha = v.createdAt?.toDate?.() instanceof Date ? v.createdAt.toDate() : null;
-            return (
-              <li key={v.id} className="flex items-center justify-between border rounded p-2">
-                <div>
-                  <div className="font-medium">{v.id}</div>
-                  <div className="text-xs text-gray-600">
-                    {fecha ? fecha.toLocaleString() : "—"} · Total: {formatMoney(v.total || 0)}
+      {/* ----- Versiones generadas ----- */}
+      <div className="bg-white shadow rounded-xl p-6 space-y-3">
+        <h2 className="text-lg font-semibold">Versiones generadas</h2>
+        {versions.length === 0 ? (
+          <p className="text-gray-600">Aún no hay versiones.</p>
+        ) : (
+          <ul className="space-y-2">
+            {versions.map((v) => {
+              const fecha = v.createdAt?.toDate?.() instanceof Date ? v.createdAt.toDate() : null;
+              return (
+                <li key={v.id} className="flex items-center justify-between border rounded p-2">
+                  <div>
+                    <div className="font-medium">{v.id}</div>
+                    <div className="text-xs text-gray-600">
+                      {fecha ? fecha.toLocaleString() : "—"} · Total: {formatMoney(v.total || 0)}
+                    </div>
                   </div>
-                </div>
-                <a
-                  className="text-blue-600 underline"
-                  href={v.url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                >
-                  Ver PDF
-                </a>
-              </li>
-            );
-          })}
-        </ul>
-      )}
+                  <a
+                    className="text-blue-600 underline"
+                    href={v.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    Ver PDF
+                  </a>
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </div>
     </div>
-  </div>
-);
-
+  );
 }
