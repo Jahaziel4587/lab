@@ -11,7 +11,8 @@ const MAQUINAS = [
   { nombre: "Resina Formlabs 3B", imagen: "/resinas.png", servicio: "impresión" },
   { nombre: "Resina Formlabs 2B", imagen: "/resinas.png", servicio: "impresión" },
  { nombre: "Libre", imagen: "/libre.png", servicio: "fixture" },
-  
+   { nombre: "Láser CO2", imagen: "/laser.jpg", servicio: "gravado" },
+    { nombre: "Fresadora CNC", imagen: "/corte.jpg", servicio: "gravado" },
 ];
 
 export default function MaquinasPage() {

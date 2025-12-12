@@ -42,6 +42,7 @@ const MATERIALES_POR_MAQUINA: Record<string, string[]> = {
   ],
   "Fresadora CNC": ["Triplay 12.7mm", "HDPE 6mm", "HDPE 12.7mm", "MDF 18 mm","Otro",],
   "Libre": ["Libre"],
+  
 };
 
 export default function MaterialPage() {

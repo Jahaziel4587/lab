@@ -5,6 +5,7 @@ import { FiArrowLeft, FiArrowRight } from "react-icons/fi";
 
 const servicios = [
   { nombre: "Corte", imagen: "/corte.jpg" },
+  { nombre: "Gravado", imagen: "/gravado.jpeg" },
   { nombre: "Impresión", imagen: "/impresion3D.jpg" },
   { nombre: "Fixture", imagen: "/fixture.jpg" },
   { nombre: "Fixture no diseñado", imagen: "/libre.png" },
