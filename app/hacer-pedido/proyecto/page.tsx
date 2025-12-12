@@ -25,7 +25,7 @@ const proyectos: Proyecto[] = [
   { nombre: "012.Neurocap", imagen: "/Bioana.jpeg" },
   { nombre: "013.T-EZ", imagen: "/Bioana.jpeg" },
   { nombre: "014.QIK Cap handle", imagen: "/Bioana.jpeg" },
-  { nombre: "015.QIK Cap disponible", imagen: "/Bioana.jpeg" },
+  { nombre: "015.QIK Cap disposible", imagen: "/Bioana.jpeg" },
   { nombre: "016.Portacad shield", imagen: "/Bioana.jpeg" },
   { nombre: "017.JNM", imagen: "/Bioana.jpeg" },
   { nombre: "027.XSCRUB", imagen: "/XSCRUB.jpeg" },
