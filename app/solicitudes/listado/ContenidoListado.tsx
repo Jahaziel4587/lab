@@ -29,8 +29,15 @@ export default function ListadoPedidosPage() {
   const [nameByEmail, setNameByEmail] = useState<Record<string, string>>({});
   const router = useRouter();
 
+  // >>> BUSCADOR
+  const [busqueda, setBusqueda] = useState("");
+
   const fmtMXN = (n: number) =>
-    n.toLocaleString("es-MX", { style: "currency", currency: "MXN", minimumFractionDigits: 2 });
+    n.toLocaleString("es-MX", {
+      style: "currency",
+      currency: "MXN",
+      minimumFractionDigits: 2,
+    });
 
   // --- Cargar mapa de usuarios (email -> nombre completo) ---
   useEffect(() => {
@@ -105,32 +112,37 @@ export default function ListadoPedidosPage() {
         ...d.data(),
       }));
 
-      // Orden opcional
       // Orden: más nuevo primero.
-// 1) fechaEntregaReal (desc)  2) fechaLimite (desc)
-listaBase.sort((a: any, b: any) => {
-  const aR = a?.fechaEntregaReal || "";
-  const bR = b?.fechaEntregaReal || "";
+      // 1) fechaEntregaReal (desc)  2) fechaLimite (desc)
+      listaBase.sort((a: any, b: any) => {
+        const aR = a?.fechaEntregaReal || "";
+        const bR = b?.fechaEntregaReal || "";
 
-  // ambos con fecha real → descendente
-  if (aR && bR) return bR.localeCompare(aR);
+        // ambos con fecha real → descendente
+        if (aR && bR) return bR.localeCompare(aR);
 
-  // quien tenga fecha real va primero
-  if (aR) return -1;
-  if (bR) return 1;
+        // quien tenga fecha real va primero
+        if (aR) return -1;
+        if (bR) return 1;
 
-  // sin fecha real: usar fecha propuesta → descendente
-  const aP = a?.fechaLimite || "";
-  const bP = b?.fechaLimite || "";
-  return bP.localeCompare(aP);
-});
-
+        // sin fecha real: usar fecha propuesta → descendente
+        const aP = a?.fechaLimite || "";
+        const bP = b?.fechaLimite || "";
+        return bP.localeCompare(aP);
+      });
 
       // Para cada pedido: sumar subtotalMXN (base) de quote_live/live/lines
       const listaConCostos = await Promise.all(
         listaBase.map(async (p: any) => {
           try {
-            const linesRef = collection(db, "pedidos", p.id, "quote_live", "live", "lines");
+            const linesRef = collection(
+              db,
+              "pedidos",
+              p.id,
+              "quote_live",
+              "live",
+              "lines"
+            );
             const linesSnap = await getDocs(linesRef);
             let subtotalBase = 0;
             linesSnap.forEach((ln) => {
@@ -139,7 +151,11 @@ listaBase.sort((a: any, b: any) => {
             });
             return { ...p, costoBaseProyecto: subtotalBase };
           } catch (err) {
-            console.warn("No se pudieron leer líneas de cotización para", p.id, err);
+            console.warn(
+              "No se pudieron leer líneas de cotización para",
+              p.id,
+              err
+            );
             return { ...p, costoBaseProyecto: 0 };
           }
         })
@@ -213,17 +229,28 @@ listaBase.sort((a: any, b: any) => {
   // --- Helper para mostrar solicitante ---
   const solicitanteDe = (p: any) => {
     const email = p?.correoUsuario || p?.usuario || "";
-    return (
-      p?.nombreUsuario ||
-      (email ? nameByEmail[email] : "") ||
-      email ||
-      "-"
-    );
+    return p?.nombreUsuario || (email ? nameByEmail[email] : "") || email || "-";
   };
 
-  // Total gastado en el proyecto (suma de costoBaseProyecto)
+  // >>> LISTA FILTRADA POR BUSCADOR (título / id)
+  const pedidosFiltrados = useMemo(() => {
+    const q = busqueda.trim().toLowerCase();
+    if (!q) return pedidos;
+
+    return pedidos.filter((p: any) => {
+      const titulo = String(p?.titulo || "").toLowerCase();
+      const id = String(p?.id || "").toLowerCase();
+      return titulo.includes(q) || id.includes(q);
+    });
+  }, [pedidos, busqueda]);
+
+  // Total gastado en el proyecto (suma de costoBaseProyecto) (sin filtrar)
   const totalGastadoProyecto = useMemo(
-    () => pedidos.reduce((acc, p: any) => acc + (Number(p?.costoBaseProyecto) || 0), 0),
+    () =>
+      pedidos.reduce(
+        (acc, p: any) => acc + (Number(p?.costoBaseProyecto) || 0),
+        0
+      ),
     [pedidos]
   );
 
@@ -250,8 +277,34 @@ listaBase.sort((a: any, b: any) => {
           <span>{fmtMXN(totalGastadoProyecto)}</span>
         </div>
 
+        {/* >>> BUSCADOR */}
+        <div className="mb-4 flex flex-col sm:flex-row gap-2 sm:items-center">
+          <input
+            type="text"
+            value={busqueda}
+            onChange={(e) => setBusqueda(e.target.value)}
+            placeholder="Buscar por título..."
+            className="w-full sm:max-w-md px-3 py-2 rounded border bg-white text-black"
+          />
+          {busqueda.trim() !== "" && (
+            <button
+              onClick={() => setBusqueda("")}
+              className="px-3 py-2 rounded bg-white text-black hover:bg-gray-200"
+              title="Limpiar búsqueda"
+            >
+              Limpiar
+            </button>
+          )}
+          <div className="text-sm text-gray-600">
+            Mostrando <span className="font-semibold">{pedidosFiltrados.length}</span>{" "}
+            de <span className="font-semibold">{pedidos.length}</span>
+          </div>
+        </div>
+
         {pedidos.length === 0 ? (
           <p>No hay pedidos registrados para este proyecto.</p>
+        ) : pedidosFiltrados.length === 0 ? (
+          <p>No hay resultados para esa búsqueda.</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="min-w-full bg-white text-black rounded shadow-md">
@@ -262,13 +315,13 @@ listaBase.sort((a: any, b: any) => {
                   <th className="py-2 px-4">Detalles</th>
                   <th className="py-2 px-4">Entrega propuesta</th>
                   <th className="py-2 px-4">Entrega real</th>
-                  <th className="py-2 px-4">Costos (base)</th> 
+                  <th className="py-2 px-4">Costos (base)</th>
                   <th className="py-2 px-4">Cotización</th>
                   <th className="py-2 px-4">Status</th>
                 </tr>
               </thead>
               <tbody>
-                {pedidos.map((p) => (
+                {pedidosFiltrados.map((p) => (
                   <tr key={p.id} className="border-t">
                     <td className="py-2 px-4">{p.titulo || "Sin título"}</td>
 
@@ -291,7 +344,11 @@ listaBase.sort((a: any, b: any) => {
                           type="date"
                           value={p.fechaEntregaReal || ""}
                           onChange={(e) =>
-                            actualizarCampo(p.id, "fechaEntregaReal", e.target.value)
+                            actualizarCampo(
+                              p.id,
+                              "fechaEntregaReal",
+                              e.target.value
+                            )
                           }
                           className="px-2 py-1 border rounded text-black"
                         />
@@ -309,17 +366,15 @@ listaBase.sort((a: any, b: any) => {
 
                     {/* COTIZACIÓN */}
                     <td className="px-4 py-2">
-                      {/* Nuevo flujo: Cotización Viva */}
                       <div className="flex flex-col gap-1">
                         <Link
                           href={`/solicitudes/listado/${p.id}#cotizacion-viva`}
                           className="inline-flex items-center justify-center px-3 py-1 rounded bg-black text-white hover:opacity-90"
                           title="Ver Cotización Viva del pedido"
                         >
-                          Ver Cotización 
+                          Ver Cotización
                         </Link>
 
-                        {/* Compatibilidad: PDF legacy si existe */}
                         {p.costo && (
                           <div className="flex items-center gap-2">
                             <a
@@ -331,7 +386,8 @@ listaBase.sort((a: any, b: any) => {
                               {p.nombreCosto
                                 ? p.nombreCosto
                                 : decodeURIComponent(
-                                    p.costo.split("/").pop()?.split("?")[0] || "archivo"
+                                    p.costo.split("/").pop()?.split("?")[0] ||
+                                      "archivo"
                                   )
                                     .split("%2F")
                                     .pop()}
@@ -357,7 +413,9 @@ listaBase.sort((a: any, b: any) => {
                       {isAdmin ? (
                         <select
                           value={p.status || "enviado"}
-                          onChange={(e) => actualizarCampo(p.id, "status", e.target.value)}
+                          onChange={(e) =>
+                            actualizarCampo(p.id, "status", e.target.value)
+                          }
                           className="px-2 py-1 border rounded text-black"
                         >
                           <option value="enviado">Enviado</option>
@@ -375,7 +433,6 @@ listaBase.sort((a: any, b: any) => {
               </tbody>
             </table>
 
-            {/* Pie con total del proyecto (opcional, ya está arriba) */}
             <div className="text-right text-sm mt-3">
               <span className="font-semibold">Total gastado (subtotal base): </span>
               <span>{fmtMXN(totalGastadoProyecto)}</span>
