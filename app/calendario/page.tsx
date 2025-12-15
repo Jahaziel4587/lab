@@ -29,7 +29,7 @@ type Pedido = {
   titulo: string;
   proyecto?: string;
   fechaEntregaReal?: string; // ISO yyyy-MM-dd
-  fechaLimite?: string;      // ISO yyyy-MM-dd
+  fechaLimite?: string; // ISO yyyy-MM-dd
   costo?: string;
   status?: string;
   nombreCosto?: string;
@@ -79,6 +79,9 @@ export default function CalendarioPage() {
   const [diasDelMes, setDiasDelMes] = useState<Date[]>([]);
   const [currentMonth, setCurrentMonth] = useState<Date>(startOfMonth(new Date()));
   const [nameByEmail, setNameByEmail] = useState<Record<string, string>>({});
+
+  // >>> BUSCADOR (para pedidos con fecha real)
+  const [busquedaFechados, setBusquedaFechados] = useState("");
 
   // Cargar pedidos + mapa de nombres
   useEffect(() => {
@@ -145,25 +148,42 @@ export default function CalendarioPage() {
     }
   };
 
- 
-
   // 1) Tabla "Todos los pedidos" -> SOLO los que NO tienen fechaEntregaReal
   const pedidosSinFecha = useMemo(
     () => pedidos.filter((p) => !p.fechaEntregaReal || p.fechaEntregaReal.trim() === ""),
     [pedidos]
   );
 
-  // 2) Tarjetas por proyecto -> SOLO los que SÍ tienen fechaEntregaReal
+  // 2) Pedidos CON fecha real (para tarjetas + buscador)
+  const pedidosConFecha = useMemo(
+    () => pedidos.filter((p) => p.fechaEntregaReal && p.fechaEntregaReal.trim() !== ""),
+    [pedidos]
+  );
+
+  // 3) Tarjetas por proyecto -> SOLO los que SÍ tienen fechaEntregaReal
   const proyectosConFecha = useMemo(() => {
     const map = new Map<string, number>();
-    pedidos
-      .filter((p) => p.fechaEntregaReal && p.fechaEntregaReal.trim() !== "")
-      .forEach((p) => {
-        const key = p.proyecto || "Sin proyecto";
-        map.set(key, (map.get(key) || 0) + 1);
-      });
+    pedidosConFecha.forEach((p) => {
+      const key = p.proyecto || "Sin proyecto";
+      map.set(key, (map.get(key) || 0) + 1);
+    });
     return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [pedidos]);
+  }, [pedidosConFecha]);
+
+  // >>> FILTRO DE BUSCADOR (título/proyecto/solicitante)
+  const pedidosFechadosFiltrados = useMemo(() => {
+    const q = busquedaFechados.trim().toLowerCase();
+    if (!q) return pedidosConFecha;
+
+    return pedidosConFecha.filter((p) => {
+      const titulo = String(p?.titulo || "").toLowerCase();
+      const proyecto = String(p?.proyecto || "").toLowerCase();
+      const solicitante = String(p?.nombreUsuario || p?.correoUsuario || "").toLowerCase();
+      return titulo.includes(q) || proyecto.includes(q) || solicitante.includes(q);
+    });
+  }, [pedidosConFecha, busquedaFechados]);
+
+  const mostrandoBusquedaFechados = busquedaFechados.trim().length > 0;
 
   return (
     <div className="max-w-6xl mx-auto bg-white text-black p-6 rounded-xl shadow space-y-10">
@@ -206,13 +226,8 @@ export default function CalendarioPage() {
                 : false
             );
             return (
-              <div
-                key={dia.toISOString()}
-                className="border p-2 rounded h-28 overflow-auto"
-              >
-                <div className="font-semibold">
-                  {format(dia, "d", { locale: es })}
-                </div>
+              <div key={dia.toISOString()} className="border p-2 rounded h-28 overflow-auto">
+                <div className="font-semibold">{format(dia, "d", { locale: es })}</div>
                 <div className="text-xs mt-1 space-y-1">
                   {pedidosDelDia.map((p) => (
                     <div key={p.id} className="truncate" title={p.titulo}>
@@ -247,7 +262,6 @@ export default function CalendarioPage() {
                   <th className="px-4 py-2">Solicitante</th>
                   <th className="px-4 py-2">Fecha propuesta</th>
                   <th className="px-4 py-2">Fecha real</th>
-                
                   <th className="px-4 py-2">Status</th>
                   <th className="px-4 py-2">Detalles</th>
                 </tr>
@@ -270,13 +284,10 @@ export default function CalendarioPage() {
                         className="border px-2 py-1 rounded"
                       />
                     </td>
-                   
                     <td className="px-4 py-2">
                       <select
                         value={p.status || "enviado"}
-                        onChange={(e) =>
-                          actualizarCampo(p.id, "status", e.target.value)
-                        }
+                        onChange={(e) => actualizarCampo(p.id, "status", e.target.value)}
                         className="border px-2 py-1 rounded"
                       >
                         <option value="enviado">Enviado</option>
@@ -298,7 +309,7 @@ export default function CalendarioPage() {
                 ))}
                 {pedidosSinFecha.length === 0 && (
                   <tr>
-                    <td className="px-4 py-6 text-center text-gray-500" colSpan={7}>
+                    <td className="px-4 py-6 text-center text-gray-500" colSpan={6}>
                       No hay pedidos pendientes de asignar fecha.
                     </td>
                   </tr>
@@ -309,36 +320,122 @@ export default function CalendarioPage() {
         </div>
       )}
 
-      {/* TARJETAS POR PROYECTO: pedidos CON fecha real */}
+      {/* PROYECTOS CON PEDIDOS FECHADOS + BUSCADOR */}
       {isAdmin && (
         <div className="space-y-4">
-          <h2 className="text-lg font-semibold">Proyectos con pedidos fechados</h2>
-          {proyectosConFecha.length === 0 ? (
-            <p className="text-sm text-gray-600">
-              Aún no hay pedidos con <em>fecha real</em>.
-            </p>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-              {proyectosConFecha.map(([proyecto, count]) => (
-                <Link
-                  key={proyecto}
-                  href={`/calendario/proyectos/${encodeURIComponent(proyecto)}`}
-                  className="relative rounded-xl overflow-hidden shadow-lg group"
+          {/* Header + buscador al lado */}
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <h2 className="text-lg font-semibold">Proyectos con pedidos fechados</h2>
+
+            <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+              <input
+                type="text"
+                value={busquedaFechados}
+                onChange={(e) => setBusquedaFechados(e.target.value)}
+                placeholder="Buscar pedido (título / proyecto / solicitante)..."
+                className="w-full sm:w-[420px] border px-3 py-2 rounded"
+              />
+              {mostrandoBusquedaFechados && (
+                <button
+                  onClick={() => setBusquedaFechados("")}
+                  className="px-3 py-2 rounded border hover:bg-gray-50"
+                  title="Limpiar búsqueda"
                 >
-                  <Image
-                    src={proyectosImagenes[proyecto] || "/otro.jpg"}
-                    alt={proyecto}
-                    width={500}
-                    height={300}
-                    className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
-                  />
-                  <div className="absolute bottom-3 left-3 right-3 bg-white text-black rounded-full px-4 py-1 flex justify-between items-center">
-                    <span className="text-sm font-medium truncate">{proyecto}</span>
-                    <span className="text-xs opacity-70">{count}</span>
-                  </div>
-                </Link>
-              ))}
+                  Limpiar
+                </button>
+              )}
             </div>
+          </div>
+
+          {/* Si hay búsqueda: mostrar resultados en TABLA (fuera de tarjetas) */}
+          {mostrandoBusquedaFechados ? (
+            <div className="space-y-3">
+              <div className="text-sm text-gray-600">
+                Mostrando{" "}
+                <span className="font-semibold">{pedidosFechadosFiltrados.length}</span>{" "}
+                de <span className="font-semibold">{pedidosConFecha.length}</span>{" "}
+                pedidos con fecha real.
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm bg-white text-black rounded shadow-md">
+                  <thead className="bg-gray-100">
+                    <tr>
+                      <th className="px-4 py-2">Título</th>
+                      <th className="px-4 py-2">Proyecto</th>
+                      <th className="px-4 py-2">Solicitante</th>
+                      <th className="px-4 py-2">Fecha propuesta</th>
+                      <th className="px-4 py-2">Fecha real</th>
+                      <th className="px-4 py-2">Status</th>
+                      <th className="px-4 py-2">Detalles</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {pedidosFechadosFiltrados.map((p) => (
+                      <tr key={p.id} className="border-t">
+                        <td className="px-4 py-2">{p.titulo}</td>
+                        <td className="px-4 py-2">{p.proyecto || "Sin proyecto"}</td>
+                        <td className="px-4 py-2">
+                          {p.nombreUsuario || p.correoUsuario || "Sin información"}
+                        </td>
+                        <td className="px-4 py-2">{p.fechaLimite || "No definida"}</td>
+                        <td className="px-4 py-2">{p.fechaEntregaReal || "-"}</td>
+                        <td className="px-4 py-2">
+                          <span className="capitalize">{p.status || "enviado"}</span>
+                        </td>
+                        <td className="px-4 py-2">
+                          <Link
+                            href={`/solicitudes/listado/${p.id}`}
+                            className="text-blue-600 hover:underline"
+                          >
+                            Ver detalles
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+
+                    {pedidosFechadosFiltrados.length === 0 && (
+                      <tr>
+                        <td className="px-4 py-6 text-center text-gray-500" colSpan={7}>
+                          No hay resultados para esa búsqueda.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          ) : (
+            // Si NO hay búsqueda: mostrar tarjetas por proyecto como antes
+            <>
+              {proyectosConFecha.length === 0 ? (
+                <p className="text-sm text-gray-600">
+                  Aún no hay pedidos con <em>fecha real</em>.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
+                  {proyectosConFecha.map(([proyecto, count]) => (
+                    <Link
+                      key={proyecto}
+                      href={`/calendario/proyectos/${encodeURIComponent(proyecto)}`}
+                      className="relative rounded-xl overflow-hidden shadow-lg group"
+                    >
+                      <Image
+                        src={proyectosImagenes[proyecto] || "/otro.jpg"}
+                        alt={proyecto}
+                        width={500}
+                        height={300}
+                        className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
+                      />
+                      <div className="absolute bottom-3 left-3 right-3 bg-white text-black rounded-full px-4 py-1 flex justify-between items-center">
+                        <span className="text-sm font-medium truncate">{proyecto}</span>
+                        <span className="text-xs opacity-70">{count}</span>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>
       )}
