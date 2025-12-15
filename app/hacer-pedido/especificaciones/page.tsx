@@ -54,6 +54,8 @@ export default function EspecificacionesPage() {
     "resina formlabs 2b": "FL2B",
     "laser co2": "Láser",
     "fresadora cnc": "CNC",
+    "polipropileno": "CNC",
+    "HDPE": "CNC",
     "necesidad": "Need",
     "libre": "FXT",
   };

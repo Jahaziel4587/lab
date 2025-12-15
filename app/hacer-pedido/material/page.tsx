@@ -40,7 +40,7 @@ const MATERIALES_POR_MAQUINA: Record<string, string[]> = {
     "Papel",
     "Otro",
   ],
-  "Fresadora CNC": ["Triplay 12.7mm", "HDPE 6mm", "HDPE 12.7mm", "MDF 18 mm","Otro",],
+  "Fresadora CNC": ["Triplay 12.7mm", "HDPE 6mm", "HDPE 12.7mm", "MDF 18 mm", "Polipropileno","Otro",],
   "Libre": ["Libre"],
   
 };
