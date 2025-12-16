@@ -10,7 +10,12 @@ const MAQUINAS = [
   { nombre: "Filamento", imagen: "/filamentos.jpg", servicio: "impresión" },
   { nombre: "Resina Formlabs 3B", imagen: "/resinas.png", servicio: "impresión" },
   { nombre: "Resina Formlabs 2B", imagen: "/resinas.png", servicio: "impresión" },
- { nombre: "Libre", imagen: "/libre.png", servicio: "fixture" },
+ { nombre: "Libre", imagen: "/libre.png", servicio: "diseño de fixture" },
+  { nombre: "Fresadora CNC", imagen: "/corte.jpg", servicio: "diseño de fixture" },
+  { nombre: "Filamento", imagen: "/filamentos.jpg", servicio: "diseño de fixture" },
+  { nombre: "Resina Formlabs 3B", imagen: "/resinas.png", servicio: "diseño de fixture" },
+  { nombre: "Resina Formlabs 2B", imagen: "/resinas.png", servicio: "diseño de fixture" },
+    { nombre: "Láser CO2", imagen: "/laser.jpg", servicio: "diseño de fixture" },
    { nombre: "Láser CO2", imagen: "/laser.jpg", servicio: "grabado" },
     { nombre: "Fresadora CNC", imagen: "/corte.jpg", servicio: "grabado" },
 ];
