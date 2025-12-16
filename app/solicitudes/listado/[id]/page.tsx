@@ -24,7 +24,7 @@ import {
   listAll,
 } from "firebase/storage";
 import { db, storage } from "@/src/firebase/firebaseConfig";
-import { FiArrowLeft } from "react-icons/fi";
+import { FiArrowLeft, FiX, FiChevronUp, FiChevronDown } from "react-icons/fi";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 
 // >>> para saber si es admin / usuario actual
@@ -215,6 +215,41 @@ export default function DetallePedidoPage() {
   const [specDesc, setSpecDesc] = useState("");
   const [specFiles, setSpecFiles] = useState<File[]>([]);
   const [savingSpec, setSavingSpec] = useState(false);
+  const specInputRef = useRef<HTMLInputElement | null>(null);
+
+  const addSpecFiles = (list: FileList | null) => {
+    if (!list) return;
+    const incoming = Array.from(list);
+
+    setSpecFiles((prev) => {
+      // opcional: evitar duplicados por (name + size + lastModified)
+      const seen = new Set(prev.map((f) => `${f.name}_${f.size}_${f.lastModified}`));
+      const filtered = incoming.filter((f) => {
+        const k = `${f.name}_${f.size}_${f.lastModified}`;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+      return [...prev, ...filtered];
+    });
+
+    // reset para poder volver a seleccionar el mismo archivo si quieren
+    if (specInputRef.current) specInputRef.current.value = "";
+  };
+
+  const removeSpecFile = (idx: number) => {
+    setSpecFiles((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const moveSpecFile = (idx: number, dir: -1 | 1) => {
+    setSpecFiles((prev) => {
+      const next = [...prev];
+      const target = idx + dir;
+      if (target < 0 || target >= next.length) return prev;
+      [next[idx], next[target]] = [next[target], next[idx]];
+      return next;
+    });
+  };
 
   // <<< NUEVO: estado de chat
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
@@ -1483,29 +1518,70 @@ const ownerEmail: string | null =
             <div>
               <label className="block text-sm font-medium mb-1">Adjuntar archivos</label>
 
-              <label className="inline-flex items-center px-4 py-2 rounded-xl bg-black text-white text-sm cursor-pointer hover:opacity-90">
-                <span className="mr-2">⬆</span>
-                Seleccionar archivos
-                <input
-                  type="file"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => {
-                    const list = e.target.files;
-                    if (!list) {
-                      setSpecFiles([]);
-                      return;
-                    }
-                    setSpecFiles(Array.from(list));
-                  }}
-                />
-              </label>
+             <label className="inline-flex items-center px-4 py-2 rounded-xl bg-black text-white text-sm cursor-pointer hover:opacity-90">
+  <span className="mr-2">⬆</span>
+  Seleccionar archivos
+  <input
+    ref={specInputRef}
+    type="file"
+    multiple
+    className="hidden"
+    onChange={(e) => addSpecFiles(e.target.files)}
+  />
+</label>
 
-              {specFiles.length > 0 && (
-                <p className="mt-1 text-xs text-gray-500">
-                  {specFiles.length} archivo(s) seleccionados.
-                </p>
-              )}
+{specFiles.length > 0 && (
+  <div className="mt-3 border rounded-lg bg-white">
+    <div className="px-3 py-2 text-xs text-gray-600 border-b">
+      Archivos seleccionados (puedes reordenar):
+    </div>
+
+    <ul className="divide-y">
+      {specFiles.map((f, idx) => (
+        <li key={`${f.name}_${f.size}_${f.lastModified}`} className="flex items-center justify-between gap-3 px-3 py-2">
+          <div className="min-w-0">
+            <p className="text-sm font-medium truncate">{f.name}</p>
+            <p className="text-xs text-gray-500">
+              {(f.size / 1024 / 1024).toFixed(2)} MB
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() => moveSpecFile(idx, -1)}
+              disabled={idx === 0}
+              className="p-2 rounded border hover:bg-gray-100 disabled:opacity-40"
+              title="Subir"
+            >
+              <FiChevronUp />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => moveSpecFile(idx, 1)}
+              disabled={idx === specFiles.length - 1}
+              className="p-2 rounded border hover:bg-gray-100 disabled:opacity-40"
+              title="Bajar"
+            >
+              <FiChevronDown />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => removeSpecFile(idx)}
+              className="p-2 rounded border hover:bg-red-50 text-red-600"
+              title="Quitar"
+            >
+              <FiX />
+            </button>
+          </div>
+        </li>
+      ))}
+    </ul>
+  </div>
+)}
+
             </div>
 
             <button
