@@ -8,7 +8,7 @@ const SENDGRID_API_KEY = defineSecret("SENDGRID_API_KEY");
 const ADMIN_EMAILS = defineSecret("ADMIN_EMAILS");
 
 // Ajusta si cambias el dominio de producción
-const APP_BASE_URL = process.env.APP_BASE_URL || "https://bioanaprotolab.com/";
+const APP_BASE_URL = "https://bioanaprotolab.com/";
 
 if (!admin.apps.length) {
   admin.initializeApp();

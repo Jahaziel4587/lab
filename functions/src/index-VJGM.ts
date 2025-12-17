@@ -8,7 +8,7 @@ const SENDGRID_API_KEY = defineSecret("SENDGRID_API_KEY");
 const ADMIN_EMAILS = defineSecret("ADMIN_EMAILS");
 
 // Ajusta si cambias el dominio de producción
-const APP_BASE_URL = process.env.APP_BASE_URL || "https://bioanaprotolab.com/";
+const APP_BASE_URL = "https://bioanaprotolab.com/";
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -62,7 +62,7 @@ export const onPedidoCreatedSendEmail = onDocumentCreated(
 
       const html = `
         <div style="font-family:Arial,Helvetica,sans-serif;line-height:1.45;font-size:14px;color:#111">
-          <h2 style="margin:0 0 12px">🧾 Nuevo pedido recibido</h2>
+          <h2 style="margin:0 0 12px"> Nuevo pedido recibido</h2>
           <table style="width:100%;border-collapse:collapse">
             <tr><td style="padding:6px 0"><strong>ID:</strong></td><td style="padding:6px 0">${pedidoId}</td></tr>
             <tr><td style="padding:6px 0"><strong>Título:</strong></td><td style="padding:6px 0">${pretty(titulo)}</td></tr>
