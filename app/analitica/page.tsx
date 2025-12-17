@@ -477,6 +477,38 @@ export default function AnaliticaPage() {
     return str.replace(/\b\w/g, (c) => c.toUpperCase());
   }
 
+  // Convierte " 123.45" / "1,234.56" / 123.45 -> 123.45 (number)
+function toExcelNumber(v: any): number {
+  if (typeof v === "number" && Number.isFinite(v)) return v;
+  if (typeof v === "string") {
+    const cleaned = v.trim().replace(/,/g, "");
+    const n = Number(cleaned);
+    return Number.isFinite(n) ? n : 0;
+  }
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+// Fuerza ciertas columnas a tipo número y les aplica formato moneda
+function applyCurrencyFormat(ws: XLSX.WorkSheet, colIdxs: number[]) {
+  if (!ws["!ref"]) return;
+
+  const range = XLSX.utils.decode_range(ws["!ref"]);
+
+  // r=0 es header; empezamos en r=1 (primera fila de datos)
+  for (let r = range.s.r + 1; r <= range.e.r; r++) {
+    for (const c of colIdxs) {
+      const addr = XLSX.utils.encode_cell({ r, c });
+      const cell = ws[addr];
+      if (!cell) continue;
+
+      cell.v = toExcelNumber(cell.v);
+      cell.t = "n"; // number
+      cell.z = '"$"#,##0.00'; // formato moneda (en Excel se verá como $)
+    }
+  }
+}
+
   const handleDownloadXLSX = () => {
     if (exportRows.length === 0) return;
 
@@ -511,22 +543,25 @@ export default function AnaliticaPage() {
       ).join(", ");
 
       return [
-        r.proyecto,
-        r.titulo,
-        r.fechaPedido,
-        r.fechaFinal,
-        serviciosClean,
-        r.totalMXN.toFixed(2),
-        materialesClean,
-        // >>> NEW
-        r.materialCostMXN.toFixed(2),
-      ];
+  r.proyecto,
+  r.titulo,
+  r.fechaPedido,
+  r.fechaFinal,
+  serviciosClean,
+  r.totalMXN,          // <- number (NO toFixed)
+  materialesClean,
+  r.materialCostMXN,   // <- number (NO toFixed)
+];
+
     };
 
     const wb = XLSX.utils.book_new();
 
     const mainRows = exportRows.map(makeRowMain);
     const wsMain = XLSX.utils.aoa_to_sheet([headerMain, ...mainRows]);
+    // Resumen: "Costo final del pedido" = col 5, "Costo material (MXN)" = col 7
+applyCurrencyFormat(wsMain, [5, 7]);
+
     XLSX.utils.book_append_sheet(wb, wsMain, "Resumen");
 
     // --- Hojas por proyecto: con comparativa pedido vs cotización ---
@@ -564,22 +599,22 @@ export default function AnaliticaPage() {
         )
       ).join(", ");
 
-      return [
-        r.proyecto,
-        r.titulo,
-        r.fechaPedido,
-        r.fechaFinal,
-        r.servicioSolicitado || "",
-        r.materialSolicitado || "",
-        r.fechaPropuesta || "",
-        r.descripcion || "",
-        r.maquina || "",
-        serviciosClean,
-        r.totalMXN.toFixed(2),
-        materialesClean,
-        // >>> NEW
-        r.materialCostMXN.toFixed(2),
-      ];
+     return [
+  r.proyecto,
+  r.titulo,
+  r.fechaPedido,
+  r.fechaFinal,
+  r.servicioSolicitado || "",
+  r.materialSolicitado || "",
+  r.fechaPropuesta || "",
+  r.descripcion || "",
+  r.maquina || "",
+  serviciosClean,
+  r.totalMXN,          // <- number
+  materialesClean,
+  r.materialCostMXN,   // <- number
+];
+
     };
 
     const byProject = new Map<string, PedidoExportRow[]>();
@@ -595,6 +630,9 @@ export default function AnaliticaPage() {
         (proyecto || "Proyecto").replace(/[\\/?*\[\]:]/g, "").slice(0, 31) ||
         "Proyecto";
       const wsProj = XLSX.utils.aoa_to_sheet([headerProyecto, ...data]);
+      // Proyecto: "Costo final del pedido" = col 10, "Costo material (MXN)" = col 12
+applyCurrencyFormat(wsProj, [10, 12]);
+
       XLSX.utils.book_append_sheet(wb, wsProj, safeName);
     });
 
