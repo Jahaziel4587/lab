@@ -216,14 +216,24 @@ function SegmentedProgress({
     return "Enviado";
   };
 
-  const statusPillClass = (s?: string) => {
-    const v = (s || "enviado").toLowerCase();
-    if (v === "listo") return "border-emerald-500/40 text-emerald-200 bg-emerald-500/10";
-    if (v === "en proceso") return "border-yellow-500/40 text-yellow-200 bg-yellow-500/10";
-    if (v === "visto") return "border-sky-500/40 text-sky-200 bg-sky-500/10";
-    if (v === "cancelado") return "border-red-500/40 text-red-200 bg-red-500/10";
-    return "border-white/10 text-white/80 bg-white/5";
-  };
+  const statusPillClass = (status?: string) => {
+  const base =
+    "appearance-none rounded-full px-4 py-1.5 text-xs font-medium border transition cursor-pointer focus:outline-none";
+
+  switch (status) {
+    case "listo":
+      return `${base} bg-emerald-500/15 text-emerald-300 border-emerald-500/30`;
+    case "en proceso":
+      return `${base} bg-yellow-500/15 text-yellow-300 border-yellow-500/30`;
+    case "visto":
+      return `${base} bg-blue-500/15 text-blue-300 border-blue-500/30`;
+    case "cancelado":
+      return `${base} bg-red-500/15 text-red-300 border-red-500/30`;
+    default: // enviado
+      return `${base} bg-white/10 text-white/80 border-white/20`;
+  }
+};
+
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-10">
@@ -241,6 +251,8 @@ function SegmentedProgress({
           </button>
 
           <div className="text-center">
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-emerald-500/10 to-transparent" />
+
             <h1 className="text-lg md:text-xl font-semibold text-white">
               Calendario de pedidos
             </h1>
@@ -344,104 +356,135 @@ function SegmentedProgress({
         </div>
       </div>
 
-      {/* TABLA: pedidos sin fecha real (igual vibe Mis solicitudes) */}
-      {isAdmin && (
-        <div className="rounded-2xl border border-white/10 bg-black/40 backdrop-blur-md shadow-[0_20px_80px_rgba(0,0,0,0.55)] overflow-hidden">
-          <div className="px-6 py-5 border-b border-white/10 flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-semibold text-white">
-                Pedidos pendientes de fecha
-              </h2>
-              <p className="text-sm text-white/60">
-                Asigna fecha real y ajusta status.
-              </p>
-            </div>
+      {/* TABLA: pedidos sin fecha real (misma vibra que "Mis solicitudes") */}
+{isAdmin && (
+  <div className="space-y-4">
+    {/* Header opcional (puedes quitarlo si quieres) */}
+    <div className="flex items-end justify-between gap-4">
+      <div>
+        <h2 className="text-lg font-semibold text-white">
+          Pedidos pendientes de fecha
+        </h2>
+        <p className="text-sm text-white/60">
+          Asigna fecha real y ajusta status.
+        </p>
+      </div>
 
-            <div className="text-sm text-white/60">
-              Mostrando{" "}
-              <span className="text-white font-semibold">{pedidosSinFecha.length}</span>
-            </div>
-          </div>
+      <div className="text-sm text-white/60">
+        Mostrando{" "}
+        <span className="text-white font-semibold">{pedidosSinFecha.length}</span>
+      </div>
+    </div>
 
-          <div className="overflow-x-auto">
-            <table className="min-w-full text-sm text-white/85">
-              <thead className="text-left text-white/55">
-                <tr className="border-b border-white/10">
-                  <th className="px-6 py-4 font-semibold">Título</th>
-                  <th className="px-6 py-4 font-semibold">Solicitante</th>
-                  <th className="px-6 py-4 font-semibold">Entrega propuesta</th>
-                  <th className="px-6 py-4 font-semibold">Entrega real</th>
-                  <th className="px-6 py-4 font-semibold">Status</th>
-                  <th className="px-6 py-4 font-semibold">Detalles</th>
-                </tr>
-              </thead>
+    {/* Card tabla estilo "Mis solicitudes" */}
+    <div className="relative rounded-3xl border border-white/10 bg-white/[0.035] backdrop-blur-2xl ring-1 ring-white/5 shadow-[0_30px_120px_-80px_rgba(0,0,0,0.95)] overflow-hidden">
+      {/* top glow */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-emerald-500/10 to-transparent" />
 
-              <tbody>
-                {pedidosSinFecha.map((p) => (
-                  <tr key={p.id} className="border-b border-white/10 hover:bg-white/5">
-                    <td className="px-6 py-4">
-                      <div className="font-medium text-white">{p.titulo}</div>
-                      <div className="text-xs text-white/35">ID: {p.id}</div>
-                    </td>
+      <div className="w-full overflow-hidden">
+        <table className="w-full table-fixed">
+          {/* colgroup fijo (evita brincos/whitespace issues) */}
+          <colgroup>
+            <col className="w-[320px]" />
+            <col className="w-[170px]" />
+            <col className="w-[150px]" />
+            <col className="w-[170px]" />
+            <col className="w-[150px]" />
+            <col className="w-[150px]" />
+          </colgroup>
 
-                    <td className="px-6 py-4">
-                      {p.nombreUsuario || p.correoUsuario || "Sin información"}
-                    </td>
+          {/* Header fino */}
+          <thead className="bg-white/[0.02]">
+            <tr className="text-left text-[12px] tracking-wide text-white/55">
+              <th className="py-3 px-4 font-semibold">Título</th>
+              <th className="py-3 px-4 font-semibold">Solicitante</th>
+              <th className="py-3 px-4 font-semibold">Entrega propuesta</th>
+              <th className="py-3 px-4 font-semibold">Entrega real</th>
+              <th className="py-3 px-4 font-semibold">Status</th>
+              <th className="py-3 px-4 font-semibold">Detalles</th>
+            </tr>
+          </thead>
 
-                    <td className="px-6 py-4">{p.fechaLimite || "—"}</td>
+          {/* Divisores sutiles */}
+          <tbody className="divide-y divide-white/8">
+            {pedidosSinFecha.map((p) => (
+              <tr
+                key={p.id}
+                className="hover:bg-emerald-500/[0.04] transition align-top"
+              >
+                {/* Título compacto + wrap */}
+                <td className="py-2.5 px-4">
+                  <div
+                    className="max-w-[340px] whitespace-normal break-words leading-snug text-white/90 font-medium"
+                    title={p.titulo || ""}
+                  >
+                    {p.titulo}
+                  </div>
+                  <div className="text-[10px] text-white/35 mt-1">
+                    ID: <span className="break-all">{p.id}</span>
+                  </div>
+                </td>
 
-                    <td className="px-6 py-4">
-                      <input
-                        type="date"
-                        value={p.fechaEntregaReal ?? ""}
-                        onChange={(e) =>
-                          actualizarCampo(p.id, "fechaEntregaReal", e.target.value)
-                        }
-                        className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white outline-none"
-                      />
-                    </td>
+                <td className="py-2.5 px-4 text-white/75">
+                  {p.nombreUsuario || p.correoUsuario || "Sin información"}
+                </td>
 
-                    <td className="px-6 py-4">
-                      <select
-                        value={p.status || "enviado"}
-                        onChange={(e) => actualizarCampo(p.id, "status", e.target.value)}
-                        className={[
-                          "px-4 py-2 rounded-full border outline-none",
-                          "bg-black/30",
-                          statusPillClass(p.status),
-                        ].join(" ")}
-                      >
-                        <option value="enviado">Enviado</option>
-                        <option value="visto">Visto</option>
-                        <option value="en proceso">En proceso</option>
-                        <option value="listo">Listo</option>
-                        <option value="cancelado">Cancelado</option>
-                      </select>
-                    </td>
+                <td className="py-2.5 px-4 text-white/75">
+                  {p.fechaLimite || "—"}
+                </td>
 
-                    <td className="px-6 py-4">
-                      <Link
-                        href={`/solicitudes/listado/${p.id}`}
-                        className="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-white"
-                      >
-                        Ver detalles
-                      </Link>
-                    </td>
-                  </tr>
-                ))}
+                <td className="py-2.5 px-4">
+                  <input
+                    type="date"
+                    value={p.fechaEntregaReal ?? ""}
+                    onChange={(e) =>
+                      actualizarCampo(p.id, "fechaEntregaReal", e.target.value)
+                    }
+                    className="w-[140px] rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/25"
+                  />
+                </td>
 
-                {pedidosSinFecha.length === 0 && (
-                  <tr>
-                    <td className="px-6 py-10 text-center text-white/45" colSpan={6}>
-                      No hay pedidos pendientes de asignar fecha.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+                <td className="py-2.5 px-4">
+                  <select
+                    value={p.status || "enviado"}
+                    onChange={(e) =>
+                      actualizarCampo(p.id, "status", e.target.value)
+                    }
+                    className={statusPillClass(p.status || "enviado")}
+                  >
+                    <option value="enviado">Enviado</option>
+                    <option value="visto">Visto</option>
+                    <option value="en proceso">En proceso</option>
+                    <option value="listo">Listo</option>
+                    <option value="cancelado">Cancelado</option>
+                  </select>
+                </td>
+
+                <td className="py-2.5 px-4">
+                  <Link
+                    href={`/solicitudes/listado/${p.id}`}
+                    className="inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-2 text-white/85 hover:bg-white/[0.08] transition"
+                  >
+                    Ver detalles
+                  </Link>
+                </td>
+              </tr>
+            ))}
+
+            {pedidosSinFecha.length === 0 && (
+              <tr>
+                <td className="py-10 px-4 text-center text-white/45" colSpan={6}>
+                  No hay pedidos pendientes de asignar fecha.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+)}
+
 
       {/* Proyectos con pedidos fechados (tarjetas estilo Mis solicitudes) */}
       {isAdmin && (
