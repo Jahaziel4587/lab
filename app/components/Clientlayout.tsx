@@ -166,7 +166,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             href="/"
             className="font-semibold text-sm tracking-wider text-white/90 hover:text-white transition"
           >
-            LABORATORIO DE PROTOTIPADO
+           BIOANA PROTOTYPING LAB
           </Link>
 
           <nav className="hidden lg:flex items-center gap-6 text-sm text-white/75">

@@ -179,12 +179,10 @@ const scrollTimeline = (dir: "left" | "right") => {
           {/* CTA */}
           <div className="lg:col-span-5">
             <div className="rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-xl shadow-[0_20px_80px_-40px_rgba(0,0,0,0.8)] p-6 sm:p-7">
-              <h1 className="text-xl sm:text-2xl font-semibold tracking-tight">
-                LABORATORIO DE PROTOTIPADO
-              </h1>
+              
 
               <p className="mt-2 text-sm text-white/70 leading-relaxed">
-                Gestiona tus solicitudes, adjunta archivos y da seguimiento a tus
+                Gestiona tus solicitudes, adjunta archivos y da seguimiento a los prototipos de tus
                 proyectos en un solo lugar.
               </p>
 
@@ -199,8 +197,8 @@ const scrollTimeline = (dir: "left" | "right") => {
               </button>
 
               <p className="mt-3 text-xs text-white/55">
-                Te lleva al flujo de pedido (proyecto → servicio → máquina → material →
-                especificaciones).
+                Seleccionarás: proyecto → servicio → máquina → material →
+                especificaciones.
               </p>
             </div>
           </div>
