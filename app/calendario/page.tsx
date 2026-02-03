@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { db, storage } from "@/src/firebase/firebaseConfig";
+import { db } from "@/src/firebase/firebaseConfig";
 import {
   collection,
   getDocs,
@@ -20,60 +20,19 @@ import {
 } from "date-fns";
 import { es } from "date-fns/locale";
 import Link from "next/link";
-import Image from "next/image";
 import { useAuth } from "@/src/Context/AuthContext";
-import { ref as storageRef, uploadBytes, getDownloadURL } from "firebase/storage";
 
 type Pedido = {
   id: string;
   titulo: string;
   proyecto?: string;
-  fechaEntregaReal?: string; // ISO yyyy-MM-dd
-  fechaLimite?: string; // ISO yyyy-MM-dd
+  fechaEntregaReal?: string; // yyyy-MM-dd
+  fechaLimite?: string; // yyyy-MM-dd
   costo?: string;
   status?: string;
   nombreCosto?: string;
   correoUsuario?: string;
   nombreUsuario?: string;
-};
-
-// Opcional: mismas imágenes que usas en /solicitudes
-const proyectosImagenes: { [k: string]: string } = {
- "001.Ocumetics": "/Bioana.jpeg",
-  "002.Labella": "/Bioana.jpeg",
-  //"003.XSONXS": "/XSONX.png",
-  "004.Solvein": "/Bioana.jpeg",
-  "005.XSONXS Wound Heads": "/XSONX.png",
-  "006.AGMI": "/Bioana.jpeg",
-  "007.LumeNXT": "/LumeNXT.jpg",
-  "008.Panter": "/Bioana.jpeg",
-  "009.Recopad": "/Bioana.jpeg",
-  "010.Juno": "/Bioana.jpeg",
-  //"012.Neurocap": "/Bioana.jpeg",
-  "013.T-EZ": "/Bioana.jpeg",
-  "014.QIKCap handle": "/Bioana.jpeg",
-  "015.QIKCap disposible": "/Bioana.jpeg",
-  "016.Portacad shield": "/Bioana.jpeg",
-  "017.JNM": "/Bioana.jpeg",
-  "027.XSCRUB": "/Bioana.jpeg",
-  "030.MUV": "/Bioana.jpeg",
- // "E001.Avarie Menstrual Pads": "/Bioana.jpeg",
-  "E011.Orthodoxo Anclas": "/Bioana.jpeg",
-  "E012.Falcon View": "/Bioana.jpeg",
-  "E019.Othotek": "/Bioana.jpeg",
-  "E020.Hero Cap": "/Bioana.jpeg",
-  "E022.Injectable Dermis": "/Bioana.jpeg",
-  "E023.DiViDiaper": "/Bioana.jpeg",
-  //"E006.Structural Heart": "/Bioana.jpeg",
-  //"E007.Leg wrap": "/Bioana.jpeg",
-  "E025.InjectMate": "/Bioana.jpeg",
-  "E026.Birchconcepts": "/Bioana.jpeg",
-  "E028.Peniflex": "/Bioana.jpeg",
-  "E029.Zipstich": "/Bioana.jpeg",
-  "E031.Orthodoxo Cople": "/Bioana.jpeg",
-  "E033.Sport Care": "/Bioana.jpeg",
-  "E034.Sage guard": "/Bioana.jpeg",
-  "Otro": "/otro.jpg",
 };
 
 export default function CalendarioPage() {
@@ -84,13 +43,13 @@ export default function CalendarioPage() {
   const [currentMonth, setCurrentMonth] = useState<Date>(startOfMonth(new Date()));
   const [nameByEmail, setNameByEmail] = useState<Record<string, string>>({});
 
-  // >>> BUSCADOR (para pedidos con fecha real)
+  // buscador (para fechados)
   const [busquedaFechados, setBusquedaFechados] = useState("");
 
-  // Cargar pedidos + mapa de nombres
+  // -------- cargar pedidos + nombres --------
   useEffect(() => {
     const obtenerPedidos = async () => {
-      // 1) Mapear usuarios (email -> nombre completo)
+      // 1) Mapear usuarios (email -> nombre)
       const usuariosSnap = await getDocs(collection(db, "users"));
       const _nameByEmail: Record<string, string> = {};
       usuariosSnap.forEach((docu) => {
@@ -109,6 +68,7 @@ export default function CalendarioPage() {
       const pedidosData: Pedido[] = [];
       snap.forEach((docSnap) => {
         const data = docSnap.data() as any;
+        const correo = data.correoUsuario || "";
         pedidosData.push({
           id: docSnap.id,
           titulo: data.titulo || "Sin título",
@@ -118,8 +78,8 @@ export default function CalendarioPage() {
           costo: data.costo || "",
           nombreCosto: data.nombreCosto || "",
           status: data.status || "enviado",
-          correoUsuario: data.correoUsuario || "",
-          nombreUsuario: _nameByEmail[data.correoUsuario] || data.correoUsuario || "",
+          correoUsuario: correo,
+          nombreUsuario: _nameByEmail[correo] || correo || "",
         });
       });
 
@@ -129,21 +89,62 @@ export default function CalendarioPage() {
     obtenerPedidos();
   }, []);
 
-  // Recalcular días cuando cambie el mes visible
+function SegmentedProgress({
+  pct,
+  segments = 12,
+}: {
+  pct: number;
+  segments?: number;
+}) {
+  const safe = Number.isFinite(pct) ? Math.max(0, Math.min(100, pct)) : 0;
+  const filled = Math.round((safe / 100) * segments);
+
+  return (
+    <div className="mt-4">
+      <div className="flex items-center gap-3">
+        <div className="flex-1 flex gap-2">
+          {Array.from({ length: segments }).map((_, idx) => {
+            const on = idx < filled;
+            return (
+              <span
+                key={idx}
+                className={[
+                  // IMPORTANTE: altura/anchura consistentes con el look de la card
+                  "h-3 w-6 rounded-full border",
+                  on
+                    ? "bg-emerald-400/90 border-emerald-400/40"
+                    : "bg-white/[0.03] border-white/10",
+                ].join(" ")}
+              />
+            );
+          })}
+        </div>
+
+        <span className="text-xs text-white/60 w-10 text-right">{safe}%</span>
+      </div>
+    </div>
+  );
+}
+
+
+
+
+
+  // recalcular días del mes
   useEffect(() => {
     const inicioMes = startOfMonth(currentMonth);
     const finMes = endOfMonth(currentMonth);
     setDiasDelMes(eachDayOfInterval({ start: inicioMes, end: finMes }));
   }, [currentMonth]);
 
-  // Navegación de meses
+  // navegación meses
   const goPrevMonth = () => setCurrentMonth((d) => addMonths(d, -1));
   const goNextMonth = () => setCurrentMonth((d) => addMonths(d, +1));
 
   const actualizarCampo = async (id: string, campo: string, valor: string) => {
     try {
-      const ref = doc(db, "pedidos", id);
-      await updateDoc(ref, { [campo]: valor });
+      const refDoc = doc(db, "pedidos", id);
+      await updateDoc(refDoc, { [campo]: valor });
       setPedidos((prev) =>
         prev.map((p) => (p.id === id ? { ...p, [campo]: valor } : p))
       );
@@ -152,147 +153,263 @@ export default function CalendarioPage() {
     }
   };
 
-  // 1) Tabla "Todos los pedidos" -> SOLO los que NO tienen fechaEntregaReal
+  // pedidos sin fecha real
   const pedidosSinFecha = useMemo(
     () => pedidos.filter((p) => !p.fechaEntregaReal || p.fechaEntregaReal.trim() === ""),
     [pedidos]
   );
 
-  // 2) Pedidos CON fecha real (para tarjetas + buscador)
+  // pedidos con fecha real
   const pedidosConFecha = useMemo(
     () => pedidos.filter((p) => p.fechaEntregaReal && p.fechaEntregaReal.trim() !== ""),
     [pedidos]
   );
 
-  // 3) Tarjetas por proyecto -> SOLO los que SÍ tienen fechaEntregaReal
+  // tarjetas por proyecto (solo con fecha real)
   const proyectosConFecha = useMemo(() => {
-    const map = new Map<string, number>();
+    const map = new Map<string, { total: number; listos: number; ultima: number }>();
+
     pedidosConFecha.forEach((p) => {
       const key = p.proyecto || "Sin proyecto";
-      map.set(key, (map.get(key) || 0) + 1);
+      const status = (p.status || "").toLowerCase();
+      const isListo = status === "listo";
+      const ts = p.fechaEntregaReal ? new Date(p.fechaEntregaReal + "T00:00:00").getTime() : 0;
+
+      const prev = map.get(key);
+      if (!prev) {
+        map.set(key, { total: 1, listos: isListo ? 1 : 0, ultima: ts });
+      } else {
+        map.set(key, {
+          total: prev.total + 1,
+          listos: prev.listos + (isListo ? 1 : 0),
+          ultima: Math.max(prev.ultima, ts),
+        });
+      }
     });
+
     return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
   }, [pedidosConFecha]);
 
-  // >>> FILTRO DE BUSCADOR (título/proyecto/solicitante)
+  // buscador en fechados (cuando buscas, mostramos tabla de resultados)
   const pedidosFechadosFiltrados = useMemo(() => {
     const q = busquedaFechados.trim().toLowerCase();
     if (!q) return pedidosConFecha;
 
     return pedidosConFecha.filter((p) => {
       const titulo = String(p?.titulo || "").toLowerCase();
-      const proyecto = String(p?.proyecto || "").toLowerCase();
       const solicitante = String(p?.nombreUsuario || p?.correoUsuario || "").toLowerCase();
-      return titulo.includes(q) || proyecto.includes(q) || solicitante.includes(q);
+      return titulo.includes(q) || solicitante.includes(q);
     });
   }, [pedidosConFecha, busquedaFechados]);
 
   const mostrandoBusquedaFechados = busquedaFechados.trim().length > 0;
 
-  return (
-    <div className="max-w-6xl mx-auto bg-white text-black p-6 rounded-xl shadow space-y-10">
-      {/* Header con navegación de meses */}
-      <div className="flex items-center justify-between">
-        <button
-          onClick={goPrevMonth}
-          className="px-3 py-1 rounded-lg border hover:bg-gray-50"
-          aria-label="Mes anterior"
-        >
-          ◀
-        </button>
-        <h1 className="text-xl font-bold text-center">
-          Calendario de Pedidos — {format(currentMonth, "MMMM yyyy", { locale: es })}
-        </h1>
-        <button
-          onClick={goNextMonth}
-          className="px-3 py-1 rounded-lg border hover:bg-gray-50"
-          aria-label="Mes siguiente"
-        >
-          ▶
-        </button>
-      </div>
+  // helpers UI
+  const formatMes = format(currentMonth, "MMMM yyyy", { locale: es });
 
-      {/* CABECERAS DÍAS + CUADRÍCULA */}
-      <div className="grid grid-cols-7 gap-2 text-sm">
-        {["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"].map((dia) => (
-          <div key={dia} className="text-center font-semibold">
-            {dia}
+  const statusLabel = (s?: string) => {
+    const v = (s || "enviado").toLowerCase();
+    if (v === "en proceso") return "En proceso";
+    if (v === "listo") return "Listo";
+    if (v === "visto") return "Visto";
+    if (v === "cancelado") return "Cancelado";
+    return "Enviado";
+  };
+
+  const statusPillClass = (s?: string) => {
+    const v = (s || "enviado").toLowerCase();
+    if (v === "listo") return "border-emerald-500/40 text-emerald-200 bg-emerald-500/10";
+    if (v === "en proceso") return "border-yellow-500/40 text-yellow-200 bg-yellow-500/10";
+    if (v === "visto") return "border-sky-500/40 text-sky-200 bg-sky-500/10";
+    if (v === "cancelado") return "border-red-500/40 text-red-200 bg-red-500/10";
+    return "border-white/10 text-white/80 bg-white/5";
+  };
+
+  return (
+    <div className="max-w-6xl mx-auto p-6 space-y-10">
+      {/* CONTENEDOR "Mis solicitudes style" */}
+      <div className="rounded-2xl border border-white/10 bg-black/40 backdrop-blur-md shadow-[0_20px_80px_rgba(0,0,0,0.55)] overflow-hidden">
+        {/* Header */}
+        <div className="px-6 py-5 border-b border-white/10 flex items-center justify-between">
+          <button
+            onClick={goPrevMonth}
+            className="h-10 w-10 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-white flex items-center justify-center"
+            aria-label="Mes anterior"
+            title="Mes anterior"
+          >
+            ◀
+          </button>
+
+          <div className="text-center">
+            <h1 className="text-lg md:text-xl font-semibold text-white">
+              Calendario de pedidos
+            </h1>
+            <p className="text-sm text-white/70 capitalize">{formatMes}</p>
           </div>
-        ))}
-        {(() => {
-          const primerDia = diasDelMes.length > 0 ? diasDelMes[0].getDay() : 0;
-          const espacios = Array(primerDia).fill(null);
-          return [...espacios, ...diasDelMes].map((dia, i) => {
-            if (!dia) return <div key={`empty-${i}`} />;
-            const pedidosDelDia = pedidos.filter((p) =>
-              p.fechaEntregaReal
-                ? isSameDay(new Date(p.fechaEntregaReal + "T00:00:00"), dia)
-                : false
-            );
-            return (
-              <div key={dia.toISOString()} className="border p-2 rounded h-28 overflow-auto">
-                <div className="font-semibold">{format(dia, "d", { locale: es })}</div>
-                <div className="text-xs mt-1 space-y-1">
-                  {pedidosDelDia.map((p) => (
-                    <div key={p.id} className="truncate" title={p.titulo}>
-                      {isAdmin ? (
-                        <Link
-                          href={`/solicitudes/listado/${p.id}`}
-                          className="text-blue-600 hover:underline"
-                        >
-                          {p.titulo}
-                        </Link>
-                      ) : (
-                        <span>{p.titulo}</span>
+
+          <button
+            onClick={goNextMonth}
+            className="h-10 w-10 rounded-xl border border-white/10 bg-white/5 hover:bg-white/10 text-white flex items-center justify-center"
+            aria-label="Mes siguiente"
+            title="Mes siguiente"
+          >
+            ▶
+          </button>
+        </div>
+
+        {/* Calendario */}
+        <div className="p-6">
+          {/* Cabecera días */}
+          <div className="grid grid-cols-7 gap-3 text-xs md:text-sm text-white/70 mb-3">
+            {["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"].map((dia) => (
+              <div key={dia} className="text-center font-semibold">
+                {dia}
+              </div>
+            ))}
+          </div>
+
+          {/* Cuadrícula */}
+          <div className="grid grid-cols-7 gap-3">
+            {(() => {
+              const primerDia = diasDelMes.length > 0 ? diasDelMes[0].getDay() : 0;
+              const espacios = Array(primerDia).fill(null);
+
+              return [...espacios, ...diasDelMes].map((dia, i) => {
+                if (!dia) {
+                  return <div key={`empty-${i}`} className="min-h-[120px]" />;
+                }
+
+                const pedidosDelDia = pedidosConFecha.filter((p) =>
+                  p.fechaEntregaReal
+                    ? isSameDay(new Date(p.fechaEntregaReal + "T00:00:00"), dia)
+                    : false
+                );
+
+                const esHoy =
+                  isSameDay(dia, new Date());
+
+                return (
+                  <div
+                    key={dia.toISOString()}
+                    className={[
+                      "min-h-[140px] rounded-2xl border bg-white/5 backdrop-blur-md",
+                      esHoy ? "border-teal-400/40" : "border-white/10",
+                      "p-3",
+                      "hover:bg-white/10 transition",
+                    ].join(" ")}
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-white font-semibold">
+                        {format(dia, "d", { locale: es })}
+                      </span>
+                      {pedidosDelDia.length > 0 && (
+                        <span className="text-[11px] text-white/60">
+                          {pedidosDelDia.length}
+                        </span>
                       )}
                     </div>
-                  ))}
-                </div>
-              </div>
-            );
-          });
-        })()}
+
+                    {/* LISTA SCROLLEABLE (si hay muchos) */}
+                    <div className="max-h-[92px] overflow-y-auto pr-1 space-y-1">
+                      {pedidosDelDia.length === 0 ? (
+                        <div className="text-xs text-white/35">—</div>
+                      ) : (
+                        pedidosDelDia.map((p) => (
+                          <div key={p.id} className="w-full">
+                            {isAdmin ? (
+                              <Link
+                                href={`/solicitudes/listado/${p.id}`}
+                                className="block text-xs text-white/85 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-2 py-1 truncate"
+                                title={p.titulo}
+                              >
+                                {p.titulo}
+                              </Link>
+                            ) : (
+                              <div
+                                className="text-xs text-white/85 bg-white/5 border border-white/10 rounded-lg px-2 py-1 truncate"
+                                title={p.titulo}
+                              >
+                                {p.titulo}
+                              </div>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                );
+              });
+            })()}
+          </div>
+        </div>
       </div>
 
-      {/* TABLA GENERAL: SOLO pedidos SIN fecha real */}
+      {/* TABLA: pedidos sin fecha real (igual vibe Mis solicitudes) */}
       {isAdmin && (
-        <div className="space-y-4">
-          <h2 className="text-lg font-semibold">Pedidos pendientes de fecha</h2>
+        <div className="rounded-2xl border border-white/10 bg-black/40 backdrop-blur-md shadow-[0_20px_80px_rgba(0,0,0,0.55)] overflow-hidden">
+          <div className="px-6 py-5 border-b border-white/10 flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-white">
+                Pedidos pendientes de fecha
+              </h2>
+              <p className="text-sm text-white/60">
+                Asigna fecha real y ajusta status.
+              </p>
+            </div>
+
+            <div className="text-sm text-white/60">
+              Mostrando{" "}
+              <span className="text-white font-semibold">{pedidosSinFecha.length}</span>
+            </div>
+          </div>
+
           <div className="overflow-x-auto">
-            <table className="min-w-full text-sm bg-white text-black rounded shadow-md">
-              <thead className="bg-gray-100">
-                <tr>
-                  <th className="px-4 py-2">Título</th>
-                  <th className="px-4 py-2">Solicitante</th>
-                  <th className="px-4 py-2">Fecha propuesta</th>
-                  <th className="px-4 py-2">Fecha real</th>
-                  <th className="px-4 py-2">Status</th>
-                  <th className="px-4 py-2">Detalles</th>
+            <table className="min-w-full text-sm text-white/85">
+              <thead className="text-left text-white/55">
+                <tr className="border-b border-white/10">
+                  <th className="px-6 py-4 font-semibold">Título</th>
+                  <th className="px-6 py-4 font-semibold">Solicitante</th>
+                  <th className="px-6 py-4 font-semibold">Entrega propuesta</th>
+                  <th className="px-6 py-4 font-semibold">Entrega real</th>
+                  <th className="px-6 py-4 font-semibold">Status</th>
+                  <th className="px-6 py-4 font-semibold">Detalles</th>
                 </tr>
               </thead>
+
               <tbody>
                 {pedidosSinFecha.map((p) => (
-                  <tr key={p.id} className="border-t">
-                    <td className="px-4 py-2">{p.titulo}</td>
-                    <td className="px-4 py-2">
+                  <tr key={p.id} className="border-b border-white/10 hover:bg-white/5">
+                    <td className="px-6 py-4">
+                      <div className="font-medium text-white">{p.titulo}</div>
+                      <div className="text-xs text-white/35">ID: {p.id}</div>
+                    </td>
+
+                    <td className="px-6 py-4">
                       {p.nombreUsuario || p.correoUsuario || "Sin información"}
                     </td>
-                    <td className="px-4 py-2">{p.fechaLimite || "No definida"}</td>
-                    <td className="px-4 py-2">
+
+                    <td className="px-6 py-4">{p.fechaLimite || "—"}</td>
+
+                    <td className="px-6 py-4">
                       <input
                         type="date"
                         value={p.fechaEntregaReal ?? ""}
                         onChange={(e) =>
                           actualizarCampo(p.id, "fechaEntregaReal", e.target.value)
                         }
-                        className="border px-2 py-1 rounded"
+                        className="px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-white outline-none"
                       />
                     </td>
-                    <td className="px-4 py-2">
+
+                    <td className="px-6 py-4">
                       <select
                         value={p.status || "enviado"}
                         onChange={(e) => actualizarCampo(p.id, "status", e.target.value)}
-                        className="border px-2 py-1 rounded"
+                        className={[
+                          "px-4 py-2 rounded-full border outline-none",
+                          "bg-black/30",
+                          statusPillClass(p.status),
+                        ].join(" ")}
                       >
                         <option value="enviado">Enviado</option>
                         <option value="visto">Visto</option>
@@ -301,19 +418,21 @@ export default function CalendarioPage() {
                         <option value="cancelado">Cancelado</option>
                       </select>
                     </td>
-                    <td className="px-4 py-2">
+
+                    <td className="px-6 py-4">
                       <Link
                         href={`/solicitudes/listado/${p.id}`}
-                        className="text-blue-600 hover:underline"
+                        className="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-white"
                       >
                         Ver detalles
                       </Link>
                     </td>
                   </tr>
                 ))}
+
                 {pedidosSinFecha.length === 0 && (
                   <tr>
-                    <td className="px-4 py-6 text-center text-gray-500" colSpan={6}>
+                    <td className="px-6 py-10 text-center text-white/45" colSpan={6}>
                       No hay pedidos pendientes de asignar fecha.
                     </td>
                   </tr>
@@ -324,26 +443,32 @@ export default function CalendarioPage() {
         </div>
       )}
 
-      {/* PROYECTOS CON PEDIDOS FECHADOS + BUSCADOR */}
+      {/* Proyectos con pedidos fechados (tarjetas estilo Mis solicitudes) */}
       {isAdmin && (
-        <div className="space-y-4">
-          {/* Header + buscador al lado */}
-          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-            <h2 className="text-lg font-semibold">Proyectos con pedidos fechados</h2>
+        <div className="rounded-2xl border border-white/10 bg-black/40 backdrop-blur-md shadow-[0_20px_80px_rgba(0,0,0,0.55)] overflow-hidden">
+          <div className="px-6 py-5 border-b border-white/10 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+            <div>
+              <h2 className="text-lg font-semibold text-white">
+                Proyectos con pedidos fechados
+              </h2>
+              <p className="text-sm text-white/60">
+                Busca por título o solicitante, o entra por proyecto.
+              </p>
+            </div>
 
             <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
               <input
                 type="text"
                 value={busquedaFechados}
                 onChange={(e) => setBusquedaFechados(e.target.value)}
-                placeholder="Buscar pedido (título / proyecto / solicitante)..."
-                className="w-full sm:w-[420px] border px-3 py-2 rounded"
+                placeholder="Buscar pedido (título / solicitante)..."
+                className="w-full sm:w-[420px] px-4 py-2 rounded-xl bg-white/5 border border-white/10 text-white placeholder:text-white/40 outline-none"
               />
               {mostrandoBusquedaFechados && (
                 <button
                   onClick={() => setBusquedaFechados("")}
-                  className="px-3 py-2 rounded border hover:bg-gray-50"
-                  title="Limpiar búsqueda"
+                  className="px-4 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-white"
+                  title="Limpiar"
                 >
                   Limpiar
                 </button>
@@ -351,46 +476,54 @@ export default function CalendarioPage() {
             </div>
           </div>
 
-          {/* Si hay búsqueda: mostrar resultados en TABLA (fuera de tarjetas) */}
+          {/* Si hay búsqueda: tabla de resultados (mismo estilo) */}
           {mostrandoBusquedaFechados ? (
-            <div className="space-y-3">
-              <div className="text-sm text-gray-600">
+            <div className="p-6 space-y-3">
+              <div className="text-sm text-white/60">
                 Mostrando{" "}
-                <span className="font-semibold">{pedidosFechadosFiltrados.length}</span>{" "}
-                de <span className="font-semibold">{pedidosConFecha.length}</span>{" "}
-                pedidos con fecha real.
+                <span className="text-white font-semibold">{pedidosFechadosFiltrados.length}</span>{" "}
+                de <span className="text-white font-semibold">{pedidosConFecha.length}</span>{" "}
+                pedidos.
               </div>
 
               <div className="overflow-x-auto">
-                <table className="min-w-full text-sm bg-white text-black rounded shadow-md">
-                  <thead className="bg-gray-100">
-                    <tr>
-                      <th className="px-4 py-2">Título</th>
-                      <th className="px-4 py-2">Proyecto</th>
-                      <th className="px-4 py-2">Solicitante</th>
-                      <th className="px-4 py-2">Fecha propuesta</th>
-                      <th className="px-4 py-2">Fecha real</th>
-                      <th className="px-4 py-2">Status</th>
-                      <th className="px-4 py-2">Detalles</th>
+                <table className="min-w-full text-sm text-white/85">
+                  <thead className="text-left text-white/55">
+                    <tr className="border-b border-white/10">
+                      <th className="px-6 py-4 font-semibold">Título</th>
+                      <th className="px-6 py-4 font-semibold">Solicitante</th>
+                      <th className="px-6 py-4 font-semibold">Entrega propuesta</th>
+                      <th className="px-6 py-4 font-semibold">Entrega real</th>
+                      <th className="px-6 py-4 font-semibold">Status</th>
+                      <th className="px-6 py-4 font-semibold">Detalles</th>
                     </tr>
                   </thead>
                   <tbody>
                     {pedidosFechadosFiltrados.map((p) => (
-                      <tr key={p.id} className="border-t">
-                        <td className="px-4 py-2">{p.titulo}</td>
-                        <td className="px-4 py-2">{p.proyecto || "Sin proyecto"}</td>
-                        <td className="px-4 py-2">
+                      <tr key={p.id} className="border-b border-white/10 hover:bg-white/5">
+                        <td className="px-6 py-4">
+                          <div className="font-medium text-white">{p.titulo}</div>
+                          <div className="text-xs text-white/35">ID: {p.id}</div>
+                        </td>
+                        <td className="px-6 py-4">
                           {p.nombreUsuario || p.correoUsuario || "Sin información"}
                         </td>
-                        <td className="px-4 py-2">{p.fechaLimite || "No definida"}</td>
-                        <td className="px-4 py-2">{p.fechaEntregaReal || "-"}</td>
-                        <td className="px-4 py-2">
-                          <span className="capitalize">{p.status || "enviado"}</span>
+                        <td className="px-6 py-4">{p.fechaLimite || "—"}</td>
+                        <td className="px-6 py-4">{p.fechaEntregaReal || "—"}</td>
+                        <td className="px-6 py-4">
+                          <span
+                            className={[
+                              "inline-flex items-center px-4 py-2 rounded-full border",
+                              statusPillClass(p.status),
+                            ].join(" ")}
+                          >
+                            {statusLabel(p.status)}
+                          </span>
                         </td>
-                        <td className="px-4 py-2">
+                        <td className="px-6 py-4">
                           <Link
                             href={`/solicitudes/listado/${p.id}`}
-                            className="text-blue-600 hover:underline"
+                            className="inline-flex items-center justify-center px-4 py-2 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-white"
                           >
                             Ver detalles
                           </Link>
@@ -400,7 +533,7 @@ export default function CalendarioPage() {
 
                     {pedidosFechadosFiltrados.length === 0 && (
                       <tr>
-                        <td className="px-4 py-6 text-center text-gray-500" colSpan={7}>
+                        <td className="px-6 py-10 text-center text-white/45" colSpan={6}>
                           No hay resultados para esa búsqueda.
                         </td>
                       </tr>
@@ -410,36 +543,90 @@ export default function CalendarioPage() {
               </div>
             </div>
           ) : (
-            // Si NO hay búsqueda: mostrar tarjetas por proyecto como antes
-            <>
+            // Si NO hay búsqueda: tarjetas por proyecto estilo Mis solicitudes
+            <div className="p-6">
               {proyectosConFecha.length === 0 ? (
-                <p className="text-sm text-gray-600">
+                <p className="text-sm text-white/60">
                   Aún no hay pedidos con <em>fecha real</em>.
                 </p>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-                  {proyectosConFecha.map(([proyecto, count]) => (
-                    <Link
-                      key={proyecto}
-                      href={`/calendario/proyectos/${encodeURIComponent(proyecto)}`}
-                      className="relative rounded-xl overflow-hidden shadow-lg group"
-                    >
-                      <Image
-                        src={proyectosImagenes[proyecto] || "/otro.jpg"}
-                        alt={proyecto}
-                        width={500}
-                        height={300}
-                        className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
-                      />
-                      <div className="absolute bottom-3 left-3 right-3 bg-white text-black rounded-full px-4 py-1 flex justify-between items-center">
-                        <span className="text-sm font-medium truncate">{proyecto}</span>
-                        <span className="text-xs opacity-70">{count}</span>
-                      </div>
-                    </Link>
-                  ))}
+                  {proyectosConFecha.map(([proyecto, stats]) => {
+                    const pct =
+                      stats.total > 0 ? Math.round((stats.listos / stats.total) * 100) : 0;
+
+                    // “última actividad” simple en días (aprox)
+                    const dias =
+                      stats.ultima > 0
+                        ? Math.max(0, Math.round((Date.now() - stats.ultima) / (1000 * 60 * 60 * 24)))
+                        : null;
+
+                    return (
+                      <Link
+                        key={proyecto}
+                        href={`/calendario/proyectos/${encodeURIComponent(proyecto)}`}
+                        className="group rounded-2xl border border-white/10 bg-white/5 hover:bg-white/10 transition overflow-hidden"
+                      >
+                        <div className="p-5">
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0">
+                              <div className="text-xl font-semibold text-white truncate">
+                                {proyecto}
+                              </div>
+                              <div className="text-sm text-white/60">
+                                Última actividad:{" "}
+                                {dias === null ? "—" : dias === 0 ? "Hoy" : `Hace ${dias} días`}
+                              </div>
+                            </div>
+
+                            <div className="h-12 w-12 rounded-2xl border border-white/10 bg-white/5 flex items-center justify-center text-white/80 group-hover:text-white">
+                              →
+                            </div>
+                          </div>
+
+                          <div className="mt-4 flex gap-2">
+                            <div className="px-3 py-1 rounded-full border border-white/10 bg-white/5 text-white/80 text-sm">
+                              Pedidos: <span className="text-white font-semibold">{stats.total}</span>
+                            </div>
+                            <div className="px-3 py-1 rounded-full border border-white/10 bg-white/5 text-white/80 text-sm">
+                              Listos: <span className="text-white font-semibold">{stats.listos}</span>
+                            </div>
+                          </div>
+
+                          <div className="mt-4 flex items-center gap-3">
+                            {/* mini progress bar con “píldoras” */}
+                            <div className="flex-1 flex gap-2">
+                              {Array.from({ length: 9 }).map((_, idx) => {
+                                const filled = idx < Math.round((pct / 100) * 9);
+                                return (
+                                  <span
+                                    key={idx}
+                                    className={[
+                                      "h-2 w-5 rounded-full border",
+                                      filled
+                                        ? "bg-emerald-400/90 border-emerald-400/40"
+                                        : "bg-white/5 border-white/10",
+                                    ].join(" ")}
+                                  />
+                                );
+                              })}
+                            </div>
+                            <div className="text-sm text-white/70 w-10 text-right">
+                              {pct}%
+                            </div>
+                          </div>
+
+                          <div className="mt-4 flex items-center justify-between text-sm text-white/60">
+                            <span>Porcentaje de solicitudes terminadas</span>
+                            <span className="text-white/80">Ver proyecto</span>
+                          </div>
+                        </div>
+                      </Link>
+                    );
+                  })}
                 </div>
               )}
-            </>
+            </div>
           )}
         </div>
       )}
