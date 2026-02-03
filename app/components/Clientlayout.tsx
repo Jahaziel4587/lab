@@ -4,15 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "../../src/Context/AuthContext";
 import { FiUser, FiBell } from "react-icons/fi";
-import {
-  collection,
-  doc,
-  onSnapshot,
-  query,
-  updateDoc,
-  where,
-} from "firebase/firestore";
+import { collection, doc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
 import { db } from "@/src/firebase/firebaseConfig";
+import ParticlesBackground from "../components/ParticlesBackground";
 
 type NotiItem = {
   id: string;
@@ -26,45 +20,30 @@ type NotiItem = {
 
 export default function ClientLayout({ children }: { children: React.ReactNode }) {
   const { user, logout, isAdmin, displayName } = useAuth();
-
   const nombreUsuario = displayName || user?.email || "";
 
-  // ---- Estado de notificaciones ----
   const [userNotis, setUserNotis] = useState<NotiItem[]>([]);
   const [adminNotis, setAdminNotis] = useState<NotiItem[]>([]);
   const [panelAbierto, setPanelAbierto] = useState(false);
 
-  // merge de ambas listas (si es admin ve las dos) y ORDENAMOS AQUÍ
   const notificaciones = useMemo(() => {
     const base = [...userNotis, ...(isAdmin ? adminNotis : [])];
     return base.sort((a, b) => {
-      const ta =
-        a.createdAt?.toDate?.() instanceof Date
-          ? a.createdAt.toDate().getTime()
-          : 0;
-      const tb =
-        b.createdAt?.toDate?.() instanceof Date
-          ? b.createdAt.toDate().getTime()
-          : 0;
-      return tb - ta; // más recientes primero
+      const ta = a.createdAt?.toDate?.() instanceof Date ? a.createdAt.toDate().getTime() : 0;
+      const tb = b.createdAt?.toDate?.() instanceof Date ? b.createdAt.toDate().getTime() : 0;
+      return tb - ta;
     });
   }, [userNotis, adminNotis, isAdmin]);
 
   const unreadCount = notificaciones.filter((n) => !n.leido).length;
 
-  // ---- Suscripción a notificaciones de usuario (SIN orderBy) ----
   useEffect(() => {
     if (!user?.email) {
       setUserNotis([]);
       return;
     }
 
-    const qNotiUser = query(
-      collection(db, "notifications"),
-      where("userEmail", "==", user.email)
-      // SIN orderBy("createdAt")
-    );
-
+    const qNotiUser = query(collection(db, "notifications"), where("userEmail", "==", user.email));
     const unsub = onSnapshot(
       qNotiUser,
       (snap) => {
@@ -83,26 +62,19 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         });
         setUserNotis(arr);
       },
-      (err) => {
-        console.error("Error escuchando notifications de usuario:", err);
-      }
+      (err) => console.error("Error escuchando notifications de usuario:", err)
     );
 
     return () => unsub();
   }, [user?.email]);
 
-  // ---- Suscripción a notificaciones de admins (también sin orderBy para evitar líos) ----
   useEffect(() => {
     if (!isAdmin) {
       setAdminNotis([]);
       return;
     }
 
-    const qAdmin = query(
-      collection(db, "notifications_admin")
-      // SIN orderBy("createdAt")
-    );
-
+    const qAdmin = query(collection(db, "notifications_admin"));
     const unsub = onSnapshot(
       qAdmin,
       (snap) => {
@@ -121,15 +93,12 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         });
         setAdminNotis(arr);
       },
-      (err) => {
-        console.error("Error escuchando notifications_admin:", err);
-      }
+      (err) => console.error("Error escuchando notifications_admin:", err)
     );
 
     return () => unsub();
   }, [isAdmin]);
 
-  // ---- Marcar todas como leídas cuando se abre el panel ----
   const marcarTodasLeidas = async () => {
     const pendientes = notificaciones.filter((n) => !n.leido);
     if (pendientes.length === 0) return;
@@ -149,177 +118,244 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const togglePanel = () => {
     setPanelAbierto((prev) => {
       const next = !prev;
-      if (!prev && next) {
-        marcarTodasLeidas();
-      }
+      if (!prev && next) marcarTodasLeidas();
       return next;
     });
   };
 
   const handleIconClick = async () => {
-    if (user) {
-      await logout();
-    } else {
-      window.location.href = "/login";
-    }
+    if (user) await logout();
+    else window.location.href = "/login";
   };
 
   return (
-    <div
-      className="min-h-screen text-white"
-      style={{
-        backgroundImage: "url('/fondo-bioana.jpg')",
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-      }}
-    >
-      <header className="flex items-center justify-between px-8 py-4 bg-black text-white">
-        <Link href="/" className="font-bold text-sm tracking-wider hover:underline">
-          LABORATORIO DE PROTOTIPADO
-        </Link>
+    <div className="min-h-screen text-white relative overflow-hidden bg-neutral-950">
+      {/* Fondo tipo “pro” (sin imagen pesada) */}
+      <div className="pointer-events-none absolute inset-0">
+        {/* glow arriba izquierda */}
+<div className="absolute -top-56 -left-56 h-[720px] w-[720px] rounded-full bg-emerald-400/14 blur-3xl" />
+{/* glow derecha */}
+<div className="absolute -top-40 -right-64 h-[760px] w-[760px] rounded-full bg-teal-400/12 blur-3xl" />
+{/* glow inferior */}
+<div className="absolute -bottom-64 left-1/3 h-[760px] w-[760px] rounded-full bg-emerald-500/10 blur-3xl" />
 
-        <div className="flex gap-6 items-center text-sm font-light">
-          <Link href="/calendario" className="hover:underline">
-            Calendario
-          </Link>
-          <Link href="/about" className="hover:underline">
-            Información
-          </Link>
-          <Link href="/collection" className="hover:underline">
-            Colección
-          </Link>
-          <Link href="/solicitudes" className="hover:underline">
-            Mis proyectos
-          </Link>
-          <Link href="/hacer-pedido/proyecto" className="hover:underline">
-            Hacer pedido
-          </Link>
-          <Link href="/inventario" className="hover:underline">
-            Inventario
+{/* gradiente y viñeta */}
+<div className="absolute inset-0 bg-gradient-to-b from-white/[0.06] via-transparent to-black/55" />
+<div className="absolute inset-0 [background:radial-gradient(ellipse_at_center,transparent_0%,rgba(0,0,0,0.65)_70%,rgba(0,0,0,0.85)_100%)]" />
+
+        {/* Partículas */}
+<div className="pointer-events-none absolute inset-0 z-0">
+  <ParticlesBackground />
+</div>
+        {/* “ruido” simple con gradients (ligero) */}
+        <div
+        
+          className="absolute inset-0 opacity-[0.06]"
+          
+          style={{
+            backgroundImage:
+              "repeating-linear-gradient(0deg, rgba(255,255,255,0.08) 0px, rgba(255,255,255,0.08) 1px, transparent 1px, transparent 3px)",
+          }}
+        />
+      </div>
+
+      {/* HEADER glass */}
+      <header className="sticky top-0 z-40 border-b border-white/10 bg-black/40 backdrop-blur-xl">
+        <div className="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between">
+          <Link
+            href="/"
+            className="font-semibold text-sm tracking-wider text-white/90 hover:text-white transition"
+          >
+            LABORATORIO DE PROTOTIPADO
           </Link>
 
-          {isAdmin && (
-            <Link href="/cotizador" className="hover:underline">
-              Cotizador
+          <nav className="hidden lg:flex items-center gap-6 text-sm text-white/75">
+            <Link href="/calendario" className="hover:text-white transition">
+              Calendario
             </Link>
-          )}
-          {isAdmin && (
-            <Link href="/analitica" className="hover:underline">
-              Análisis
+            <Link href="/about" className="hover:text-white transition">
+              Información
             </Link>
-          )}
+            <Link href="/collection" className="hover:text-white transition">
+              Colección
+            </Link>
+            <Link href="/solicitudes" className="hover:text-white transition">
+              Mis proyectos
+            </Link>
+            <Link href="/hacer-pedido/proyecto" className="hover:text-white transition">
+              Hacer pedido
+            </Link>
+            <Link href="/inventario" className="hover:text-white transition">
+              Inventario
+            </Link>
 
-          {/* ---- Campana de notificaciones ---- */}
-          {user && (
-            <div className="relative">
+            {isAdmin && (
+              <Link href="/cotizador" className="hover:text-white transition">
+                Cotizador
+              </Link>
+            )}
+            {isAdmin && (
+              <Link href="/analitica" className="hover:text-white transition">
+                Análisis
+              </Link>
+            )}
+          </nav>
+
+          {/* derecha: campana + nombre + usuario */}
+          <div className="flex items-center gap-3">
+            {/* Campana */}
+            {user && (
+              <div className="relative">
+                <button
+                  type="button"
+                  onClick={togglePanel}
+                  className="relative w-9 h-9 rounded-2xl border border-white/10 bg-white/[0.04]
+                    text-white flex items-center justify-center hover:bg-white/[0.07] transition"
+                >
+                  <FiBell />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[9px] font-bold rounded-full px-1.5 py-[1px]">
+                      {unreadCount > 9 ? "9+" : unreadCount}
+                    </span>
+                  )}
+                </button>
+
+                {panelAbierto && (
+                  <div className="absolute right-0 mt-2 w-80 rounded-2xl border border-white/10 bg-black/80 backdrop-blur-xl shadow-2xl z-50 p-3 max-h-96 overflow-y-auto text-xs">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="font-semibold text-sm text-white">
+                        Notificaciones
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setPanelAbierto(false)}
+                        className="text-[11px] text-white/60 hover:text-white transition"
+                      >
+                        Cerrar
+                      </button>
+                    </div>
+
+                    {notificaciones.length === 0 ? (
+                      <p className="text-white/60 text-xs">
+                        No tienes notificaciones por el momento.
+                      </p>
+                    ) : (
+                      <ul className="space-y-2">
+                        {notificaciones.map((n) => {
+                          const fecha =
+                            n.createdAt?.toDate?.() instanceof Date
+                              ? n.createdAt.toDate()
+                              : null;
+
+                          const href = n.pedidoId
+                            ? `/solicitudes/listado/${n.pedidoId}`
+                            : undefined;
+
+                          const contenido = (
+                            <div
+                              className={`rounded-xl border border-white/10 px-3 py-2 ${
+                                n.leido ? "bg-white/[0.03]" : "bg-white/[0.06]"
+                              }`}
+                            >
+                              <div className="text-[11px] leading-snug text-white/90">
+                                {n.mensaje}
+                              </div>
+                              {fecha && (
+                                <div className="text-[10px] text-white/55 mt-1">
+                                  {fecha.toLocaleDateString()}{" "}
+                                  {fecha.toLocaleTimeString([], {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </div>
+                              )}
+                            </div>
+                          );
+
+                          return (
+                            <li key={`${n.origen}-${n.id}`}>
+                              {href ? (
+                                <Link href={href} onClick={() => setPanelAbierto(false)}>
+                                  {contenido}
+                                </Link>
+                              ) : (
+                                contenido
+                              )}
+                            </li>
+                          );
+                        })}
+                      </ul>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {user && (
+              <span className="hidden sm:inline text-xs font-semibold text-white/80">
+                {nombreUsuario}
+              </span>
+            )}
+
+            {/* Usuario */}
+            <div className="relative group">
               <button
                 type="button"
-                onClick={togglePanel}
-                className="relative w-8 h-8 rounded-full bg-white text-black flex items-center justify-center hover:bg-gray-200"
+                onClick={handleIconClick}
+                className="w-9 h-9 rounded-2xl border border-white/10 bg-white/[0.04]
+                  text-white flex items-center justify-center hover:bg-white/[0.07] transition"
               >
-                <FiBell />
-                {unreadCount > 0 && (
-                  <span className="absolute -top-1 -right-1 bg-red-600 text-white text-[9px] font-bold rounded-full px-1.5 py-[1px]">
-                    {unreadCount > 9 ? "9+" : unreadCount}
-                  </span>
-                )}
+                <FiUser />
               </button>
 
-              {panelAbierto && (
-                <div className="absolute right-0 mt-2 w-80 bg-white text-black rounded-xl shadow-lg z-30 p-3 max-h-96 overflow-y-auto text-xs">
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="font-semibold text-sm">Notificaciones</span>
-                    <button
-                      type="button"
-                      onClick={() => setPanelAbierto(false)}
-                      className="text-[11px] text-gray-500 hover:text-black"
-                    >
-                      Cerrar
-                    </button>
-                  </div>
-
-                  {notificaciones.length === 0 ? (
-                    <p className="text-gray-500 text-xs">
-                      No tienes notificaciones por el momento.
-                    </p>
-                  ) : (
-                    <ul className="space-y-2">
-                      {notificaciones.map((n) => {
-                        const fecha =
-                          n.createdAt?.toDate?.() instanceof Date
-                            ? n.createdAt.toDate()
-                            : null;
-                        const href = n.pedidoId
-                          ? `/solicitudes/listado/${n.pedidoId}`
-                          : undefined;
-
-                        const contenido = (
-                          <div
-                            className={`border rounded-lg px-2 py-1.5 ${
-                              n.leido ? "bg-white" : "bg-gray-100"
-                            }`}
-                          >
-                            <div className="text-[11px] leading-snug">
-                              {n.mensaje}
-                            </div>
-                            {fecha && (
-                              <div className="text-[9px] text-gray-500 mt-1">
-                                {fecha.toLocaleDateString()}{" "}
-                                {fecha.toLocaleTimeString([], {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
-                              </div>
-                            )}
-                          </div>
-                        );
-
-                        return (
-                          <li key={`${n.origen}-${n.id}`}>
-                            {href ? (
-                              <Link href={href} onClick={() => setPanelAbierto(false)}>
-                                {contenido}
-                              </Link>
-                            ) : (
-                              contenido
-                            )}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
+              <div className="absolute right-0 mt-2 hidden group-hover:flex flex-col z-50">
+                <div className="bg-black/80 backdrop-blur-xl border border-white/10 text-white text-xs px-3 py-2 rounded-xl shadow-lg pointer-events-none">
+                  {user ? "Cerrar sesión" : "Iniciar sesión"}
                 </div>
-              )}
-            </div>
-          )}
-
-          {user && (
-            <span className="text-xs font-semibold text-white mr-1">
-              {nombreUsuario}
-            </span>
-          )}
-
-          {/* Icono de usuario / login-logout */}
-          <div className="relative group">
-            <div
-              onClick={handleIconClick}
-              className="w-8 h-8 rounded-full bg-white text-black flex items-center justify-center cursor-pointer"
-            >
-              <FiUser />
-            </div>
-
-            <div className="absolute right-0 mt-2 hidden group-hover:flex flex-col z-20">
-              <div className="bg-white text-black text-xs px-3 py-2 rounded shadow-md pointer-events-none">
-                {user ? "Cerrar sesión" : "Iniciar sesión"}
               </div>
             </div>
           </div>
         </div>
+
+        {/* navbar móvil simple (si quieres, luego lo hacemos hamburger bonito) */}
+        <div className="lg:hidden px-6 pb-4">
+          <div className="flex flex-wrap gap-3 text-xs text-white/70">
+            <Link href="/calendario" className="hover:text-white transition">
+              Calendario
+            </Link>
+            <Link href="/about" className="hover:text-white transition">
+              Información
+            </Link>
+            <Link href="/collection" className="hover:text-white transition">
+              Colección
+            </Link>
+            <Link href="/solicitudes" className="hover:text-white transition">
+              Mis proyectos
+            </Link>
+            <Link href="/hacer-pedido/proyecto" className="hover:text-white transition">
+              Hacer pedido
+            </Link>
+            <Link href="/inventario" className="hover:text-white transition">
+              Inventario
+            </Link>
+            {isAdmin && (
+              <Link href="/cotizador" className="hover:text-white transition">
+                Cotizador
+              </Link>
+            )}
+            {isAdmin && (
+              <Link href="/analitica" className="hover:text-white transition">
+                Análisis
+              </Link>
+            )}
+          </div>
+        </div>
       </header>
 
-      <main className="px-5 py-10">{children}</main>
+      {/* Contenido */}
+      <main className="relative z-10 px-0">{children}</main>
 
-      <footer className="text-center text-sm text-gray-400 py-4">
+      <footer className="relative z-10 text-center text-xs text-white/45 py-6">
         © 2025 BIOANA. Todos los derechos reservados.
       </footer>
     </div>

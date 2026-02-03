@@ -39,7 +39,7 @@ type Pedido = {
 
 // Opcional: mismas imágenes que usas en /solicitudes
 const proyectosImagenes: { [k: string]: string } = {
- "001.Ocumetics": "/ocumetics.jpeg",
+ "001.Ocumetics": "/Bioana.jpeg",
   "002.Labella": "/Bioana.jpeg",
   //"003.XSONXS": "/XSONX.png",
   "004.Solvein": "/Bioana.jpeg",
