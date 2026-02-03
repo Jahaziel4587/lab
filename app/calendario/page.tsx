@@ -489,6 +489,7 @@ function SegmentedProgress({
       {/* Proyectos con pedidos fechados (tarjetas estilo Mis solicitudes) */}
       {isAdmin && (
         <div className="rounded-2xl border border-white/10 bg-black/40 backdrop-blur-md shadow-[0_20px_80px_rgba(0,0,0,0.55)] overflow-hidden">
+           <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-emerald-500/10 to-transparent" />
           <div className="px-6 py-5 border-b border-white/10 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
             <div>
               <h2 className="text-lg font-semibold text-white">
