@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useMemo } from "react";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import {
   collection,
@@ -13,20 +13,21 @@ import {
 } from "firebase/firestore";
 import { auth, db, storage } from "@/src/firebase/firebaseConfig";
 import { useRouter } from "next/navigation";
-import { FiX, FiUpload, FiVideo } from "react-icons/fi";
+import { FiX, FiUpload, FiVideo, FiArrowLeft } from "react-icons/fi";
 
 export default function EspecificacionesPage() {
   // Sufijo editable por el usuario
   const [titulo, setTitulo] = useState("");
-  const [prefijoTitulo, setPrefijoTitulo] = useState<string>(""); 
+  const [prefijoTitulo, setPrefijoTitulo] = useState<string>("");
 
-  // NUEVO: título final garantizado único
+  // Título final garantizado único
   const [tituloFinalUnico, setTituloFinalUnico] = useState("");
 
   const [explicacion, setExplicacion] = useState("");
   const [fecha, setFecha] = useState("");
   const [archivos, setArchivos] = useState<File[]>([]);
   const [subiendo, setSubiendo] = useState(false);
+
   const [grabando, setGrabando] = useState(false);
   const [pausado, setPausado] = useState(false);
   const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
@@ -36,6 +37,39 @@ export default function EspecificacionesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const router = useRouter();
+
+  // ---------- UI helpers ----------
+  const baseButton =
+    "inline-flex items-center gap-2 px-4 py-2 rounded-full " +
+    "bg-white/10 text-white backdrop-blur " +
+    "border border-white/10 " +
+    "hover:bg-white/20 transition disabled:opacity-60 disabled:cursor-not-allowed";
+
+  const primaryButton =
+    "inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full " +
+    "bg-emerald-500/90 text-black font-semibold " +
+    "hover:bg-emerald-400 transition disabled:opacity-60 disabled:cursor-not-allowed";
+
+  const darkButton =
+    "inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full " +
+    "bg-white/10 text-white border border-white/10 backdrop-blur " +
+    "hover:bg-white/20 transition disabled:opacity-60 disabled:cursor-not-allowed";
+
+  const warnButton =
+    "inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full " +
+    "bg-yellow-500/90 text-black font-semibold " +
+    "hover:bg-yellow-400 transition disabled:opacity-60 disabled:cursor-not-allowed";
+
+  const card =
+    "rounded-2xl bg-white/5 backdrop-blur border border-white/10 " +
+    "shadow-[0_10px_35px_rgba(0,0,0,0.35)]";
+
+  const input =
+    "w-full px-3 py-2 rounded-xl bg-white/5 text-white " +
+    "border border-white/10 outline-none " +
+    "focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-300/30";
+
+  const label = "block text-sm font-medium text-white/80 mb-1";
 
   // ---------- Helpers ----------
   const normalize = (s: string) =>
@@ -53,9 +87,10 @@ export default function EspecificacionesPage() {
     "resina formlabs 3b": "FL3B",
     "resina formlabs 2b": "FL2B",
     "laser co2": "Láser",
+    "láser co2": "Láser",
     "fresadora cnc": "CNC",
     "polipropileno": "CNC",
-    "HDPE": "CNC",
+    "hdpe": "CNC",
     "necesidad": "Need",
     "libre": "FXT",
   };
@@ -70,11 +105,10 @@ export default function EspecificacionesPage() {
     if (key.includes("1.75") && key.includes("nylon")) return "BML";
     if (key.includes("formlabs") && key.includes("3b")) return "FL3B";
     if (key.includes("formlabs") && key.includes("2b")) return "FL2B";
-    if (key.includes("laser")) return "Láser";
+    if (key.includes("laser") || key.includes("láser")) return "Láser";
     if (key.includes("cnc")) return "CNC";
     if (key.includes("necesidad") || key === "need") return "Need";
     if (key.includes("libre")) return "FXT";
-
     return null;
   }
 
@@ -113,13 +147,16 @@ export default function EspecificacionesPage() {
     return `${abbrCandidate}_${code}_`;
   }
 
-  // ---------- NUEVO: generar título único ----------
+  // ---------- Generar título único ----------
   async function generarTituloUnico(tituloBase: string): Promise<string> {
     let tituloTest = tituloBase;
     let i = 1;
 
     while (true) {
-      const q = query(collection(db, "pedidos"), where("titulo", "==", tituloTest));
+      const q = query(
+        collection(db, "pedidos"),
+        where("titulo", "==", tituloTest)
+      );
       const snap = await getDocs(q);
       if (snap.empty) return tituloTest;
 
@@ -128,27 +165,31 @@ export default function EspecificacionesPage() {
     }
   }
 
-  // Calcular el prefijo al montar
+  // Calcular prefijo al montar
   useEffect(() => {
     setPrefijoTitulo(computePrefijo());
   }, []);
 
-  // NUEVO: recalcular título único cada vez que cambie prefijo o título
+  // Debounce para no spamear Firestore en cada tecla
   useEffect(() => {
-    const actualizar = async () => {
+    let alive = true;
+    const t = setTimeout(async () => {
       if (!prefijoTitulo) return;
 
       const base = `${prefijoTitulo}${titulo}`;
       if (!titulo) {
-        setTituloFinalUnico(base);
+        if (alive) setTituloFinalUnico(base);
         return;
       }
 
       const unico = await generarTituloUnico(base);
-      setTituloFinalUnico(unico);
-    };
+      if (alive) setTituloFinalUnico(unico);
+    }, 350);
 
-    actualizar();
+    return () => {
+      alive = false;
+      clearTimeout(t);
+    };
   }, [titulo, prefijoTitulo]);
 
   // -------------------- Archivos --------------------
@@ -166,6 +207,8 @@ export default function EspecificacionesPage() {
   const handleClickBoton = () => {
     fileInputRef.current?.click();
   };
+
+  const totalArchivos = useMemo(() => archivos.length, [archivos]);
 
   // -------------------- Upload / Guardado --------------------
   const handleUploadAll = async () => {
@@ -199,14 +242,17 @@ export default function EspecificacionesPage() {
 
       let urlDelVideo = "";
       if (videoFile) {
-        const videoStorageRef = ref(storage, `pedidos/${carpetaId}/${videoFile.name}`);
+        const videoStorageRef = ref(
+          storage,
+          `pedidos/${carpetaId}/${videoFile.name}`
+        );
         await uploadBytes(videoStorageRef, videoFile);
         urlDelVideo = await getDownloadURL(videoStorageRef);
         if (!archivos.includes(videoFile)) archivosSubidos.push(urlDelVideo);
       }
 
       await setDoc(nuevoDocRef, {
-        titulo: tituloFinalUnico, // USAMOS EL TÍTULO ÚNICO
+        titulo: tituloFinalUnico,
         descripcion: explicacion,
         fechaLimite: fecha,
         proyecto,
@@ -247,6 +293,7 @@ export default function EspecificacionesPage() {
       });
       setVideoFile(archivo);
       setArchivos((prev) => [...prev, archivo]);
+
       if (videoRef.current) videoRef.current.srcObject = null;
       mediaStream.getTracks().forEach((track) => track.stop());
       setStream(null);
@@ -284,96 +331,121 @@ export default function EspecificacionesPage() {
   }, [stream]);
 
   return (
-    <div className="max-w-2xl mx-auto p-4 space-y-4">
-      <button
-        className="bg-white text-black px-4 py-2 rounded"
-        onClick={() => router.back()}
-      >
-        ← Regresar
-      </button>
+    <div className="relative max-w-5xl mx-auto px-4 py-6 space-y-5">
+      {/* Top bar */}
+      <div className="flex items-center justify-between gap-3">
+        <button className={baseButton} onClick={() => router.back()}>
+          <FiArrowLeft className="opacity-80" /> Regresar
+        </button>
 
-      <h1 className="text-xl font-bold text-center text-white">
-        Especificaciones del pedido
-      </h1>
+        <div className="text-right text-xs text-white/60">
+          {totalArchivos > 0 ? (
+            <span>{totalArchivos} archivo(s) listo(s)</span>
+          ) : (
+            <span>Sin archivos aún</span>
+          )}
+        </div>
+      </div>
 
-      <div className="bg-white p-4 rounded-xl shadow space-y-4">
-        {/* Título final */}
-        <div>
-          <label className="block font-medium text-black mb-1">
-            Título del pedido
-          </label>
-          <div className="flex items-stretch w-full border border-gray-300 rounded overflow-hidden">
-            <span className="px-3 py-2 bg-gray-100 text-gray-700 border-r border-gray-300 select-none whitespace-nowrap">
-              {prefijoTitulo || "GEN_PRJ0_"}
-            </span>
-            <input
-              type="text"
-              value={titulo}
-              onChange={(e) => setTitulo(e.target.value)}
-              className="flex-1 px-3 py-2 text-black outline-none"
-              placeholder="Escribe la parte final del título. Evita usar diagonales(/)"
+      <div>
+        <h1 className="text-2xl md:text-3xl font-semibold text-white">
+          Especificaciones del pedido
+        </h1>
+        <p className="text-sm text-white/60 mt-1">
+          Completa la información final y adjunta archivos si aplica.
+        </p>
+      </div>
+
+      {/* Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-5">
+        {/* Form */}
+        <div className={`${card} p-5 space-y-5`}>
+          {/* Título */}
+          <div>
+            <label className={label}>Título del pedido</label>
+
+            <div className="flex items-stretch w-full rounded-xl overflow-hidden border border-white/10 bg-white/5">
+              <span className="px-3 py-2 text-white/70 border-r border-white/10 select-none whitespace-nowrap">
+                {prefijoTitulo || "GEN_PRJ0_"}
+              </span>
+
+              <input
+                type="text"
+                value={titulo}
+                onChange={(e) => setTitulo(e.target.value)}
+                className="flex-1 px-3 py-2 bg-transparent text-white outline-none"
+                placeholder="Escribe la parte final. Evita usar /"
+              />
+            </div>
+
+            <p className="text-xs text-white/50 mt-2">
+              Se guardará como:{" "}
+              <span className="text-white/80 font-semibold">
+                {tituloFinalUnico || "..."}
+              </span>
+            </p>
+          </div>
+
+          {/* Explicación */}
+          <div>
+            <label className={label}>Explicación del pedido</label>
+            <textarea
+              rows={5}
+              value={explicacion}
+              onChange={(e) => setExplicacion(e.target.value)}
+              className={input}
+              placeholder="Describe el pedido (medidas, tolerancias, objetivo, etc.)"
             />
           </div>
 
-          <p className="text-xs text-gray-500 mt-1">
-            Se guardará como:{" "}
-            <strong>{tituloFinalUnico || "..."}</strong>
+          {/* Fecha */}
+          <div>
+            <label className={label}>Fecha propuesta</label>
+            <input
+              type="date"
+              value={fecha}
+              onChange={(e) => setFecha(e.target.value)}
+              className={input}
+            />
+          </div>
+
+          {/* Submit */}
+          <button
+            onClick={handleUploadAll}
+            disabled={subiendo}
+            className="w-full h-12 rounded-full bg-emerald-500/90 hover:bg-emerald-400 text-black font-semibold transition disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {subiendo ? "Subiendo..." : "Enviar pedido"}
+          </button>
+
+          <p className="text-xs text-white/40">
+            Al enviar, se guardan los archivos en Storage dentro de una carpeta con el ID del pedido.
           </p>
         </div>
 
-        {/* Explicación */}
-        <div>
-          <label className="block font-medium text-black mb-1">
-            Explicación del pedido
-          </label>
-          <textarea
-            rows={4}
-            value={explicacion}
-            onChange={(e) => setExplicacion(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded text-black"
-            placeholder="Describe el pedido"
-          />
-        </div>
+        {/* Attachments */}
+        <div className={`${card} p-5 space-y-4`}>
+          <div className="flex items-center justify-between">
+            <h2 className="text-white font-semibold">Archivos y video</h2>
+            <span className="text-xs text-white/50">
+              {archivos.length} adjunto(s)
+            </span>
+          </div>
 
-        {/* Fecha */}
-        <div>
-          <label className="block font-medium text-black mb-1">
-            Fecha Propuesta
-          </label>
-          <input
-            type="date"
-            value={fecha}
-            onChange={(e) => setFecha(e.target.value)}
-            className="w-full px-3 py-2 border border-gray-300 rounded text-black"
-          />
-        </div>
-
-        {/* Archivos */}
-        <div>
-          <label className="block font-medium text-black mb-1">
-            Adjuntar archivos
-          </label>
-
-          <div className="flex gap-2 mb-2">
-            <button
-              onClick={handleClickBoton}
-              className="bg-black text-white px-4 py-2 rounded hover:bg-gray-800 flex items-center gap-2"
-            >
+          <div className="flex flex-wrap gap-2">
+            <button onClick={handleClickBoton} className={darkButton}>
               <FiUpload /> Seleccionar archivos
             </button>
 
             <button
               onClick={grabando ? detenerGrabacion : iniciarGrabacion}
-              className="bg-black text-white px-4 py-2 rounded hover:bg-gray-800 flex items-center gap-2"
+              className={darkButton}
             >
-              <FiVideo /> {grabando ? "Detener grabación" : "Grabarme"}
+              <FiVideo /> {grabando ? "Detener" : "Grabarme"}
             </button>
 
             {grabando && (
-              <button
-                onClick={togglePausa}
-                className="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600"
-              >
+              <button onClick={togglePausa} className={warnButton}>
                 {pausado ? "Reanudar" : "Pausar"}
               </button>
             )}
@@ -385,54 +457,60 @@ export default function EspecificacionesPage() {
               autoPlay
               muted
               playsInline
-              className="w-full h-64 bg-black mb-4 rounded"
+              className="w-full h-56 bg-black/60 rounded-xl border border-white/10"
             />
           )}
 
-          {archivos.length > 0 && (
-            <ul className="space-y-2">
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            onChange={handleSelectFiles}
+            className="hidden"
+          />
+
+          {archivos.length === 0 ? (
+            <div className="text-sm text-white/50 bg-white/5 border border-white/10 rounded-xl p-4">
+              No has adjuntado archivos todavía.
+            </div>
+          ) : (
+            <div className="space-y-2 max-h-[52vh] overflow-auto pr-1">
               {archivos.map((file) => (
-                <li
+                <div
                   key={file.name}
-                  className="flex flex-col bg-gray-100 px-3 py-2 rounded text-black"
+                  className="rounded-xl bg-white/5 border border-white/10 p-3"
                 >
-                  <div className="flex justify-between items-center">
-                    <span className="truncate">{file.name}</span>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-sm text-white font-medium truncate">
+                        {file.name}
+                      </div>
+                      <div className="text-xs text-white/50">
+                        {file.type || "archivo"} • {(file.size / 1024 / 1024).toFixed(2)} MB
+                      </div>
+                    </div>
+
                     <button
                       onClick={() => handleRemove(file.name)}
-                      className="text-red-600 hover:text-red-800"
+                      className="h-9 w-9 rounded-full bg-white/10 border border-white/10 hover:bg-white/20 transition flex items-center justify-center"
+                      title="Quitar"
                     >
-                      <FiX />
+                      <FiX className="text-white/80" />
                     </button>
                   </div>
+
                   {file.type.startsWith("video") && (
                     <video
                       controls
                       src={URL.createObjectURL(file)}
-                      className="mt-2 rounded"
+                      className="mt-3 w-full rounded-xl border border-white/10"
                     />
                   )}
-                </li>
+                </div>
               ))}
-            </ul>
+            </div>
           )}
         </div>
-
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          onChange={handleSelectFiles}
-          className="hidden"
-        />
-
-        <button
-          onClick={handleUploadAll}
-          disabled={subiendo}
-          className="w-full bg-green-600 text-white py-3 rounded hover:bg-green-700 transition"
-        >
-          {subiendo ? "Subiendo..." : "Enviar pedido"}
-        </button>
       </div>
     </div>
   );

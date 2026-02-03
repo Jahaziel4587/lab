@@ -3,62 +3,101 @@
 import { useRouter } from "next/navigation";
 import { FiArrowLeft, FiArrowRight } from "react-icons/fi";
 
-const servicios = [
-  { nombre: "Corte", imagen: "/corte.jpg" },
-  { nombre: "Grabado", imagen: "/gravado.jpeg" },
-  { nombre: "Impresión", imagen: "/impresion3D.jpg" },
-  { nombre: "Diseño de fixture", imagen: "/fixture.jpg" },
-  { nombre: "Necesidad", imagen: "/fixture-no-diseñado.jpg" },
+type ServicioItem = {
+  key: string; // lo que guardas en localStorage
+  label: string; // lo que se muestra
+  code: string; // lo grande (para ubicar rápido)
+  route?: string; // opcional si quieres override
+};
+
+const servicios: ServicioItem[] = [
+  { key: "Corte", label: "Corte", code: "01" },
+  { key: "Grabado", label: "Grabado", code: "02" },
+  { key: "Impresión", label: "Impresión", code: "03" },
+  { key: "Fixture", label: "Diseño de fixture", code: "04" },
+  { key: "Necesidad", label: "Necesidad", code: "05", route: "/hacer-pedido/especificaciones" },
 ];
 
 export default function ServiciosPage() {
   const router = useRouter();
 
-  const seleccionarServicio = (nombre: string) => {
-    if (nombre === "Necesidad") {
-      // Guardar el servicio y limpiar residuos que luego “contaminan”
-      localStorage.setItem("servicio", "Necesidad");
+  const baseButton =
+    "flex items-center gap-2 px-4 py-2 rounded-full " +
+    "bg-white/10 text-white backdrop-blur " +
+    "border border-white/10 " +
+    "hover:bg-white/20 transition";
+
+  const cardBase =
+    "group relative w-full rounded-2xl overflow-hidden " +
+    "bg-white/5 backdrop-blur border border-white/10 " +
+    "shadow-[0_10px_35px_rgba(0,0,0,0.35)] " +
+    "hover:bg-white/10 transition " +
+    "text-left";
+
+  const seleccionarServicio = (item: ServicioItem) => {
+    // Guardar servicio
+    localStorage.setItem("servicio", item.key);
+
+    // Si es “Necesidad”, limpia residuos porque se brinca pasos
+    if (item.key === "Necesidad") {
       localStorage.removeItem("maquina");
       localStorage.removeItem("material");
       localStorage.removeItem("tecnica");
-      router.push("/hacer-pedido/especificaciones");
+      router.push(item.route || "/hacer-pedido/especificaciones");
       return;
     }
-
-    // Para esta tarjeta queremos que el servicio quede como "Libre"
-    const key = nombre === "Fixture no diseñado" ? "Fixture" : nombre;
-    localStorage.setItem("servicio", key);
-
 
     router.push("/hacer-pedido/maquinas");
   };
 
   return (
-    <div>
+    <div className="relative">
+      {/* Top controls */}
       <button
         onClick={() => router.push("/hacer-pedido/proyecto")}
-        className="mb-4 bg-white text-black px-4 py-2 rounded flex items-center gap-2 hover:bg-gray-200"
+        className={`${baseButton} mb-4`}
       >
-        <FiArrowLeft /> Regresar
+        <FiArrowLeft className="opacity-80" /> Regresar
       </button>
 
-      <h1 className="text-xl mb-6 font-semibold">Selecciona el servicio</h1>
+      <h1 className="text-2xl md:text-3xl font-semibold text-white mb-1">
+        Selecciona el servicio
+      </h1>
+      <p className="text-sm text-white/60 mb-6">
+        Elige el tipo de trabajo para continuar.
+      </p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-2 gap-6">
+      {/* Grid */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
         {servicios.map((s) => (
           <button
-            key={s.nombre}
-            onClick={() => seleccionarServicio(s.nombre)}
-            className="relative rounded-xl overflow-hidden shadow-lg group"
+            key={s.key}
+            onClick={() => seleccionarServicio(s)}
+            className={cardBase}
           >
-            <img
-              src={s.imagen}
-              alt={s.nombre}
-              className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
-            />
-            <div className="absolute bottom-3 left-3 right-3 bg-white text-black rounded-full px-4 py-1 flex justify-between items-center">
-              <span className="text-sm font-medium capitalize">{s.nombre}</span>
-              <FiArrowRight />
+            {/* Accent line bottom (teal) */}
+            <div className="absolute inset-x-0 bottom-0 h-1 bg-emerald-400/40" />
+
+            <div className="p-6 md:p-7 flex items-center justify-between gap-6">
+              <div className="min-w-0">
+                <div className="text-5xl md:text-6xl font-bold text-emerald-300 tracking-tight">
+                  {s.code}
+                </div>
+
+                <div className="mt-1 text-lg md:text-xl font-semibold text-white truncate">
+                  {s.label}
+                </div>
+
+                <div className="mt-2 text-sm text-white/50">
+                  Click para continuar
+                </div>
+              </div>
+
+              <div className="shrink-0">
+                <div className="h-11 w-11 rounded-full bg-white/10 border border-white/10 flex items-center justify-center group-hover:bg-white/20 transition">
+                  <FiArrowRight className="text-white/80" />
+                </div>
+              </div>
             </div>
           </button>
         ))}
