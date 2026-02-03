@@ -14,7 +14,7 @@ import {
   runTransaction,
   serverTimestamp,
   addDoc,
-  onSnapshot, // <<< NUEVO
+  onSnapshot,
 } from "firebase/firestore";
 import {
   ref as storageRef,
@@ -26,8 +26,6 @@ import {
 import { db, storage } from "@/src/firebase/firebaseConfig";
 import { FiArrowLeft, FiX, FiChevronUp, FiChevronDown } from "react-icons/fi";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
-
-// >>> para saber si es admin / usuario actual
 import { useAuth } from "@/src/Context/AuthContext";
 
 // ---- Tipos ----
@@ -45,7 +43,7 @@ type QuoteLine = {
   serviceName?: string;
   answers?: Record<string, number>;
   selects?: Record<string, string>;
-  subtotalMXN?: number; // base en MXN
+  subtotalMXN?: number;
   createdAt?: any;
 };
 
@@ -53,14 +51,13 @@ type ServiceField = { key: string; label: string; type: string; options?: string
 type ServiceDoc = { name: string; fields: ServiceField[] };
 
 type QuoteDraft = {
-  gananciaPct: number; // %
+  gananciaPct: number;
   cliente?: string;
   atencionA?: string;
-  envio?: number; // MXN
+  envio?: number;
   notas?: string;
 };
 
-// Branding opcional (si no existe, usamos defaults)
 type OrgBranding = {
   companyName?: string;
   addressLine?: string;
@@ -68,7 +65,6 @@ type OrgBranding = {
   email?: string;
 };
 
-// ---- PDF Template types ----
 type PdfCoords = {
   fecha?: { x: number; y: number };
   folio?: { x: number; y: number };
@@ -88,7 +84,6 @@ type PdfCoords = {
 };
 type PdfTemplateConf = { templatePath: string; coords: PdfCoords };
 
-// tipo para las versiones de especificaciones
 type SpecUpdate = {
   id: string;
   version: number;
@@ -97,7 +92,6 @@ type SpecUpdate = {
   archivos?: { name: string; url: string }[];
 };
 
-// <<< NUEVO: tipo para mensajes de chat
 type ChatMessage = {
   id: string;
   text: string;
@@ -123,7 +117,6 @@ function formatNumber(n: number) {
 function formatMoney(n: number) {
   return `MXN ${n.toFixed(2)}`;
 }
-// helper: limpia datos para Firestore (sin funciones / undefined)
 function sanitizeForFirestore<T = any>(val: T): T {
   if (val === undefined) return null as any;
   if (val === null) return val;
@@ -176,7 +169,6 @@ export default function DetallePedidoPage() {
   const { id } = useParams();
   const router = useRouter();
 
-  // info de auth
   const { isAdmin, user } = useAuth() as any;
 
   const [pedido, setPedido] = useState<any>(null);
@@ -186,17 +178,17 @@ export default function DetallePedidoPage() {
   const [quoteLines, setQuoteLines] = useState<Array<{ id: string; data: QuoteLine }>>([]);
   const [loadingQuote, setLoadingQuote] = useState<boolean>(true);
 
-  // Mapa de etiquetas por servicio: serviceId -> (key -> label)
+  // Mapa de etiquetas por servicio
   const [serviceLabelsMap, setServiceLabelsMap] = useState<Record<string, Record<string, string>>>({});
 
   // Draft del PM (autosave)
   const [draft, setDraft] = useState<QuoteDraft>({ gananciaPct: 0, envio: 0 });
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Branding opcional
+  // Branding
   const [branding, setBranding] = useState<OrgBranding>({});
 
-  // Versiones existentes
+  // Versiones
   const [versions, setVersions] = useState<Array<{ id: string; url: string; total: number; createdAt?: any }>>([]);
 
   // PDF Template state
@@ -205,7 +197,7 @@ export default function DetallePedidoPage() {
   // Estado de generación
   const [isGen, setIsGen] = useState(false);
 
-  // --- Archivos adjuntos (Storage) ---
+  // Archivos adjuntos
   const [filesLoading, setFilesLoading] = useState<boolean>(false);
   const [files, setFiles] = useState<Array<{ name: string; url: string }>>([]);
 
@@ -217,52 +209,58 @@ export default function DetallePedidoPage() {
   const [savingSpec, setSavingSpec] = useState(false);
   const specInputRef = useRef<HTMLInputElement | null>(null);
 
-  const addSpecFiles = (list: FileList | null) => {
-    if (!list) return;
-    const incoming = Array.from(list);
-
-    setSpecFiles((prev) => {
-      // opcional: evitar duplicados por (name + size + lastModified)
-      const seen = new Set(prev.map((f) => `${f.name}_${f.size}_${f.lastModified}`));
-      const filtered = incoming.filter((f) => {
-        const k = `${f.name}_${f.size}_${f.lastModified}`;
-        if (seen.has(k)) return false;
-        seen.add(k);
-        return true;
-      });
-      return [...prev, ...filtered];
-    });
-
-    // reset para poder volver a seleccionar el mismo archivo si quieren
-    if (specInputRef.current) specInputRef.current.value = "";
-  };
-
-  const removeSpecFile = (idx: number) => {
-    setSpecFiles((prev) => prev.filter((_, i) => i !== idx));
-  };
-
-  const moveSpecFile = (idx: number, dir: -1 | 1) => {
-    setSpecFiles((prev) => {
-      const next = [...prev];
-      const target = idx + dir;
-      if (target < 0 || target >= next.length) return prev;
-      [next[idx], next[target]] = [next[target], next[idx]];
-      return next;
-    });
-  };
-
-  // <<< NUEVO: estado de chat
+  // Chat
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const chatEndRef = useRef<HTMLDivElement | null>(null);
 
   const [nameByEmail, setNameByEmail] = useState<Record<string, string>>({});
 
-  // === helper: dueño del pedido (para notificaciones al usuario, por correo) ===
-const ownerEmail: string | null =
-  pedido?.correoUsuario || pedido?.usuario || null;
+  const ownerEmail: string | null = pedido?.correoUsuario || pedido?.usuario || null;
 
-  // === Carga de usuarios para nombres bonitos en el chat ===
+  // ======== UI helpers (clases) ========
+  const cardClass =
+    "rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-xl shadow-[0_30px_120px_-90px_rgba(0,0,0,0.95)]";
+  const cardPad = "p-5 sm:p-6";
+  const muted = "text-white/60";
+  const label = "text-white/70";
+  const value = "text-white/90";
+
+  const inputClass =
+    "w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white placeholder:text-white/35 " +
+    "focus:outline-none focus:ring-2 focus:ring-emerald-400/30";
+  const textareaClass =
+    "w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white placeholder:text-white/35 " +
+    "focus:outline-none focus:ring-2 focus:ring-emerald-400/30 resize-none";
+
+  const pillBase =
+    "px-3 py-1 rounded-full text-[11px] font-semibold border inline-flex items-center justify-center whitespace-nowrap";
+  const normStatus = (s: any) => String(s || "").trim().toLowerCase();
+  const statusPillClass = (status: any) => {
+    const s = normStatus(status);
+    if (s === "en proceso")
+      return `${pillBase} bg-yellow-500/15 text-yellow-200 border-yellow-400/30 shadow-[0_10px_28px_-18px_rgba(234,179,8,0.75)]`;
+    if (s === "listo")
+      return `${pillBase} bg-emerald-500/15 text-emerald-200 border-emerald-400/30 shadow-[0_10px_28px_-18px_rgba(45,212,191,0.75)]`;
+    if (s === "cancelado")
+      return `${pillBase} bg-red-500/15 text-red-200 border-red-400/30 shadow-[0_10px_28px_-18px_rgba(239,68,68,0.7)]`;
+    return `${pillBase} bg-white/5 text-white/80 border-white/15`;
+  };
+  const statusLabel = (s: any) => {
+    const v = String(s || "enviado");
+    return v.replace(/\b\w/g, (c) => c.toUpperCase());
+  };
+
+  const btnGhost =
+    "inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/5 px-4 py-2 text-sm text-white/90 hover:bg-white/10 transition";
+  const btnSoft =
+    "inline-flex items-center justify-center rounded-xl border border-white/12 bg-white/5 px-4 py-2 text-sm text-white/85 hover:bg-white/10 transition";
+  const btnPrimary =
+    "inline-flex items-center justify-center rounded-xl bg-emerald-500/15 border border-emerald-400/30 px-4 py-2 text-sm text-emerald-100 hover:bg-emerald-500/20 transition shadow-[0_12px_30px_-22px_rgba(16,185,129,0.9)]";
+  const btnDanger =
+    "inline-flex items-center justify-center rounded-xl border border-red-400/25 bg-red-500/10 px-3 py-2 text-sm text-red-200 hover:bg-red-500/15 transition";
+
+  // === Carga nombres (email->nombre) ===
   useEffect(() => {
     const loadUsers = async () => {
       try {
@@ -273,17 +271,13 @@ const ownerEmail: string | null =
           const email = data.email as string | undefined;
           const nombre = data.nombre as string | undefined;
           const apellido = data.apellido as string | undefined;
-
-          if (email && nombre) {
-            map[email] = apellido ? `${nombre} ${apellido}` : nombre;
-          }
+          if (email && nombre) map[email] = apellido ? `${nombre} ${apellido}` : nombre;
         });
         setNameByEmail(map);
       } catch (e) {
         console.error("No se pudieron cargar los usuarios para el chat:", e);
       }
     };
-
     loadUsers();
   }, []);
 
@@ -308,34 +302,31 @@ const ownerEmail: string | null =
     cargarPedido();
   }, [id, router]);
 
-  // --------- Cargar archivos adjuntos (por ID; fallback por título) ---------
+  // --------- Cargar archivos adjuntos ---------
   useEffect(() => {
     const listarAdjuntos = async () => {
       if (!id) return;
       setFilesLoading(true);
       try {
-        // 1) Ruta nueva por ID
         const refById = storageRef(storage, `pedidos/${id as string}`);
         let items = (await listAll(refById)).items;
 
-        // 2) Compatibilidad: si no hay por ID, intenta por título
         if (items.length === 0 && pedido?.titulo) {
           try {
             const refByTitle = storageRef(storage, `pedidos/${pedido.titulo}`);
             items = (await listAll(refByTitle)).items;
-          } catch {
-            /* ignore */
-          }
+          } catch {}
         }
 
-        // FILTRAR archivos de versiones (spec_v...)
         items = items.filter((it) => !it.name.startsWith("spec_v"));
 
         const out = await Promise.all(
           items.map(async (it) => {
             const url = await getDownloadURL(it);
-            const raw = url.split("/").pop()?.split("?")[0] || it.name;
-            const name = decodeURIComponent(raw).split("%2F").pop() || it.name;
+            const name = decodeURIComponent(
+  url.split("/").pop()?.split("?")[0] || ""
+).split("/").pop() || "archivo";
+
             return { name, url };
           })
         );
@@ -347,7 +338,6 @@ const ownerEmail: string | null =
         setFilesLoading(false);
       }
     };
-
     listarAdjuntos();
   }, [id, pedido?.titulo]);
 
@@ -517,7 +507,6 @@ const ownerEmail: string | null =
       console.error("No se pudieron cargar especificaciones adicionales:", e);
     }
   };
-
   useEffect(() => {
     loadSpecUpdates();
   }, [id]);
@@ -526,11 +515,7 @@ const ownerEmail: string | null =
   useEffect(() => {
     if (!id) return;
 
-    const qChat = query(
-      collection(db, "pedidos", id as string, "chat"),
-      orderBy("createdAt", "asc")
-    );
-
+    const qChat = query(collection(db, "pedidos", id as string, "chat"), orderBy("createdAt", "asc"));
     const unsub = onSnapshot(
       qChat,
       (snap) => {
@@ -552,32 +537,27 @@ const ownerEmail: string | null =
         });
         setChatMessages(arr);
       },
-      (err) => {
-        console.error("Error escuchando chat:", err);
-      }
+      (err) => console.error("Error escuchando chat:", err)
     );
 
     return () => unsub();
   }, [id]);
 
-  // --------- CHAT: marcar mensajes como "visto" cuando se abre la página ---------
+  // --------- CHAT: marcar mensajes como "visto" ---------
   useEffect(() => {
     if (!id || !user) return;
     if (chatMessages.length === 0) return;
 
     const updates: Promise<void>[] = [];
-
     chatMessages.forEach((m) => {
       const esMio = m.userId === user.uid;
 
       if (isAdmin) {
-        // Admin ve mensajes de usuario
         if (!esMio && !m.vistoPorAdmin) {
           const ref = doc(db, "pedidos", id as string, "chat", m.id);
           updates.push(updateDoc(ref, { vistoPorAdmin: true }));
         }
       } else {
-        // Usuario ve mensajes de admin
         if (!esMio && !m.vistoPorUser) {
           const ref = doc(db, "pedidos", id as string, "chat", m.id);
           updates.push(updateDoc(ref, { vistoPorUser: true }));
@@ -586,9 +566,7 @@ const ownerEmail: string | null =
     });
 
     if (updates.length > 0) {
-      Promise.all(updates).catch((err) =>
-        console.error("Error al marcar mensajes como vistos:", err)
-      );
+      Promise.all(updates).catch((err) => console.error("Error al marcar mensajes como vistos:", err));
     }
   }, [chatMessages, id, isAdmin, user]);
 
@@ -649,7 +627,7 @@ const ownerEmail: string | null =
   };
 
   // =========================
-  // === Generar PDF (nuevo)
+  // === Generar PDF (genérico)
   // =========================
   const handleGenerarPDF = async (): Promise<boolean> => {
     try {
@@ -662,7 +640,6 @@ const ownerEmail: string | null =
       const folio = await nextFolio();
       const fecha = new Date();
 
-      // Tabla de servicios: total por servicio YA INCLUYE ganancia
       const filasServicios = quoteLines.map((ln) => {
         const d = ln.data;
         const base = d.subtotalMXN ?? 0;
@@ -671,10 +648,9 @@ const ownerEmail: string | null =
         return { servicio: d.serviceName || d.serviceId || "Servicio", detalles, total: inflado };
       });
 
-      // Cargar pdfmake
       const pdfMake = await loadPdfMake();
 
-      // Intentar cargar LOGO desde Storage (varias rutas candidatas)
+      // Logo opcional
       const logoCandidates = ["org/logo.png"];
       const loadLogo = async (): Promise<string | null> => {
         for (const p of logoCandidates) {
@@ -690,18 +666,13 @@ const ownerEmail: string | null =
               reader.readAsDataURL(blob);
             });
             return dataUrl;
-          } catch {
-            // intenta siguiente
-          }
+          } catch {}
         }
         return null;
       };
       const logoDataUrl = await loadLogo();
 
-      // Branding por si quieres mostrarlo:
       const company = branding.companyName || "Bioana SAPI de CV";
-
-      // Textos de secciones (edítalos a tu gusto)
       const generalInfo = [
         "Once the deposit payment is made, the order cannot be canceled either entirely or partially.",
         "Pieces with different or extra details mentioned in the quotation are not covered by the quotation.",
@@ -718,26 +689,13 @@ const ownerEmail: string | null =
         "If the price is in US dollars, the exchange rate of Banorte on the day the payment is made will be applied.",
       ];
 
-      // helper para secciones con banda verde
       function sectionBlock(title: string, items: string[]) {
         return {
           table: {
             widths: ["*"],
             body: [
-              [
-                {
-                  text: title,
-                  color: "white",
-                  margin: [6, 3, 6, 3],
-                },
-              ],
-              [
-                {
-                  ul: items,
-                  margin: [6, 6, 6, 6],
-                  fontSize: 8.5,
-                },
-              ],
+              [{ text: title, color: "white", margin: [6, 3, 6, 3] }],
+              [{ ul: items, margin: [6, 6, 6, 6], fontSize: 8.5 }],
             ],
           },
           layout: {
@@ -750,15 +708,12 @@ const ownerEmail: string | null =
         };
       }
 
-      // Construcción del documento
-      const cotizadoPor = "Manuel García"; // puedes cambiarlo por el PM logueado si luego lo tienes
+      const cotizadoPor = "Manuel García";
 
       const docDefinition: any = {
         pageSize: "A4",
         pageMargins: [40, 60, 40, 70],
-
         content: [
-          // Encabezado
           {
             columns: [
               {
@@ -782,8 +737,6 @@ const ownerEmail: string | null =
             ],
             margin: [0, 0, 0, 6],
           },
-
-          // Cliente / Atención a
           {
             columns: [
               {
@@ -800,18 +753,12 @@ const ownerEmail: string | null =
               },
             ],
           },
-
-          // Tabla de servicios
           {
             table: {
               headerRows: 1,
               widths: ["*", "*", 90],
               body: [
-                [
-                  { text: "Servicio", style: "th" },
-                  { text: "Detalles del servicio", style: "th" },
-                  { text: "Total", style: "th" },
-                ],
+                [{ text: "Servicio", style: "th" }, { text: "Detalles del servicio", style: "th" }, { text: "Total", style: "th" }],
                 ...filasServicios.map((f) => [
                   { text: f.servicio, bold: true },
                   { ul: f.detalles.length ? f.detalles : ["—"] },
@@ -819,13 +766,9 @@ const ownerEmail: string | null =
                 ]),
               ],
             },
-            layout: {
-              fillColor: (rowIndex: number) => (rowIndex === 0 ? "#f2f2f2" : null),
-            },
+            layout: { fillColor: (rowIndex: number) => (rowIndex === 0 ? "#f2f2f2" : null) },
             margin: [0, 6, 0, 10],
           },
-
-          // Tabla de totales (a la derecha)
           {
             columns: [
               { width: "*", text: "" },
@@ -836,14 +779,8 @@ const ownerEmail: string | null =
                   body: [
                     [{ text: "Subtotal:", bold: true }, { text: formatMoney(subtotalConGananciaMXN), alignment: "right" }],
                     [{ text: "IVA (16%):", bold: true }, { text: formatMoney(ivaMonto), alignment: "right" }],
-                    [
-                      { text: "Envío:", bold: true },
-                      { text: formatMoney(Number(draft.envio) || 0), alignment: "right" },
-                    ],
-                    [
-                      { text: "TOTAL:", bold: true },
-                      { text: formatMoney(totalFinal), bold: true, alignment: "right" },
-                    ],
+                    [{ text: "Envío:", bold: true }, { text: formatMoney(Number(draft.envio) || 0), alignment: "right" }],
+                    [{ text: "TOTAL:", bold: true }, { text: formatMoney(totalFinal), bold: true, alignment: "right" }],
                   ],
                 },
                 layout: "lightHorizontalLines",
@@ -851,15 +788,11 @@ const ownerEmail: string | null =
             ],
             margin: [0, 0, 0, 16],
           },
-
-          // Bloques informativos con banda verde
           sectionBlock("General Information", generalInfo),
           { text: " " },
           sectionBlock("Conditions", conditionsInfo),
           { text: " " },
           sectionBlock("Payment", paymentInfo),
-
-          // Notas del PM (opcional)
           draft.notas
             ? {
                 margin: [0, 12, 0, 0],
@@ -870,8 +803,6 @@ const ownerEmail: string | null =
                 ],
               }
             : null,
-
-          // Pie
           {
             margin: [0, 20, 0, 0],
             alignment: "center",
@@ -886,26 +817,20 @@ const ownerEmail: string | null =
             ],
           },
         ].filter(Boolean),
-
-        styles: {
-          th: { bold: true },
-        },
+        styles: { th: { bold: true } },
         defaultStyle: { fontSize: 10 },
       };
 
-      // Generar blob
       const pdfBlob: Blob = await new Promise((resolve) => {
         const gen = pdfMake.createPdf(docDefinition);
         gen.getBlob((blob: Blob) => resolve(blob));
       });
 
-      // Subir a Storage
       const filePath = `cotizaciones/${id}/${folio}.pdf`;
       const fileRef = storageRef(storage, filePath);
       await uploadBytes(fileRef, pdfBlob);
       const url = await getDownloadURL(fileRef);
 
-      // Guardar versión en Firestore
       const versionDataRaw = {
         folio,
         url,
@@ -927,10 +852,7 @@ const ownerEmail: string | null =
 
       alert(`PDF generado: ${folio}`);
 
-      // refrescar versiones
-      const snap = await getDocs(
-        query(collection(db, "pedidos", id as string, "quote_versions"), orderBy("createdAt", "desc"))
-      );
+      const snap = await getDocs(query(collection(db, "pedidos", id as string, "quote_versions"), orderBy("createdAt", "desc")));
       const arr: Array<{ id: string; url: string; total: number; createdAt?: any }> = [];
       snap.forEach((d) => {
         const data = d.data() as any;
@@ -959,11 +881,9 @@ const ownerEmail: string | null =
       const folio = await nextFolio();
       const fecha = new Date();
 
-      // Descarga plantilla desde Storage
       const tplRef = storageRef(storage, pdfTpl.templatePath);
-      const tplBytes = await getBytes(tplRef); // Uint8Array
+      const tplBytes = await getBytes(tplRef);
 
-      // pdf-lib setup
       const pdfDoc = await PDFDocument.load(tplBytes);
       const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
       const fontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
@@ -982,19 +902,16 @@ const ownerEmail: string | null =
         });
       };
 
-      // Encabezado
       safeDraw("fecha", fecha.toLocaleDateString(), 10);
       safeDraw("folio", folio, 10, true);
       safeDraw("cliente", draft.cliente || "-", 12, true);
       safeDraw("atencion", draft.atencionA || "-", 10);
 
-      // Resumen (sin base/ganancia)
       safeDraw("subtotal", `MXN ${subtotalConGananciaMXN.toFixed(2)}`);
       safeDraw("iva", `MXN ${ivaMonto.toFixed(2)}`);
       safeDraw("envio", `MXN ${(Number(draft.envio) || 0).toFixed(2)}`);
       safeDraw("total", `MXN ${totalFinal.toFixed(2)}`, 12, true);
 
-      // Área de items
       const area = coords.itemsArea;
       if (!area) {
         alert("Faltan coords.itemsArea en la plantilla.");
@@ -1053,7 +970,7 @@ const ownerEmail: string | null =
         }
       }
 
-      const pdfBytes = await pdfDoc.save(); // Uint8Array
+      const pdfBytes = await pdfDoc.save();
       const filePath = `cotizaciones/${id}/${folio}.pdf`;
       const fileRef = storageRef(storage, filePath);
       await uploadBytes(fileRef, pdfBytes, { contentType: "application/pdf" });
@@ -1088,6 +1005,37 @@ const ownerEmail: string | null =
     }
   };
 
+  // ======== SPEC files helpers ========
+  const addSpecFiles = (list: FileList | null) => {
+    if (!list) return;
+    const incoming = Array.from(list);
+
+    setSpecFiles((prev) => {
+      const seen = new Set(prev.map((f) => `${f.name}_${f.size}_${f.lastModified}`));
+      const filtered = incoming.filter((f) => {
+        const k = `${f.name}_${f.size}_${f.lastModified}`;
+        if (seen.has(k)) return false;
+        seen.add(k);
+        return true;
+      });
+      return [...prev, ...filtered];
+    });
+
+    if (specInputRef.current) specInputRef.current.value = "";
+  };
+
+  const removeSpecFile = (idx: number) => setSpecFiles((prev) => prev.filter((_, i) => i !== idx));
+
+  const moveSpecFile = (idx: number, dir: -1 | 1) => {
+    setSpecFiles((prev) => {
+      const next = [...prev];
+      const target = idx + dir;
+      if (target < 0 || target >= next.length) return prev;
+      [next[idx], next[target]] = [next[target], next[idx]];
+      return next;
+    });
+  };
+
   // --------- Guardar nueva versión de especificaciones ---------
   const handleSpecSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -1099,7 +1047,6 @@ const ownerEmail: string | null =
     try {
       setSavingSpec(true);
 
-      // versión siguiente (v2, v3, etc.). Asumimos que la versión 1 es el pedido original.
       const currentMax =
         specUpdates.length === 0
           ? 1
@@ -1123,37 +1070,30 @@ const ownerEmail: string | null =
         createdAt: serverTimestamp(),
       });
 
-      // <<< NUEVO: notificación por nueva especificación
+      // notificaciones
       const titulo = pedido?.titulo || "Sin título";
-
       if (isAdmin) {
-  // Especificación creada por admin -> notificación al dueño del pedido
-  if (ownerEmail) {
-    await addDoc(collection(db, "notifications"), {
-      userEmail: ownerEmail,
-      pedidoId: id,
-      tipo: "spec_nueva_admin",
-      mensaje: `Tu pedido "${titulo}" tiene una nueva especificación.`,
-      createdAt: serverTimestamp(),
-      leido: false,
-    });
-  }
-} else {
-  // Especificación creada por usuario -> notificación para todos los admins (bandeja admin)
-  await addDoc(collection(db, "notifications_admin"), {
-    pedidoId: id,
-    tipo: "spec_nueva_usuario",
-    mensaje: `El pedido "${titulo}" tiene una nueva especificación.`,
-    createdAt: serverTimestamp(),
-    leido: false,
-  });
-}
+        if (ownerEmail) {
+          await addDoc(collection(db, "notifications"), {
+            userEmail: ownerEmail,
+            pedidoId: id,
+            tipo: "spec_nueva_admin",
+            mensaje: `Tu pedido "${titulo}" tiene una nueva especificación.`,
+            createdAt: serverTimestamp(),
+            leido: false,
+          });
+        }
+      } else {
+        await addDoc(collection(db, "notifications_admin"), {
+          pedidoId: id,
+          tipo: "spec_nueva_usuario",
+          mensaje: `El pedido "${titulo}" tiene una nueva especificación.`,
+          createdAt: serverTimestamp(),
+          leido: false,
+        });
+      }
 
-
-      // refrescar lista
       await loadSpecUpdates();
-
-      // limpiar formulario
       setSpecDesc("");
       setSpecFiles([]);
       setShowSpecForm(false);
@@ -1174,15 +1114,9 @@ const ownerEmail: string | null =
     if (!text) return;
 
     try {
-      const displayName =
-        user.displayName ||
-        (user as any).name ||
-        user.email ||
-        "Usuario";
-
+      const displayName = user.displayName || (user as any).name || user.email || "Usuario";
       const chatColRef = collection(db, "pedidos", id as string, "chat");
 
-      // Mensaje con flags de visto según quién lo manda
       const msgData = {
         text,
         createdAt: serverTimestamp(),
@@ -1190,60 +1124,47 @@ const ownerEmail: string | null =
         userEmail: user.email,
         userName: displayName,
         isAdmin,
-        // flags de lectura
         vistoPorAdmin: !!isAdmin,
         vistoPorUser: !isAdmin,
         notificacionCreada: false,
       };
 
       const msgRef = await addDoc(chatColRef, msgData);
-
-      // Limpiar campo de texto inmediatamente
       setNewMessage("");
 
-      // <<< NUEVO: programar notificación 1 minuto después,
-      // solo si el mensaje sigue sin ser leído por el otro lado
       setTimeout(async () => {
         try {
           const snap = await getDoc(msgRef);
           if (!snap.exists()) return;
           const data = snap.data() as any;
-
-          // si ya se creó notificación para este mensaje, no hacemos nada
           if (data.notificacionCreada) return;
 
-          const sigueSinLeer = isAdmin
-            ? !data.vistoPorUser
-            : !data.vistoPorAdmin;
-
+          const sigueSinLeer = isAdmin ? !data.vistoPorUser : !data.vistoPorAdmin;
           if (!sigueSinLeer) return;
 
           const titulo = pedido?.titulo || "Sin título";
 
           if (isAdmin) {
-  // Mensaje de admin -> notificación al dueño del pedido (por correo)
-  if (ownerEmail) {
-    await addDoc(collection(db, "notifications"), {
-      userEmail: ownerEmail,
-      pedidoId: id,
-      tipo: "chat_msg_para_usuario",
-      mensaje: `Tu pedido "${titulo}" tiene un mensaje nuevo.`,
-      createdAt: serverTimestamp(),
-      leido: false,
-    });
-  }
-} else {
-  // Mensaje de usuario -> notificación para admins (bandeja general de admins)
-  await addDoc(collection(db, "notifications_admin"), {
-    pedidoId: id,
-    tipo: "chat_msg_para_admin",
-    mensaje: `El pedido "${titulo}" tiene un mensaje nuevo.`,
-    createdAt: serverTimestamp(),
-    leido: false,
-  });
-}
+            if (ownerEmail) {
+              await addDoc(collection(db, "notifications"), {
+                userEmail: ownerEmail,
+                pedidoId: id,
+                tipo: "chat_msg_para_usuario",
+                mensaje: `Tu pedido "${titulo}" tiene un mensaje nuevo.`,
+                createdAt: serverTimestamp(),
+                leido: false,
+              });
+            }
+          } else {
+            await addDoc(collection(db, "notifications_admin"), {
+              pedidoId: id,
+              tipo: "chat_msg_para_admin",
+              mensaje: `El pedido "${titulo}" tiene un mensaje nuevo.`,
+              createdAt: serverTimestamp(),
+              leido: false,
+            });
+          }
 
-          // marcar que ya generó notificación
           await updateDoc(msgRef, { notificacionCreada: true });
         } catch (err) {
           console.error("Error al evaluar notificación de chat:", err);
@@ -1255,115 +1176,159 @@ const ownerEmail: string | null =
     }
   };
 
-  if (!pedido) return <p className="text-black p-4">Cargando...</p>;
+  if (!pedido) {
+    return <div className="mx-auto max-w-7xl px-4 sm:px-8 py-10 text-white/80">Cargando…</div>;
+  }
 
+  // ======== Render ========
   return (
-    <div className="max-w-5xl mx-auto p-4 text-black space-y-6">
-      <button
-        onClick={() => router.back()}
-        className="bg-white text-black px-4 py-2 rounded hover:bg-gray-200 flex items-center gap-2"
-      >
+    <div className="mx-auto max-w-7xl px-4 sm:px-8 py-10 text-white">
+      {/* Back */}
+      <button onClick={() => router.back()} className={btnGhost}>
         <FiArrowLeft /> Regresar
       </button>
 
-      <h1 className="text-white text-xl text-center font-bold">Detalles del pedido</h1>
+      {/* Header */}
+      <div className="mt-6">
+        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-white/95">
+          Detalles del pedido
+        </h1>
+        <div className="mt-2 text-sm text-white/60">
+          <span className="text-white/75">ID:</span>{" "}
+          <span className="font-semibold text-white/85 break-all">{String(id)}</span>
+        </div>
+      </div>
 
-      {/* ----- Layout principal: detalles + chat lateral ----- */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 items-stretch">
-        {/* Columna izquierda: datos del pedido */}
-        <div className="bg-white shadow rounded-xl p-6 space-y-4 lg:col-span-2 h-full">
-          <p>
-            <strong>Título:</strong> {pedido.titulo || "Sin título"}
-          </p>
-          <p>
-            <strong>Proyecto:</strong> {pedido.proyecto}
-          </p>
-          <p>
-            <strong>Servicio:</strong> {pedido.servicio}
-          </p>
-          <p>
-            <strong>Máquina:</strong> {pedido.maquina}
-          </p>
-          <p>
-            <strong>Material:</strong> {pedido.material}
-          </p>
-          <p>
-            <strong>Descripción:</strong> {pedido.descripcion}
-          </p>
-          <p>
-            <strong>Fecha de entrega propuesta:</strong> {pedido.fechaLimite}
-          </p>
-          <p>
-            <strong>Fecha de entrega real:</strong> {pedido.fechaEntregaReal || "No definida"}
-          </p>
+      {/* Top grid: Pedido + Chat */}
+      <div className="mt-8 grid grid-cols-1 lg:grid-cols-5 gap-6 items-stretch">
+        {/* Pedido */}
+        <div className={`${cardClass} ${cardPad} lg:col-span-2`}>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-white/90">Resumen</h2>
+              <p className="mt-1 text-sm text-white/60">Información general del pedido.</p>
+            </div>
 
-          <p>
-            <strong>Status:</strong> {pedido.status || "Enviado"}
-          </p>
-
-          {/* Archivos adjuntos */}
-          <div className="pt-4 mt-2 border-t">
-            <strong>Archivos adjuntos:</strong>{" "}
-            {filesLoading ? (
-              <span>Cargando…</span>
-            ) : files.length === 0 ? (
-              <span className="italic">No hay archivos adjuntos.</span>
-            ) : (
-              <ul className="list-disc pl-6 mt-2 space-y-1">
-                {files.map((f) => (
-                  <li key={f.url}>
-                    <a
-                      href={f.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-blue-600 underline"
-                    >
-                      {f.name}
-                    </a>
-                  </li>
-                ))}
-              </ul>
-            )}
+            <span className={statusPillClass(pedido.status || "enviado")}>
+              {statusLabel(pedido.status || "enviado")}
+            </span>
           </div>
 
-          {isAdmin && (
-            <div className="pt-4 mt-4 border-t">
-              <button
-                onClick={() => {
-                  const proyecto = encodeURIComponent(pedido.proyecto || "");
-                  const titulo = encodeURIComponent(pedido.titulo || "");
-                  router.push(`/cotizador?proyecto=${proyecto}&titulo=${titulo}`);
-                }}
-                className="px-4 py-2 rounded-xl bg-black text-white hover:opacity-90"
-              >
-                Cotizar servicio
-              </button>
+          <div className="mt-5 space-y-3 text-sm">
+            <div>
+              <div className={label}>Título</div>
+              <div className={`${value} font-medium break-words`}>{pedido.titulo || "Sin título"}</div>
             </div>
-          )}
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <div className={label}>Proyecto</div>
+                <div className={`${value} break-words`}>{pedido.proyecto || "—"}</div>
+              </div>
+              <div>
+                <div className={label}>Servicio</div>
+                <div className={value}>{pedido.servicio || "—"}</div>
+              </div>
+              <div>
+                <div className={label}>Máquina</div>
+                <div className={value}>{pedido.maquina || "—"}</div>
+              </div>
+              <div>
+                <div className={label}>Material</div>
+                <div className={value}>{pedido.material || "—"}</div>
+              </div>
+            </div>
+
+            <div>
+              <div className={label}>Descripción</div>
+              <div className={`${value} whitespace-pre-wrap leading-relaxed`}>
+                {pedido.descripcion || "—"}
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <div className={label}>Entrega propuesta</div>
+                <div className={value}>{pedido.fechaLimite || "—"}</div>
+              </div>
+              <div>
+                <div className={label}>Entrega real</div>
+                <div className={value}>{pedido.fechaEntregaReal || "Pendiente"}</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Adjuntos */}
+          <div className="mt-5 border-t border-white/10 pt-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-sm font-semibold text-white/90">Archivos adjuntos</div>
+                <div className="text-xs text-white/50">Archivos del pedido (Storage).</div>
+              </div>
+            </div>
+
+            <div className="mt-3">
+              {filesLoading ? (
+                <div className="text-sm text-white/60">Cargando…</div>
+              ) : files.length === 0 ? (
+                <div className="text-sm text-white/60 italic">No hay archivos adjuntos.</div>
+              ) : (
+                <ul className="space-y-2">
+                  {files.map((f) => (
+                    <li key={f.url} className="flex items-center justify-between gap-3">
+                      <a
+                        href={f.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-emerald-200 hover:text-emerald-100 underline decoration-white/20 text-sm break-all"
+                      >
+                        {f.name}
+                      </a>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            {isAdmin && (
+              <div className="mt-5">
+                <button
+                  onClick={() => {
+                    const proyecto = encodeURIComponent(pedido.proyecto || "");
+                    const titulo = encodeURIComponent(pedido.titulo || "");
+                    router.push(`/cotizador?proyecto=${proyecto}&titulo=${titulo}`);
+                  }}
+                  className={btnSoft}
+                >
+                  Cotizar servicio
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Columna derecha: CANAL DE COMUNICACIÓN */}
-        <div className="bg-white shadow rounded-xl p-6 space-y-4 lg:col-span-2 h-full flex flex-col">
-          <div className="w-full flex flex-col h-full">
-            <div className="flex items-center justify-between px-4 py-3 border-b">
-              <h2 className="text-sm font-semibold">Canal de comunicación</h2>
+        {/* Chat */}
+        <div className={`${cardClass} ${cardPad} lg:col-span-3 flex flex-col`}>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <h2 className="text-lg font-semibold text-white/90">Canal de comunicación</h2>
+              <p className="mt-1 text-sm text-white/60">
+                Mensajes entre administradores y usuarios sobre este pedido.
+              </p>
             </div>
+          </div>
 
-            <p className="px-4 pt-2 text-sm text-gray-500">
-              Mensajes entre administradores y usuarios sobre este pedido.
-            </p>
-
-            <div className="flex-1 mt-2 border rounded-lg p-2 overflow-y-auto space-y-2 text-sm bg-gray-50 min-h-[380px] max-h-[380px]">
+          {/* Messages box */}
+          <div className="mt-4 flex-1 rounded-2xl border border-white/10 bg-black/20 overflow-hidden flex flex-col">
+            <div className="flex-1 p-3 sm:p-4 overflow-y-auto space-y-2">
               {chatMessages.length === 0 ? (
-                <p className="text-gray-500 text-sm text-center mt-4">
+                <p className="text-white/55 text-sm text-center mt-6">
                   Aún no hay mensajes en este pedido.
                 </p>
               ) : (
                 chatMessages.map((m) => {
                   const fecha =
-                    m.createdAt?.toDate?.() instanceof Date
-                      ? m.createdAt.toDate()
-                      : null;
+                    m.createdAt?.toDate?.() instanceof Date ? m.createdAt.toDate() : null;
 
                   const isMine = user && m.userId && m.userId === user.uid;
 
@@ -1373,33 +1338,28 @@ const ownerEmail: string | null =
                     m.userName ||
                     (m.isAdmin ? "Admin" : "Usuario");
 
+                  const bubbleMine =
+                    "bg-emerald-500/15 border border-emerald-400/25 text-emerald-50";
+                  const bubbleOther =
+                    "bg-white/5 border border-white/10 text-white/90";
+
                   return (
-                    <div
-                      key={m.id}
-                      className={`flex ${isMine ? "justify-end" : "justify-start"}`}
-                    >
-                      <div
-                        className={`max-w-[85%] rounded-xl px-3 py-2 shadow-sm ${
-                          isMine ? "bg-black text-white" : "bg-white text-black"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2 mb-1">
-                          <span className="text-[11px] font-semibold">
+                    <div key={m.id} className={`flex ${isMine ? "justify-end" : "justify-start"}`}>
+                      <div className={`max-w-[85%] rounded-2xl px-3 py-2 ${isMine ? bubbleMine : bubbleOther}`}>
+                        <div className="flex items-center justify-between gap-3 mb-1">
+                          <span className="text-[11px] font-semibold text-white/80">
                             {friendlyName}
                             {m.isAdmin ? " · Admin" : ""}
                           </span>
                           {fecha && (
-                            <span className="text-[9px] opacity-70">
+                            <span className="text-[10px] text-white/45">
                               {fecha.toLocaleDateString()}{" "}
-                              {fecha.toLocaleTimeString([], {
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
+                              {fecha.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
                             </span>
                           )}
                         </div>
 
-                        <p className="whitespace-pre-wrap text-sm">{m.text}</p>
+                        <p className="whitespace-pre-wrap text-sm leading-relaxed">{m.text}</p>
                       </div>
                     </div>
                   );
@@ -1408,14 +1368,12 @@ const ownerEmail: string | null =
               <div ref={chatEndRef} />
             </div>
 
-            <form
-              onSubmit={handleSendMessage}
-              className="border-t px-3 py-2 flex flex-col gap-2"
-            >
+            {/* Composer */}
+            <form onSubmit={handleSendMessage} className="border-t border-white/10 p-3 sm:p-4">
               <textarea
-                className="w-full border rounded-lg px-2 py-1 text-sm resize-none"
+                className={textareaClass}
                 rows={2}
-                placeholder="Escribe un mensaje..."
+                placeholder="Escribe un mensaje…"
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
                 onKeyDown={(e) => {
@@ -1426,394 +1384,469 @@ const ownerEmail: string | null =
                 }}
               />
 
-              <button
-                type="submit"
-                className="self-end px-4 py-1.5 rounded-xl bg-black text-white text-sm hover:opacity-90 disabled:opacity-50"
-                disabled={!newMessage.trim()}
-              >
-                Enviar
-              </button>
+              <div className="mt-3 flex items-center justify-end">
+                <button
+                  type="submit"
+                  className={btnPrimary}
+                  disabled={!newMessage.trim()}
+                >
+                  Enviar
+                </button>
+              </div>
             </form>
           </div>
         </div>
       </div>
 
-      {/* ----- Especificaciones adicionales / cambios de versión ----- */}
-      <div className="bg-white shadow rounded-xl p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Especificaciones adicionales / versiones</h2>
+      {/* Especificaciones */}
+      <div className={`mt-6 ${cardClass} ${cardPad}`}>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-white/90">Especificaciones adicionales / versiones</h2>
+            <p className="mt-1 text-sm text-white/60">
+              Cambios sobre el pedido original (v1).
+            </p>
+          </div>
+
           <button
             type="button"
             onClick={() => setShowSpecForm((prev) => !prev)}
-            className="px-3 py-1 rounded-xl border border-gray-300 bg-gray-50 hover:bg-gray-100 text-sm"
+            className={btnSoft}
           >
             {showSpecForm ? "Cerrar" : "Agregar especificaciones"}
           </button>
         </div>
 
-        {specUpdates.length === 0 ? (
-          <p className="text-sm text-gray-600">
-            Aún no se han registrado cambios de especificaciones. La versión 1 corresponde al pedido
-            original.
-          </p>
-        ) : (
-          <div className="space-y-3">
-            {specUpdates.map((s) => {
-              const fecha = s.createdAt?.toDate?.() instanceof Date ? s.createdAt.toDate() : null;
-              return (
-                <div
-                  key={s.id}
-                  className="border border-gray-200 rounded-lg p-3 text-sm bg-gray-50"
-                >
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="font-semibold">
-                      Versión {s.version} (sobre los archivos/detalles originales)
-                    </span>
-                    <span className="text-xs text-gray-500">
-                      {fecha ? fecha.toLocaleString() : "Fecha no disponible"}
-                    </span>
-                  </div>
-                  {s.descripcion && (
-                    <p className="mb-2 whitespace-pre-wrap">{s.descripcion}</p>
-                  )}
-                  {s.archivos && s.archivos.length > 0 && (
-                    <div>
-                      <span className="font-medium">Archivos adjuntos de esta versión:</span>
-                      <ul className="list-disc pl-5 mt-1 space-y-1">
-                        {s.archivos.map((a) => (
-                          <li key={a.url}>
-                            <a
-                              href={a.url}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="text-blue-600 underline"
-                            >
-                              {a.name}
-                            </a>
-                          </li>
-                        ))}
-                      </ul>
+        <div className="mt-4">
+          {specUpdates.length === 0 ? (
+            <p className="text-sm text-white/60">
+              Aún no se han registrado cambios. La versión 1 corresponde al pedido original.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {specUpdates.map((s) => {
+                const fecha = s.createdAt?.toDate?.() instanceof Date ? s.createdAt.toDate() : null;
+                return (
+                  <div
+                    key={s.id}
+                    className="rounded-2xl border border-white/10 bg-white/[0.04] p-4"
+                  >
+                    <div className="flex items-center justify-between gap-3 mb-2">
+                      <span className="font-semibold text-white/90">
+                        Versión {s.version} <span className="text-white/50 font-normal">(sobre original)</span>
+                      </span>
+                      <span className="text-xs text-white/45">
+                        {fecha ? fecha.toLocaleString() : "Fecha no disponible"}
+                      </span>
                     </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        )}
+
+                    {s.descripcion && (
+                      <p className="text-sm text-white/85 whitespace-pre-wrap leading-relaxed">
+                        {s.descripcion}
+                      </p>
+                    )}
+
+                    {s.archivos && s.archivos.length > 0 && (
+                      <div className="mt-3">
+                        <div className="text-sm font-medium text-white/80">
+                          Archivos adjuntos de esta versión:
+                        </div>
+                        <ul className="mt-2 space-y-2">
+                          {s.archivos.map((a) => (
+                            <li key={a.url}>
+                              <a
+                                href={a.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="text-emerald-200 hover:text-emerald-100 underline decoration-white/20 text-sm"
+                              >
+                                {a.name}
+                              </a>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
 
         {showSpecForm && (
-          <form onSubmit={handleSpecSubmit} className="mt-4 space-y-3 border-t pt-4">
+          <form onSubmit={handleSpecSubmit} className="mt-5 border-t border-white/10 pt-5 space-y-4">
             <div>
-              <label className="block text-sm font-medium mb-1">
+              <label className="block text-sm font-medium text-white/85 mb-2">
                 Descripción del cambio / especificaciones nuevas
               </label>
               <textarea
-                className="w-full border rounded-md px-3 py-2 text-sm"
+                className={textareaClass}
                 rows={3}
                 value={specDesc}
                 onChange={(e) => setSpecDesc(e.target.value)}
-                placeholder="Ejemplo: Se actualiza el archivo de diseño por versión con más grosor en la pared lateral. Justificación del cambio..."
+                placeholder="Ejemplo: Se actualiza el archivo de diseño por versión con más grosor en la pared lateral…"
               />
             </div>
+
             <div>
-              <label className="block text-sm font-medium mb-1">Adjuntar archivos</label>
+              <label className="block text-sm font-medium text-white/85 mb-2">Adjuntar archivos</label>
 
-             <label className="inline-flex items-center px-4 py-2 rounded-xl bg-black text-white text-sm cursor-pointer hover:opacity-90">
-  <span className="mr-2">⬆</span>
-  Seleccionar archivos
-  <input
-    ref={specInputRef}
-    type="file"
-    multiple
-    className="hidden"
-    onChange={(e) => addSpecFiles(e.target.files)}
-  />
-</label>
+              <label className="inline-flex items-center gap-2 rounded-xl border border-white/12 bg-white/5 px-4 py-2 text-sm text-white/85 cursor-pointer hover:bg-white/10 transition">
+                <span className="text-white/70">⬆</span>
+                Seleccionar archivos
+                <input
+                  ref={specInputRef}
+                  type="file"
+                  multiple
+                  className="hidden"
+                  onChange={(e) => addSpecFiles(e.target.files)}
+                />
+              </label>
 
-{specFiles.length > 0 && (
-  <div className="mt-3 border rounded-lg bg-white">
-    <div className="px-3 py-2 text-xs text-gray-600 border-b">
-      Archivos seleccionados (puedes reordenar):
-    </div>
+              {specFiles.length > 0 && (
+                <div className="mt-3 rounded-2xl border border-white/10 bg-black/20 overflow-hidden">
+                  <div className="px-4 py-3 text-xs text-white/60 border-b border-white/10">
+                    Archivos seleccionados (puedes reordenar):
+                  </div>
 
-    <ul className="divide-y">
-      {specFiles.map((f, idx) => (
-        <li key={`${f.name}_${f.size}_${f.lastModified}`} className="flex items-center justify-between gap-3 px-3 py-2">
-          <div className="min-w-0">
-            <p className="text-sm font-medium truncate">{f.name}</p>
-            <p className="text-xs text-gray-500">
-              {(f.size / 1024 / 1024).toFixed(2)} MB
-            </p>
-          </div>
+                  <ul className="divide-y divide-white/10">
+                    {specFiles.map((f, idx) => (
+                      <li
+                        key={`${f.name}_${f.size}_${f.lastModified}`}
+                        className="flex items-center justify-between gap-3 px-4 py-3"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium text-white/90 truncate">{f.name}</p>
+                          <p className="text-xs text-white/50">
+                            {(f.size / 1024 / 1024).toFixed(2)} MB
+                          </p>
+                        </div>
 
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => moveSpecFile(idx, -1)}
-              disabled={idx === 0}
-              className="p-2 rounded border hover:bg-gray-100 disabled:opacity-40"
-              title="Subir"
-            >
-              <FiChevronUp />
-            </button>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => moveSpecFile(idx, -1)}
+                            disabled={idx === 0}
+                            className={`${btnSoft} !px-2 !py-2 disabled:opacity-40`}
+                            title="Subir"
+                          >
+                            <FiChevronUp />
+                          </button>
 
-            <button
-              type="button"
-              onClick={() => moveSpecFile(idx, 1)}
-              disabled={idx === specFiles.length - 1}
-              className="p-2 rounded border hover:bg-gray-100 disabled:opacity-40"
-              title="Bajar"
-            >
-              <FiChevronDown />
-            </button>
+                          <button
+                            type="button"
+                            onClick={() => moveSpecFile(idx, 1)}
+                            disabled={idx === specFiles.length - 1}
+                            className={`${btnSoft} !px-2 !py-2 disabled:opacity-40`}
+                            title="Bajar"
+                          >
+                            <FiChevronDown />
+                          </button>
 
-            <button
-              type="button"
-              onClick={() => removeSpecFile(idx)}
-              className="p-2 rounded border hover:bg-red-50 text-red-600"
-              title="Quitar"
-            >
-              <FiX />
-            </button>
-          </div>
-        </li>
-      ))}
-    </ul>
-  </div>
-)}
-
+                          <button
+                            type="button"
+                            onClick={() => removeSpecFile(idx)}
+                            className={`${btnDanger} !px-2 !py-2`}
+                            title="Quitar"
+                          >
+                            <FiX />
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
             </div>
 
-            <button
-              type="submit"
-              disabled={savingSpec}
-              className="px-4 py-2 rounded-xl bg-black text-white text-sm hover:opacity-90 disabled:opacity-50"
-            >
-              {savingSpec ? "Guardando…" : "Guardar como nueva versión"}
-            </button>
-            <p className="text-xs text-gray-500 mt-1">
-              Esta nueva entrada se registrará como la versión siguiente (v2, v3, etc.) con fecha
-              automática.
-            </p>
+            <div className="flex items-center gap-3">
+              <button
+                type="submit"
+                disabled={savingSpec}
+                className={btnPrimary}
+              >
+                {savingSpec ? "Guardando…" : "Guardar como nueva versión"}
+              </button>
+
+              <p className="text-xs text-white/45">
+                Se registrará como la versión siguiente (v2, v3, etc.) con fecha automática.
+              </p>
+            </div>
           </form>
         )}
       </div>
 
-      {/* ----- COTIZACIÓN VIVA ----- */}
-      <div id="cotizacion-viva" className="bg-white shadow rounded-xl p-6 space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Cotización</h2>
-          <button
-            onClick={cargarCotizacionViva}
-            className="px-3 py-1 rounded border hover:bg-gray-100"
-            title="Actualizar"
-          >
+      {/* Cotización */}
+      <div id="cotizacion-viva" className={`mt-6 ${cardClass} ${cardPad}`}>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-semibold text-white/90">Cotización</h2>
+            <p className="mt-1 text-sm text-white/60">Cotización viva del pedido.</p>
+          </div>
+
+          <button onClick={cargarCotizacionViva} className={btnSoft} title="Actualizar">
             Refrescar
           </button>
         </div>
 
-        {loadingQuote ? (
-          <p>Cargando cotización…</p>
-        ) : quoteLines.length === 0 ? (
-          <p className="text-gray-600">No se han adjuntado servicios a esta cotización.</p>
-        ) : (
-          <>
-            {/* Meta informativa */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
-              <div>
-                <span className="font-medium">Moneda base:</span> MXN
+        <div className="mt-4">
+          {loadingQuote ? (
+            <p className="text-sm text-white/60">Cargando cotización…</p>
+          ) : quoteLines.length === 0 ? (
+            <p className="text-sm text-white/60">No se han adjuntado servicios a esta cotización.</p>
+          ) : (
+            <>
+              {/* Meta */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm text-white/70">
+                <div>
+                  <span className="font-medium text-white/80">Moneda base:</span> MXN
+                </div>
+                <div>
+                  <span className="font-medium text-white/80">Tasa USD→MXN:</span> {quoteMeta?.exchangeRate ?? 17}
+                </div>
+                <div>
+                  <span className="font-medium text-white/80">IVA (default):</span> 16.00%
+                </div>
               </div>
-              <div>
-                <span className="font-medium">Tasa USD→MXN:</span> {quoteMeta?.exchangeRate ?? 17}
-              </div>
-              <div>
-                <span className="font-medium">IVA (default):</span> 16.00%
-              </div>
-            </div>
 
-            {/* Tabla de servicios */}
-            <div className="border border-gray-200 rounded-xl overflow-hidden">
-              <table className="min-w-full text-sm">
-                <thead className="bg-gray-100">
-                  <tr>
-                    <th className="text-left px-3 py-2">Servicio</th>
-                    <th className="text-left px-3 py-2">TÍTULO DEL PEDIDO</th>
-                    <th className="text-left px-3 py-2">Total</th>
-                    <th className="text-left px-3 py-2">Detalles del servicio</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {quoteLines.map((ln) => {
-                    const d = ln.data;
-                    const base = d.subtotalMXN ?? 0;
-                    const inflado = base * (1 + (Number(draft.gananciaPct) || 0) / 100);
-                    const details = buildDetailsForLine(d);
-                    return (
-                      <tr key={ln.id} className="border-t align-top">
-                        <td className="px-3 py-2">
-                          <div className="font-medium">{d.serviceName || d.serviceId || "—"}</div>
-                        </td>
-                        <td className="px-3 py-2">{pedido.titulo || "Sin título"}</td>
-                        <td className="px-3 py-2">MXN {inflado.toFixed(2)}</td>
-                        <td className="px-3 py-2">
-                          {details.length === 0 ? (
-                            <span className="text-gray-500">—</span>
-                          ) : (
-                            <ul className="list-disc pl-5 space-y-0.5">
-                              {details.map((txt, i) => (
-                                <li key={i}>{txt}</li>
-                              ))}
-                            </ul>
-                          )}
-                        </td>
+              {/* Tabla */}
+              <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 overflow-hidden">
+                <div className="w-full overflow-x-auto">
+                  <table className="min-w-[900px] w-full text-sm">
+                    <thead className="bg-white/[0.04] text-white/70">
+                      <tr>
+                        <th className="text-left px-4 py-3 font-semibold">Servicio</th>
+                        <th className="text-left px-4 py-3 font-semibold">Título del pedido</th>
+                        <th className="text-left px-4 py-3 font-semibold">Total</th>
+                        <th className="text-left px-4 py-3 font-semibold">Detalles del servicio</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+                    </thead>
+                    <tbody className="divide-y divide-white/10">
+                      {quoteLines.map((ln) => {
+                        const d = ln.data;
+                        const base = d.subtotalMXN ?? 0;
+                        const inflado = base * (1 + (Number(draft.gananciaPct) || 0) / 100);
+                        const details = buildDetailsForLine(d);
 
-            {/* Resumen de totales */}
-            <div className="space-y-2 text-right">
-              <div className="font-semibold">Subtotal sin ganancia: {formatMoney(subtotalBaseMXN)}</div>
-
-              <div className="flex items-center justify-end gap-2">
-                <label className="text-sm" htmlFor="gananciaPct">
-                  Ganancia (%):
-                </label>
-                <input
-                  id="gananciaPct"
-                  type="number"
-                  step="10"
-                  min="0"
-                  value={draft.gananciaPct}
-                  onChange={(e) => scheduleSave({ ...draft, gananciaPct: Number(e.target.value) })}
-                  className="w-24 px-2 py-1 border rounded text-right"
-                />
-                <span className="ml-2">{formatMoney(gananciaMonto)}</span>
+                        return (
+                          <tr key={ln.id} className="align-top hover:bg-emerald-500/[0.04] transition">
+                            <td className="px-4 py-3">
+                              <div className="font-medium text-white/90">
+                                {d.serviceName || d.serviceId || "—"}
+                              </div>
+                            </td>
+                            <td className="px-4 py-3 text-white/80">{pedido.titulo || "Sin título"}</td>
+                            <td className="px-4 py-3 text-white/85 whitespace-nowrap">
+                              MXN {inflado.toFixed(2)}
+                            </td>
+                            <td className="px-4 py-3">
+                              {details.length === 0 ? (
+                                <span className="text-white/50">—</span>
+                              ) : (
+                                <ul className="list-disc pl-5 space-y-1 text-white/80">
+                                  {details.map((txt, i) => (
+                                    <li key={i}>{txt}</li>
+                                  ))}
+                                </ul>
+                              )}
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               </div>
 
-              <div>
-                <span className="font-medium">Subtotal con ganancia:</span>{" "}
-                {formatMoney(subtotalConGananciaMXN)}
+              {/* Totales */}
+              <div className="mt-5 grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                  <div className="text-sm text-white/60">
+                    * El PDF mostrará los importes por servicio <span className="text-white/80 font-semibold">ya con ganancia</span>, sin revelar el %.
+                  </div>
+
+                  <div className="mt-4 flex items-center gap-3">
+                    <button
+                      onClick={async () => {
+                        try {
+                          setIsGen(true);
+                          const ok = await handleGenerarPDF(); // genérico
+                          if (ok) await cargarCotizacionViva();
+                        } finally {
+                          setIsGen(false);
+                        }
+                      }}
+                      disabled={isGen}
+                      className={btnPrimary}
+                    >
+                      {isGen ? "Generando…" : "Generar PDF"}
+                    </button>
+
+                    {/* Si un día quieres permitir plantilla, descomenta y usa handleGenerarPDF_Template */}
+                    {/* <button
+                      onClick={async () => {
+                        try {
+                          setIsGen(true);
+                          const okTpl = await handleGenerarPDF_Template();
+                          if (!okTpl) await handleGenerarPDF();
+                        } finally {
+                          setIsGen(false);
+                        }
+                      }}
+                      disabled={isGen}
+                      className={btnSoft}
+                    >
+                      {isGen ? "Generando…" : "Generar PDF (plantilla)"}
+                    </button> */}
+                  </div>
+                </div>
+
+                <div className="rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                  <div className="space-y-2 text-sm text-white/80">
+                    <div className="flex items-center justify-between">
+                      <span className="text-white/70">Subtotal sin ganancia</span>
+                      <span className="font-semibold text-white/90">{formatMoney(subtotalBaseMXN)}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-white/70">Ganancia (%)</span>
+                        <input
+                          id="gananciaPct"
+                          type="number"
+                          step="10"
+                          min="0"
+                          value={draft.gananciaPct}
+                          onChange={(e) => scheduleSave({ ...draft, gananciaPct: Number(e.target.value) })}
+                          className="w-24 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white text-right focus:outline-none focus:ring-2 focus:ring-emerald-400/30"
+                        />
+                      </div>
+                      <span className="font-semibold text-white/90">{formatMoney(gananciaMonto)}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-white/70">Subtotal con ganancia</span>
+                      <span className="font-semibold text-white/90">{formatMoney(subtotalConGananciaMXN)}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <span className="text-white/70">IVA (16%)</span>
+                      <span className="font-semibold text-white/90">{formatMoney(ivaMonto)}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2">
+                        <span className="text-white/70">Envío (MXN)</span>
+                        <input
+                          id="envio"
+                          type="number"
+                          step="10"
+                          min="0"
+                          value={draft.envio ?? 0}
+                          onChange={(e) => scheduleSave({ ...draft, envio: Number(e.target.value) })}
+                          className="w-32 rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white text-right focus:outline-none focus:ring-2 focus:ring-emerald-400/30"
+                        />
+                      </div>
+                      <span className="font-semibold text-white/90">{formatMoney(Number(draft.envio) || 0)}</span>
+                    </div>
+
+                    <div className="pt-2 border-t border-white/10 flex items-center justify-between">
+                      <span className="text-white/80 font-semibold">TOTAL</span>
+                      <span className="text-lg font-bold text-white/95">{formatMoney(totalFinal)}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
-              <div>
-                <span className="font-medium">IVA (16%):</span> {formatMoney(ivaMonto)}
-              </div>
-
-              <div className="flex items-center justify-end gap-2">
-                <label className="text-sm" htmlFor="envio">
-                  Envío (MXN):
-                </label>
-                <input
-                  id="envio"
-                  type="number"
-                  step="10"
-                  min="0"
-                  value={draft.envio ?? 0}
-                  onChange={(e) => scheduleSave({ ...draft, envio: Number(e.target.value) })}
-                  className="w-32 px-2 py-1 border rounded text-right"
-                />
-              </div>
-
-              <div className="text-lg font-bold">TOTAL: {formatMoney(totalFinal)}</div>
-            </div>
-
-            <div className="text-xs text-gray-600">
-              * El PDF mostrará los importes por servicio <strong>ya con ganancia</strong>, sin revelar el
-              %.
-            </div>
-
-            <div className="pt-2">
-              <button
-                onClick={async () => {
-                  try {
-                    setIsGen(true);
-                    const ok = await handleGenerarPDF(); // ← siempre el genérico
-                    if (ok) await cargarCotizacionViva();
-                  } finally {
-                    setIsGen(false);
-                  }
-                }}
-                disabled={isGen}
-                className="px-4 py-2 rounded-xl bg-black text-white hover:opacity-90 disabled:opacity-50"
-              >
-                {isGen ? "Generando…" : "Generar PDF"}
-              </button>
-            </div>
-          </>
-        )}
+            </>
+          )}
+        </div>
       </div>
 
-      {/* ----- Panel Draft (PM) ----- */}
-      <div className="bg-white shadow rounded-xl p-6 space-y-4">
-        <h2 className="text-lg font-semibold">Datos de cotización (draft)</h2>
+      {/* Draft */}
+      <div className={`mt-6 ${cardClass} ${cardPad}`}>
+        <div>
+          <h2 className="text-lg font-semibold text-white/90">Datos de cotización (draft)</h2>
+          <p className="mt-1 text-sm text-white/60">
+            Se guarda automáticamente y alimentará el PDF final.
+          </p>
+        </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="mt-4 grid grid-cols-1 sm:grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium">Cliente</label>
+            <label className="block text-sm font-medium text-white/80 mb-2">Cliente</label>
             <input
-              className="mt-1 w-full border rounded px-3 py-2"
+              className={inputClass}
               value={draft.cliente ?? ""}
               onChange={(e) => scheduleSave({ ...draft, cliente: e.target.value })}
+              placeholder="Nombre / empresa"
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium">Atención a</label>
+            <label className="block text-sm font-medium text-white/80 mb-2">Atención a</label>
             <input
-              className="mt-1 w-full border rounded px-3 py-2"
+              className={inputClass}
               value={draft.atencionA ?? ""}
               onChange={(e) => scheduleSave({ ...draft, atencionA: e.target.value })}
+              placeholder="Contacto"
             />
           </div>
 
           <div className="sm:col-span-2">
-            <label className="block text-sm font-medium">Notas</label>
+            <label className="block text-sm font-medium text-white/80 mb-2">Notas</label>
             <textarea
-              className="mt-1 w-full border rounded px-3 py-2"
+              className={textareaClass}
               rows={3}
               value={draft.notas ?? ""}
               onChange={(e) => scheduleSave({ ...draft, notas: e.target.value })}
+              placeholder="Notas internas que aparecerán en el PDF (opcional)"
             />
           </div>
         </div>
-
-        <p className="text-xs text-gray-600">
-          Este draft se guarda automáticamente y alimentará el PDF final.
-        </p>
       </div>
 
-      {/* ----- Versiones generadas ----- */}
-      <div className="bg-white shadow rounded-xl p-6 space-y-3">
-        <h2 className="text-lg font-semibold">Versiones generadas</h2>
-        {versions.length === 0 ? (
-          <p className="text-gray-600">Aún no hay versiones.</p>
-        ) : (
-          <ul className="space-y-2">
-            {versions.map((v) => {
-              const fecha = v.createdAt?.toDate?.() instanceof Date ? v.createdAt.toDate() : null;
-              return (
-                <li key={v.id} className="flex items-center justify-between border rounded p-2">
-                  <div>
-                    <div className="font-medium">{v.id}</div>
-                    <div className="text-xs text-gray-600">
-                      {fecha ? fecha.toLocaleString() : "—"} · Total: {formatMoney(v.total || 0)}
-                    </div>
-                  </div>
-                  <a
-                    className="text-blue-600 underline"
-                    href={v.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
+      {/* Versiones */}
+      <div className={`mt-6 ${cardClass} ${cardPad}`}>
+        <div>
+          <h2 className="text-lg font-semibold text-white/90">Versiones generadas</h2>
+          <p className="mt-1 text-sm text-white/60">Historial de PDFs generados.</p>
+        </div>
+
+        <div className="mt-4">
+          {versions.length === 0 ? (
+            <p className="text-sm text-white/60">Aún no hay versiones.</p>
+          ) : (
+            <ul className="space-y-3">
+              {versions.map((v) => {
+                const fecha = v.createdAt?.toDate?.() instanceof Date ? v.createdAt.toDate() : null;
+                return (
+                  <li
+                    key={v.id}
+                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 rounded-2xl border border-white/10 bg-white/[0.04] p-4"
                   >
-                    Ver PDF
-                  </a>
-                </li>
-              );
-            })}
-          </ul>
-        )}
+                    <div>
+                      <div className="font-semibold text-white/90">{v.id}</div>
+                      <div className="text-xs text-white/55 mt-1">
+                        {fecha ? fecha.toLocaleString() : "—"} · Total:{" "}
+                        <span className="text-white/80 font-semibold">{formatMoney(v.total || 0)}</span>
+                      </div>
+                    </div>
+
+                    <a
+                      className="inline-flex items-center justify-center rounded-xl border border-white/12 bg-white/5 px-4 py-2 text-sm text-white/85 hover:bg-white/10 transition"
+                      href={v.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                    >
+                      Ver PDF
+                    </a>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
       </div>
     </div>
   );
