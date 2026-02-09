@@ -171,32 +171,32 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
           <nav className="hidden lg:flex items-center gap-6 text-sm text-white/75">
             <Link href="/calendario" className="hover:text-white transition">
-              Calendario
+              Calendar
             </Link>
             <Link href="/about" className="hover:text-white transition">
-              Información
+              About
             </Link>
             <Link href="/collection" className="hover:text-white transition">
-              Colección
+              Collection 
             </Link>
             <Link href="/solicitudes" className="hover:text-white transition">
-              Mis proyectos
+              My Projects 
             </Link>
             <Link href="/hacer-pedido/proyecto" className="hover:text-white transition">
-              Hacer pedido
+              Place Order 
             </Link>
             <Link href="/inventario" className="hover:text-white transition">
-              Inventario
+              Inventory
             </Link>
 
             {isAdmin && (
               <Link href="/cotizador" className="hover:text-white transition">
-                Cotizador
+                Quoter
               </Link>
             )}
             {isAdmin && (
               <Link href="/analitica" className="hover:text-white transition">
-                Análisis
+                Analytics
               </Link>
             )}
           </nav>

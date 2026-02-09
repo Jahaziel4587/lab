@@ -182,8 +182,7 @@ const scrollTimeline = (dir: "left" | "right") => {
               
 
               <p className="mt-2 text-sm text-white/70 leading-relaxed">
-                Gestiona tus solicitudes, adjunta archivos y da seguimiento a los prototipos de tus
-                proyectos en un solo lugar.
+                Manage your orders, attach files, and track your project prototypes in one place.
               </p>
 
               <button
@@ -193,12 +192,11 @@ const scrollTimeline = (dir: "left" | "right") => {
                   shadow-[0_18px_50px_-20px_rgba(45,212,191,0.6)]
                   hover:brightness-110 hover:-translate-y-[1px] transition"
               >
-                Realiza una solicitud
+                Place Order 
               </button>
 
               <p className="mt-3 text-xs text-white/55">
-                Seleccionarás: proyecto → servicio → máquina → material →
-                especificaciones.
+                Select: project → service → technique → material → specifications.
               </p>
             </div>
           </div>
@@ -209,12 +207,11 @@ const scrollTimeline = (dir: "left" | "right") => {
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h2 className="text-lg sm:text-xl font-semibold">
-                    Solicitudes frecuentes
+                    Frequent Orders
                   </h2>
                   <p className="mt-2 text-sm text-white/70 max-w-2xl">
-                    Atajos a las combinaciones de proyecto, servicio y material que más
-                    utilizas. Al seleccionarlas, se llenan los datos y avanzas directo a
-                    especificaciones.
+                  Shortcuts to the order combinations you use most. 
+                  Selecting one auto-fills the data and takes you directly to specifications.
                   </p>
                 </div>
               </div>
@@ -244,7 +241,7 @@ const scrollTimeline = (dir: "left" | "right") => {
                       >
                         <div className="flex items-center justify-between gap-3">
                           <div className="text-xs text-white/60">
-                            Frecuencia:{" "}
+                            Frequency:{" "}
                             <span className="text-white/80 font-semibold">
                               {pf.count}x
                             </span>
@@ -261,7 +258,7 @@ const scrollTimeline = (dir: "left" | "right") => {
                         <div className="mt-4 space-y-3 text-sm">
                           <div>
                             <p className="text-white/60 text-xs font-medium">
-                              Proyecto
+                              Project
                             </p>
                             <p className="text-white/90 font-semibold truncate">
                               {pf.proyecto}
@@ -272,7 +269,7 @@ const scrollTimeline = (dir: "left" | "right") => {
 
                           <div>
                             <p className="text-white/60 text-xs font-medium">
-                              Servicio
+                              Service
                             </p>
                             <p className="text-white/85 truncate">{pf.servicio}</p>
                           </div>
@@ -299,10 +296,9 @@ const scrollTimeline = (dir: "left" | "right") => {
 <section className="mt-10 sm:mt-14">
   <div className="flex items-end justify-between gap-4">
     <div>
-      <h2 className="text-lg sm:text-xl font-semibold">Historial de solicitudes</h2>
+      <h2 className="text-lg sm:text-xl font-semibold">Order History</h2>
       <p className="mt-2 text-sm text-white/70 max-w-2xl">
-        Consulta y edita detalles de tus últimos pedidos de manera rápida.
-        Selecciona cualquiera para ir a la vista de detalle.
+        Quickly view and edit details of your recent orders. Select any item to open the detailed view.
       </p>
     </div>
 
@@ -312,7 +308,7 @@ const scrollTimeline = (dir: "left" | "right") => {
         rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2
         hover:bg-white/[0.06] transition"
     >
-      Ver todos <FiArrowRight className="text-white/70" />
+      View All <FiArrowRight className="text-white/70" />
     </button>
   </div>
 
