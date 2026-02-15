@@ -130,28 +130,19 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
   return (
     <div className="min-h-screen text-white relative overflow-hidden bg-neutral-950">
-      {/* Fondo tipo “pro” (sin imagen pesada) */}
       <div className="pointer-events-none absolute inset-0">
-        {/* glow arriba izquierda */}
-<div className="absolute -top-56 -left-56 h-[720px] w-[720px] rounded-full bg-emerald-400/14 blur-3xl" />
-{/* glow derecha */}
-<div className="absolute -top-40 -right-64 h-[760px] w-[760px] rounded-full bg-teal-400/12 blur-3xl" />
-{/* glow inferior */}
-<div className="absolute -bottom-64 left-1/3 h-[760px] w-[760px] rounded-full bg-emerald-500/10 blur-3xl" />
+        <div className="absolute -top-56 -left-56 h-[720px] w-[720px] rounded-full bg-emerald-400/14 blur-3xl" />
+        <div className="absolute -top-40 -right-64 h-[760px] w-[760px] rounded-full bg-teal-400/12 blur-3xl" />
+        <div className="absolute -bottom-64 left-1/3 h-[760px] w-[760px] rounded-full bg-emerald-500/10 blur-3xl" />
+        <div className="absolute inset-0 bg-gradient-to-b from-white/[0.06] via-transparent to-black/55" />
+        <div className="absolute inset-0 [background:radial-gradient(ellipse_at_center,transparent_0%,rgba(0,0,0,0.65)_70%,rgba(0,0,0,0.85)_100%)]" />
 
-{/* gradiente y viñeta */}
-<div className="absolute inset-0 bg-gradient-to-b from-white/[0.06] via-transparent to-black/55" />
-<div className="absolute inset-0 [background:radial-gradient(ellipse_at_center,transparent_0%,rgba(0,0,0,0.65)_70%,rgba(0,0,0,0.85)_100%)]" />
+        <div className="pointer-events-none absolute inset-0 z-0">
+          <ParticlesBackground />
+        </div>
 
-        {/* Partículas */}
-<div className="pointer-events-none absolute inset-0 z-0">
-  <ParticlesBackground />
-</div>
-        {/* “ruido” simple con gradients (ligero) */}
         <div
-        
           className="absolute inset-0 opacity-[0.06]"
-          
           style={{
             backgroundImage:
               "repeating-linear-gradient(0deg, rgba(255,255,255,0.08) 0px, rgba(255,255,255,0.08) 1px, transparent 1px, transparent 3px)",
@@ -159,51 +150,49 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         />
       </div>
 
-      {/* HEADER glass */}
       <header className="sticky top-0 z-40 border-b border-white/10 bg-black/40 backdrop-blur-xl">
         <div className="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between">
           <Link
             href="/"
             className="font-semibold text-sm tracking-wider text-white/90 hover:text-white transition"
           >
-           BIOANA PROTOTYPING LAB
+            BIOANA PROTOTYPING LAB
           </Link>
 
           <nav className="hidden lg:flex items-center gap-6 text-sm text-white/75">
-            <Link href="/calendario" className="hover:text-white transition">
+            <Link data-tutorial="nav-calendar" href="/calendario" className="hover:text-white transition">
               Calendar
             </Link>
-            <Link href="/about" className="hover:text-white transition">
+            <Link data-tutorial="nav-about" href="/about" className="hover:text-white transition">
               About
             </Link>
-            <Link href="/collection" className="hover:text-white transition">
-              Collection 
+            <Link data-tutorial="nav-collection" href="/collection" className="hover:text-white transition">
+              Collection
             </Link>
-            <Link href="/solicitudes" className="hover:text-white transition">
-              My Projects 
+            <Link data-tutorial="nav-projects" href="/solicitudes" className="hover:text-white transition">
+              My Projects
             </Link>
-            <Link href="/hacer-pedido/proyecto" className="hover:text-white transition">
-              Place Order 
+            <Link data-tutorial="nav-place-order" href="/hacer-pedido/proyecto" className="hover:text-white transition">
+              Place Order
             </Link>
-            <Link href="/inventario" className="hover:text-white transition">
+            <Link data-tutorial="nav-inventory" href="/inventario" className="hover:text-white transition">
               Inventory
             </Link>
 
             {isAdmin && (
-              <Link href="/cotizador" className="hover:text-white transition">
+              <Link data-tutorial="nav-quoter" href="/cotizador" className="hover:text-white transition">
                 Quoter
               </Link>
             )}
             {isAdmin && (
-              <Link href="/analitica" className="hover:text-white transition">
+              <Link data-tutorial="nav-analytics" href="/analitica" className="hover:text-white transition">
                 Analytics
               </Link>
             )}
           </nav>
 
-          {/* derecha: campana + nombre + usuario */}
+          {/* derecha */}
           <div className="flex items-center gap-3">
-            {/* Campana */}
             {user && (
               <div className="relative">
                 <button
@@ -297,7 +286,6 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               </span>
             )}
 
-            {/* Usuario */}
             <div className="relative group">
               <button
                 type="button"
@@ -317,42 +305,40 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
           </div>
         </div>
 
-        {/* navbar móvil simple (si quieres, luego lo hacemos hamburger bonito) */}
         <div className="lg:hidden px-6 pb-4">
           <div className="flex flex-wrap gap-3 text-xs text-white/70">
             <Link href="/calendario" className="hover:text-white transition">
-              Calendario
+              Calendar
             </Link>
             <Link href="/about" className="hover:text-white transition">
-              Información
+              About
             </Link>
             <Link href="/collection" className="hover:text-white transition">
-              Colección
+              Colection
             </Link>
             <Link href="/solicitudes" className="hover:text-white transition">
-              Mis proyectos
+              My Projects
             </Link>
             <Link href="/hacer-pedido/proyecto" className="hover:text-white transition">
-              Hacer pedido
+              Place Order
             </Link>
             <Link href="/inventario" className="hover:text-white transition">
-              Inventario
+              Inventary
             </Link>
             {isAdmin && (
               <Link href="/cotizador" className="hover:text-white transition">
-                Cotizador
+                Quoter
               </Link>
             )}
             {isAdmin && (
               <Link href="/analitica" className="hover:text-white transition">
-                Análisis
+                Analytics
               </Link>
             )}
           </div>
         </div>
       </header>
 
-      {/* Contenido */}
       <main className="relative z-10 px-0">{children}</main>
 
       <footer className="relative z-10 text-center text-xs text-white/45 py-6">

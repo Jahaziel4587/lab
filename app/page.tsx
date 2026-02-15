@@ -11,6 +11,7 @@ import {
   where,
   type DocumentData,
 } from "firebase/firestore";
+import AdamTutorialCard from "@/app/components/AdamTutorialCard";
 
 type Pedido = {
   id: string;
@@ -95,7 +96,6 @@ export default function Home() {
 
         pedidos.sort((a, b) => b.timestamp - a.timestamp);
 
-        // Historial (antes tenías 7)
         setPedidosRecientes(pedidos.slice(0, 7));
 
         // Frecuentes TOP 3
@@ -141,18 +141,15 @@ export default function Home() {
     cargar();
   }, [userEmail]);
 
-
-
   const timelineRef = useRef<HTMLDivElement | null>(null);
 
-const scrollTimeline = (dir: "left" | "right") => {
-  const el = timelineRef.current;
-  if (!el) return;
+  const scrollTimeline = (dir: "left" | "right") => {
+    const el = timelineRef.current;
+    if (!el) return;
 
-  const amount = Math.round(el.clientWidth * 0.85); // scroll por “pantalla”
-  el.scrollBy({ left: dir === "left" ? -amount : amount, behavior: "smooth" });
-};
-
+    const amount = Math.round(el.clientWidth * 0.85);
+    el.scrollBy({ left: dir === "left" ? -amount : amount, behavior: "smooth" });
+  };
 
   // Handlers
   const handleNuevoPedido = () => router.push("/hacer-pedido/proyecto");
@@ -178,40 +175,45 @@ const scrollTimeline = (dir: "left" | "right") => {
         <section className="grid grid-cols-1 lg:grid-cols-12 gap-8 lg:gap-10 items-start">
           {/* CTA */}
           <div className="lg:col-span-5">
-            <div className="rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-xl shadow-[0_20px_80px_-40px_rgba(0,0,0,0.8)] p-6 sm:p-7">
+            <div
+              data-tutorial="card-place-order"
+              className="rounded-3xl border border-white/10 bg-white/[0.04] backdrop-blur-xl shadow-[0_20px_80px_-40px_rgba(0,0,0,0.8)] p-6 sm:p-7"
+            >
               
-
-              <p className="mt-2 text-sm text-white/70 leading-relaxed">
-                Manage your orders, attach files, and track your project prototypes in one place.
-              </p>
 
               <button
                 onClick={handleNuevoPedido}
-                className="mt-6 w-full h-16 sm:h-[72px] rounded-2xl font-semibold text-lg
+                className="mt-6 w-full h-16 sm:h-[60px] rounded-2xl font-semibold text-lg
                   bg-gradient-to-r from-emerald-400 to-teal-500 text-black
                   shadow-[0_18px_50px_-20px_rgba(45,212,191,0.6)]
                   hover:brightness-110 hover:-translate-y-[1px] transition"
               >
-                Place Order 
+                Place Order
               </button>
 
               <p className="mt-3 text-xs text-white/55">
                 Select: project → service → technique → material → specifications.
               </p>
             </div>
+
+            {/* ✅ ADAM siempre visible debajo del Place Order */}
+            <AdamTutorialCard />
           </div>
 
           {/* Frecuentes */}
           <div className="lg:col-span-7">
-            <div className="rounded-3xl border border-white/10 bg-white/[0.03] backdrop-blur-xl p-6 sm:p-7">
+            <div
+              data-tutorial="card-frequent-orders"
+              className="rounded-3xl border border-white/10 bg-white/[0.03] backdrop-blur-xl p-6 sm:p-7"
+            >
               <div className="flex items-start justify-between gap-4">
                 <div>
                   <h2 className="text-lg sm:text-xl font-semibold">
                     Frequent Orders
                   </h2>
                   <p className="mt-2 text-sm text-white/70 max-w-2xl">
-                  Shortcuts to the order combinations you use most. 
-                  Selecting one auto-fills the data and takes you directly to specifications.
+                    Shortcuts to the order combinations you use most.
+                    Selecting one auto-fills the data and takes you directly to specifications.
                   </p>
                 </div>
               </div>
@@ -293,119 +295,106 @@ const scrollTimeline = (dir: "left" | "right") => {
         </section>
 
         {/* HISTORIAL */}
-<section className="mt-10 sm:mt-14">
-  <div className="flex items-end justify-between gap-4">
-    <div>
-      <h2 className="text-lg sm:text-xl font-semibold">Order History</h2>
-      <p className="mt-2 text-sm text-white/70 max-w-2xl">
-        Quickly view and edit details of your recent orders. Select any item to open the detailed view.
-      </p>
-    </div>
-
-    <button
-      onClick={() => router.push("/solicitudes")}
-      className="hidden sm:inline-flex items-center gap-2 text-sm
-        rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2
-        hover:bg-white/[0.06] transition"
-    >
-      View All <FiArrowRight className="text-white/70" />
-    </button>
-  </div>
-
-  {cargandoPedidos ? (
-    <p className="text-sm text-white/60 mt-4">
-      Cargando línea de tiempo de tus pedidos...
-    </p>
-  ) : pedidosRecientes.length === 0 ? (
-    <p className="text-sm text-white/60 mt-4">Aún no hay pedidos recientes registrados.</p>
-  ) : (
-   <div className="mt-6 relative">
-  {/* Flecha izquierda */}
-  <button
-    type="button"
-    onClick={() => scrollTimeline("left")}
-    className="hidden md:flex absolute left-0 top-1/2 -translate-y-1/2 z-10
-      w-10 h-10 rounded-2xl border border-white/10 bg-black/40 backdrop-blur
-      hover:bg-white/[0.06] transition items-center justify-center"
-    aria-label="Scroll left"
-  >
-    ‹
-  </button>
-
-  {/* Flecha derecha */}
-  <button
-    type="button"
-    onClick={() => scrollTimeline("right")}
-    className="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 z-10
-      w-10 h-10 rounded-2xl border border-white/10 bg-black/40 backdrop-blur
-      hover:bg-white/[0.06] transition items-center justify-center"
-    aria-label="Scroll right"
-  >
-    ›
-  </button>
-
-  {/* Contenedor scroll */}
-  <div
-    ref={timelineRef}
-    className="no-scrollbar overflow-x-auto scroll-smooth px-2 md:px-14 py-2"
-  >
-    <div className="relative min-w-max">
-      {/* Línea central */}
-      <div className="absolute left-0 right-0 top-1/2 h-px bg-white/15" />
-
-      {/* Snap para que se alineen bonito */}
-      <div className="flex items-center gap-10 min-h-[160px] snap-x snap-mandatory">
-        {pedidosRecientes.map((p) => (
-          <div
-            key={p.id}
-            className="relative flex flex-col items-center w-[190px] snap-start"
-          >
-            {/* chip superior */}
-            <button
-              onClick={() => handleVerDetallePedido(p.id)}
-              className="mb-4 w-full truncate px-4 py-2 rounded-full
-                bg-emerald-400/90 text-black text-xs font-semibold
-                shadow-[0_14px_40px_-22px_rgba(45,212,191,0.8)]
-                hover:brightness-110 transition"
-              title={p.titulo}
-            >
-              {p.titulo}
-            </button>
-
-            {/* nodo */}
-            <div className="w-2.5 h-2.5 rounded-full bg-white shadow border border-black/40" />
-
-            {/* chip inferior */}
-            <button
-              onClick={() => handleVerDetallePedido(p.id)}
-              className="mt-4 w-full truncate px-4 py-2 rounded-full
-                border border-white/15 bg-white/[0.03]
-                hover:bg-white/[0.06] transition text-xs text-white/85"
-              title={p.proyecto || p.titulo}
-            >
-              {p.proyecto || p.titulo}
-            </button>
-
-            {/* fecha relativa */}
-            <div className="mt-3 text-[11px] text-white/50">
-              {formatRelative(p.timestamp)}
+        <section data-tutorial="section-order-history" className="mt-10 sm:mt-14">
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <h2 className="text-lg sm:text-xl font-semibold">Order History</h2>
+              <p className="mt-2 text-sm text-white/70 max-w-2xl">
+                Quickly view and edit details of your recent orders. Select any item to open the detailed view.
+              </p>
             </div>
+
+            <button
+              onClick={() => router.push("/solicitudes")}
+              className="hidden sm:inline-flex items-center gap-2 text-sm
+                rounded-xl border border-white/10 bg-white/[0.03] px-4 py-2
+                hover:bg-white/[0.06] transition"
+            >
+              View All <FiArrowRight className="text-white/70" />
+            </button>
           </div>
-        ))}
-      </div>
-    </div>
-  </div>
 
-  {/* degradados laterales para que se vea “pro” y disimule bordes */}
-  <div className="pointer-events-none absolute inset-y-0 left-0 w-10 md:w-14
-    bg-gradient-to-r from-black/70 to-transparent" />
-  <div className="pointer-events-none absolute inset-y-0 right-0 w-10 md:w-14
-    bg-gradient-to-l from-black/70 to-transparent" />
-</div>
+          {cargandoPedidos ? (
+            <p className="text-sm text-white/60 mt-4">
+              Cargando línea de tiempo de tus pedidos...
+            </p>
+          ) : pedidosRecientes.length === 0 ? (
+            <p className="text-sm text-white/60 mt-4">Aún no hay pedidos recientes registrados.</p>
+          ) : (
+            <div className="mt-6 relative">
+              {/* Flecha izquierda */}
+              <button
+                type="button"
+                onClick={() => scrollTimeline("left")}
+                className="hidden md:flex absolute left-0 top-1/2 -translate-y-1/2 z-10
+                  w-10 h-10 rounded-2xl border border-white/10 bg-black/40 backdrop-blur
+                  hover:bg-white/[0.06] transition items-center justify-center"
+                aria-label="Scroll left"
+              >
+                ‹
+              </button>
 
-  )}
-</section>
+              {/* Flecha derecha */}
+              <button
+                type="button"
+                onClick={() => scrollTimeline("right")}
+                className="hidden md:flex absolute right-0 top-1/2 -translate-y-1/2 z-10
+                  w-10 h-10 rounded-2xl border border-white/10 bg-black/40 backdrop-blur
+                  hover:bg-white/[0.06] transition items-center justify-center"
+                aria-label="Scroll right"
+              >
+                ›
+              </button>
 
+              {/* Contenedor scroll */}
+              <div
+                ref={timelineRef}
+                className="no-scrollbar overflow-x-auto scroll-smooth px-2 md:px-14 py-2"
+              >
+                <div className="relative min-w-max">
+                  {/* Línea central */}
+                  <div className="absolute left-0 right-0 top-1/2 h-px bg-white/15" />
+
+                  <div className="flex items-center gap-10 min-h-[160px] snap-x snap-mandatory">
+                    {pedidosRecientes.map((p) => (
+                      <div key={p.id} className="relative flex flex-col items-center w-[190px] snap-start">
+                        <button
+                          onClick={() => handleVerDetallePedido(p.id)}
+                          className="mb-4 w-full truncate px-4 py-2 rounded-full
+                            bg-emerald-400/90 text-black text-xs font-semibold
+                            shadow-[0_14px_40px_-22px_rgba(45,212,191,0.8)]
+                            hover:brightness-110 transition"
+                          title={p.titulo}
+                        >
+                          {p.titulo}
+                        </button>
+
+                        <div className="w-2.5 h-2.5 rounded-full bg-white shadow border border-black/40" />
+
+                        <button
+                          onClick={() => handleVerDetallePedido(p.id)}
+                          className="mt-4 w-full truncate px-4 py-2 rounded-full
+                            border border-white/15 bg-white/[0.03]
+                            hover:bg-white/[0.06] transition text-xs text-white/85"
+                          title={p.proyecto || p.titulo}
+                        >
+                          {p.proyecto || p.titulo}
+                        </button>
+
+                        <div className="mt-3 text-[11px] text-white/50">
+                          {formatRelative(p.timestamp)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="pointer-events-none absolute inset-y-0 left-0 w-10 md:w-14 bg-gradient-to-r from-black/70 to-transparent" />
+              <div className="pointer-events-none absolute inset-y-0 right-0 w-10 md:w-14 bg-gradient-to-l from-black/70 to-transparent" />
+            </div>
+          )}
+        </section>
       </main>
     </div>
   );

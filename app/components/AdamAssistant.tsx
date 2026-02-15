@@ -45,7 +45,17 @@ export default function AdamAssistant({
     viewportW - PANEL_W - 16
   );
 
-  const top = clamp(anchor.y - ADAM_SIZE * 0.55, 16, viewportH - 220);
+  const headerH =
+    typeof window !== "undefined"
+      ? (document.querySelector("header") as HTMLElement | null)?.getBoundingClientRect()
+          .height ?? 0
+      : 0;
+
+
+
+    const SAFE_TOP = headerH + 12; // evita meterse bajo el header sticky
+  const top = clamp(anchor.y - ADAM_SIZE * 0.55, SAFE_TOP, viewportH - 220);
+
 
   // Adam “pegado” al panel
   const adamLeft = fitsRight ? left - ADAM_SIZE + 12 : left + PANEL_W - 12;
@@ -55,7 +65,7 @@ export default function AdamAssistant({
     <AnimatePresence>
       {visible && (
         <motion.div
-          className="fixed z-[90] pointer-events-none"
+          className="fixed z-[10060] pointer-events-none"
           initial={{ opacity: 0, scale: 0.98, y: 6 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.98, y: 6 }}
