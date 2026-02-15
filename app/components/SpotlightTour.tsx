@@ -311,7 +311,7 @@ export default function SpotlightTour({
           {/* Barra inferior */}
           <motion.div
             className="absolute bottom-6 left-1/2 -translate-x-1/2 w-[min(720px,calc(100vw-24px))]
-              rounded-2xl border border-white/10 bg-neutral-950/70 backdrop-blur px-4 py-3"
+              rounded-2xl border border-white bg-neutral-950/70 backdrop-blur px-4 py-3"
             initial={{ y: 8, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
             exit={{ y: 8, opacity: 0 }}
