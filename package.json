@@ -13,6 +13,8 @@
     "expr-eval": "^2.0.2",
     "firebase": "^12.0.0",
     "firebase-admin": "^13.4.0",
+    "framer-motion": "^12.34.0",
+    "lucide-react": "^0.564.0",
     "next": "^15.4.8",
     "pdf-lib": "^1.17.1",
     "pdfmake": "^0.2.20",

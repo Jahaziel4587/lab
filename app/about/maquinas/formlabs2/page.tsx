@@ -1,174 +1,309 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { db } from "@/src/firebase/firebaseConfig";
+import { useEffect, useMemo, useState } from "react";
+import Image from "next/image";
+import { db, storage } from "@/src/firebase/firebaseConfig";
+import { doc, getDoc, updateDoc, setDoc } from "firebase/firestore";
 import {
-  doc,
-  getDoc,
-  updateDoc,
-  setDoc,
-} from "firebase/firestore";
+  ref as storageRef,
+  uploadBytes,
+  getDownloadURL,
+  deleteObject,
+} from "firebase/storage";
 import { useAuth } from "@/src/Context/AuthContext";
-import { FiArrowLeft } from "react-icons/fi";
+import { ArrowLeft, Download, Upload, FileText, X } from "lucide-react";
 
-export default function formlabs2Page() {
+type Recurso = {
+  name: string;
+  url: string;
+  createdAt?: number;
+};
+
+export default function Formlabs2Page() {
+  const machineId = "formlabs2";
+
   const [materiales, setMateriales] = useState<string[]>([]);
   const [nuevoMaterial, setNuevoMaterial] = useState("");
   const [qsURL, setQsURL] = useState("");
-  const { user } = useAuth();
- // const esAdmin = user?.email === "jahaziel@bioana.com" || user?.email === "manuel@bioana.com";
-const {isAdmin} = useAuth();
+
+  const [recursos, setRecursos] = useState<Recurso[]>([]);
+  const [uploading, setUploading] = useState(false);
+
+  const { isAdmin } = useAuth();
+
+  const refDoc = useMemo(() => doc(db, "maquinas", machineId), [machineId]);
+
   const fetchData = async () => {
-  const ref = doc(db, "maquinas", "formlabs2");
-  const snap = await getDoc(ref);
-  if (snap.exists()) {
-    const data = snap.data();
-    setMateriales(data.materiales || []);
-    setQsURL(data.qs || "");
-  } else {
-    // Creamos el documento con campos vacíos
-    await setDoc(ref, {
-      materiales: [],
-      qs: ""
-    });
-    setMateriales([]);
-    setQsURL("");
-  }
-};
+    const snap = await getDoc(refDoc);
+
+    if (snap.exists()) {
+      const data = snap.data() as any;
+      setMateriales(data.materiales || []);
+      setQsURL(data.qs || "");
+      setRecursos(Array.isArray(data.recursos) ? data.recursos : []);
+    } else {
+      await setDoc(refDoc, {
+        materiales: [],
+        qs: "",
+        recursos: [],
+      });
+    }
+  };
+
   useEffect(() => {
     fetchData();
   }, []);
 
   const agregarMaterial = async () => {
-    if (nuevoMaterial.trim() !== "") {
-      const actualizados = [...materiales, nuevoMaterial.trim()];
-      await updateDoc(doc(db, "maquinas", "formlabs2"), { materiales: actualizados });
-      setNuevoMaterial("");
-      fetchData();
-    }
+    const v = nuevoMaterial.trim();
+    if (!v) return;
+    await updateDoc(refDoc, { materiales: [...materiales, v] });
+    setNuevoMaterial("");
+    fetchData();
   };
 
   const eliminarMaterial = async (index: number) => {
     const actualizados = materiales.filter((_, i) => i !== index);
-    await updateDoc(doc(db, "maquinas", "formlabs2"), { materiales: actualizados });
+    await updateDoc(refDoc, { materiales: actualizados });
     fetchData();
   };
 
   const actualizarQS = async (nuevaURL: string) => {
-    const ref = doc(db, "maquinas", "formlabs2");
-    await updateDoc(ref, { qs: nuevaURL });
+    await updateDoc(refDoc, { qs: nuevaURL });
     fetchData();
   };
 
+  const handleUploadRecursos = async (files: FileList | null) => {
+    if (!files || !isAdmin) return;
+
+    setUploading(true);
+    try {
+      const nuevos: Recurso[] = [];
+
+      for (const file of Array.from(files)) {
+        const path = `maquinas/${machineId}/recursos/${Date.now()}_${file.name}`;
+        const fileRef = storageRef(storage, path);
+
+        await uploadBytes(fileRef, file);
+        const url = await getDownloadURL(fileRef);
+
+        nuevos.push({ name: file.name, url, createdAt: Date.now() });
+      }
+
+      await updateDoc(refDoc, {
+        recursos: [...recursos, ...nuevos].sort(
+          (a, b) => (b.createdAt || 0) - (a.createdAt || 0)
+        ),
+      });
+
+      fetchData();
+    } catch (e) {
+      console.error(e);
+      alert("Error subiendo archivos.");
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const eliminarRecurso = async (r: Recurso) => {
+    if (!isAdmin) return;
+
+    try {
+      const encodedPath = r.url.split("/o/")[1]?.split("?")[0];
+      if (encodedPath) {
+        const fullPath = decodeURIComponent(encodedPath);
+        const fileRef = storageRef(storage, fullPath);
+        await deleteObject(fileRef);
+      }
+
+      await updateDoc(refDoc, {
+        recursos: recursos.filter((x) => x.url !== r.url),
+      });
+
+      fetchData();
+    } catch (e) {
+      console.error(e);
+      alert("Error eliminando archivo.");
+    }
+  };
+
   return (
-       <div className="bg-black text-white p-8 rounded-lg max-w-4xl mx-auto">
-      <div className="max-w-6xl mx-auto mb-6">
+    <div className="min-h-screen px-6 py-24 text-white">
+      <div className="max-w-6xl mx-auto">
+        {/* Back */}
         <button
           onClick={() => window.history.back()}
-          className="mb-4 bg-white text-black px-4 py-2 rounded flex items-center gap-2 hover:bg-black-200"
+          className="flex items-center gap-2 text-sm text-gray-300 hover:text-emerald-400 transition"
         >
-          <FiArrowLeft /> Regresar
+          <ArrowLeft className="w-4 h-4" />
+          Regresar
         </button>
-      </div>
 
-      <div className="max-w-4xl mx-auto">
-        <h1 className="text-3xl font-bold mb-6">Formlabs 2B</h1>
+        <div className="mt-10 grid grid-cols-1 lg:grid-cols-5 gap-10">
+          {/* Main Info */}
+          <div className="lg:col-span-3 rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md shadow-2xl overflow-hidden">
+            <div className="p-8">
+              <h1 className="text-3xl md:text-4xl font-bold">
+                Formlabs 2B
+              </h1>
 
-        <img
-          src="/formlabs2B.jpeg"
-          alt="Formlabs 2B"
-          className="w-full h-auto max-w-md rounded mb-6 shadow"
-        />
+              <div className="mt-8 relative w-full h-64 rounded-xl overflow-hidden border border-white/10">
+                <Image
+                  src="/formlabs2B.jpeg"
+                  alt="Formlabs 2B"
+                  fill
+                  className="object-cover"
+                />
+                <div className="absolute inset-0 bg-black/35" />
+              </div>
 
-        <p className="mb-6">
-  La Formlabs Form 2B es una impresora 3D de tecnología SLA (estereolitografía) diseñada para ofrecer piezas con un alto nivel de detalle y precisión. 
-  Utiliza resina líquida fotosensible que se solidifica capa por capa mediante un láser, logrando superficies lisas y acabados profesionales ideales para prototipado y aplicaciones funcionales.
-</p>
+              <div className="mt-8 space-y-4 text-gray-200 leading-relaxed">
+                <p>
+                  Impresora SLA de alta precisión que utiliza resina líquida fotosensible
+                  solidificada capa por capa mediante láser.
+                </p>
+                <p>
+                  Volumen de impresión: 145 x 145 x 175 mm, resolución hasta 25 micras.
+                </p>
+                <p>
+                  Compatible con resinas estándar, ingeniería, biocompatibles y dentales.
+                </p>
+                <p>
+                  Ideal para prototipos funcionales, modelos detallados y aplicaciones médicas.
+                </p>
+              </div>
+            </div>
 
-<p className="mb-6">
-  Cuenta con un volumen de impresión de 145 x 145 x 175 mm y una resolución de capa que puede alcanzar las 25 micras. 
-  Su sistema de tanque de resina y plataforma de impresión es de fácil reemplazo, lo que agiliza el mantenimiento y permite cambiar rápidamente entre diferentes tipos de resina.
-</p>
+            <div className="h-[2px] bg-gradient-to-r from-transparent via-emerald-400/30 to-transparent" />
+          </div>
 
-<p className="mb-6">
-  Es compatible con una amplia variedad de resinas desarrolladas por Formlabs, incluyendo resinas estándar, de ingeniería, biocompatibles y dentales. 
-  Esto la hace versátil para sectores como el diseño, la joyería, la medicina y la ingeniería de precisión.
-</p>
+          {/* Side Panel */}
+          <div className="lg:col-span-2 space-y-8">
+            {/* Materiales */}
+            <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-6">
+              <h2 className="text-lg font-semibold">Materiales compatibles</h2>
 
-<p className="mb-6">
-  Entre sus ventajas destacan la alta calidad de impresión, la consistencia en resultados, su interfaz intuitiva con pantalla táctil y conectividad por Wi-Fi, USB o Ethernet. 
-  Es una impresora confiable para proyectos que requieren acabados finos y tolerancias ajustadas.
-</p>
+              <ul className="mt-4 space-y-2">
+                {materiales.map((mat, index) => (
+                  <li key={index} className="flex justify-between items-center">
+                    {mat}
+                    {isAdmin && (
+                      <button
+                        onClick={() => eliminarMaterial(index)}
+                        className="text-red-400"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </li>
+                ))}
+              </ul>
 
-
-        <h2 className="text-xl font-semibold mb-2">Materiales disponibles:</h2>
-        <ul className="list-disc list-inside space-y-1 mb-4">
-          {materiales.map((mat, index) => (
-            <li key={index} className="flex justify-between items-center">
-              {mat}
               {isAdmin && (
-                <button
-                  onClick={() => eliminarMaterial(index)}
-                  className="text-red-600 ml-2 hover:text-red-800"
-                >
-                  ×
-                </button>
+                <div className="mt-4 flex gap-2">
+                  <input
+                    type="text"
+                    value={nuevoMaterial}
+                    onChange={(e) => setNuevoMaterial(e.target.value)}
+                    className="w-full bg-black/30 border border-white/10 px-3 py-2 rounded"
+                  />
+                  <button
+                    onClick={agregarMaterial}
+                    className="bg-emerald-600 px-3 py-2 rounded"
+                  >
+                    Agregar
+                  </button>
+                </div>
               )}
-            </li>
-          ))}
-        </ul>
+            </div>
 
-        {isAdmin && (
-          <div className="flex items-center gap-2 mb-6">
-            <input
-              type="text"
-              value={nuevoMaterial}
-              onChange={(e) => setNuevoMaterial(e.target.value)}
-              placeholder="Agregar material"
-              className="border px-2 py-1 rounded"
-            />
-            <button
-              onClick={agregarMaterial}
-              className="bg-blue-600 text-white px-3 py-1 rounded hover:bg-blue-700"
-            >
-              Agregar
-            </button>
+            {/* Quick Start */}
+            <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-6">
+              <h2 className="text-lg font-semibold">Quick Start</h2>
+
+              {qsURL ? (
+                <a
+                  href={qsURL}
+                  target="_blank"
+                  className="text-emerald-300 flex items-center gap-2 mt-3"
+                >
+                  <Download className="w-4 h-4" />
+                  Ver guía técnica
+                </a>
+              ) : (
+                <p className="text-gray-400 mt-3">
+                  No hay guía técnica disponible.
+                </p>
+              )}
+
+              {isAdmin && (
+                <div className="mt-4">
+                  <input
+                    type="text"
+                    value={qsURL}
+                    onChange={(e) => setQsURL(e.target.value)}
+                    className="w-full bg-black/30 border border-white/10 px-3 py-2 rounded"
+                  />
+                  <button
+                    onClick={() => actualizarQS(qsURL)}
+                    className="mt-3 bg-emerald-600 w-full px-3 py-2 rounded"
+                  >
+                    Guardar guía técnica
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Recursos */}
+            <div className="rounded-2xl border border-white/10 bg-white/5 backdrop-blur-md p-6">
+              <div className="flex justify-between items-center">
+                <h2 className="text-lg font-semibold">Recursos</h2>
+                {isAdmin && (
+                  <label className="cursor-pointer text-emerald-300 flex items-center gap-2">
+                    <Upload className="w-4 h-4" />
+                    Subir
+                    <input
+                      type="file"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => handleUploadRecursos(e.target.files)}
+                    />
+                  </label>
+                )}
+              </div>
+
+              <div className="mt-4 space-y-3">
+                {recursos.map((r) => (
+                  <div
+                    key={r.url}
+                    className="flex justify-between items-center bg-black/20 border border-white/10 rounded px-3 py-2"
+                  >
+                    <a
+                      href={r.url}
+                      target="_blank"
+                      className="flex items-center gap-2 text-sm text-gray-200"
+                    >
+                      <FileText className="w-4 h-4 text-emerald-300" />
+                      {r.name}
+                    </a>
+
+                    {isAdmin && (
+                      <button
+                        onClick={() => eliminarRecurso(r)}
+                        className="text-red-400"
+                      >
+                        <X className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
-        )}
-
-        <h2 className="text-xl font-semibold mb-2">Quick Start:</h2>
-        {qsURL ? (
-          <a
-            href={qsURL}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-blue-600 underline"
-          >
-            Ver guía técnica
-          </a>
-        ) : (
-          <p>No hay guía técnica disponible.</p>
-        )}
-
-        {isAdmin && (
-          <div className="mt-4">
-            <input
-              type="text"
-              value={qsURL}
-              onChange={(e) => setQsURL(e.target.value)}
-              placeholder="URL del QS"
-              className="border px-2 py-1 rounded w-full"
-            />
-            <button
-              onClick={() => actualizarQS(qsURL)}
-              className="mt-2 bg-green-600 text-white px-3 py-1 rounded hover:bg-green-700"
-            >
-              Guardar guía técnica
-            </button>
-          </div>
-        )}
+        </div>
       </div>
     </div>
   );
 }
+
 
