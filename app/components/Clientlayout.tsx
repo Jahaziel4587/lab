@@ -164,7 +164,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               Calendar
             </Link>
             <Link data-tutorial="nav-about" href="/about" className="hover:text-white transition">
-              About
+              Information
             </Link>
             <Link data-tutorial="nav-collection" href="/collection" className="hover:text-white transition">
               Collection
@@ -311,7 +311,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
               Calendar
             </Link>
             <Link href="/about" className="hover:text-white transition">
-              About
+              Information
             </Link>
             <Link href="/collection" className="hover:text-white transition">
               Colection
