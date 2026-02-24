@@ -27,6 +27,55 @@ function isRectInViewport(r: DOMRect, margin = 8) {
   );
 }
 
+function computeAnchorFromRect(args: {
+  rect: DOMRect;
+  placement: NonNullable<TourStep["placement"]>;
+  pad: number;
+  gap: number;
+  vw: number;
+  vh: number;
+  headerH: number;
+}) {
+  const { rect, placement, pad, gap, vw, vh, headerH } = args;
+
+  const cx = rect.left + rect.width / 2;
+  const cy = rect.top + rect.height / 2;
+
+  let x = cx;
+  let y = cy;
+
+  // Pon el “punto” donde vive ADAM/tooltip FUERA del spotlight
+  switch (placement) {
+    case "right":
+      x = rect.right + pad + gap;
+      y = cy;
+      break;
+    case "left":
+      x = rect.left - pad - gap;
+      y = cy;
+      break;
+    case "top":
+      x = cx;
+      y = rect.top - pad - gap;
+      break;
+    case "bottom":
+    default:
+      x = cx;
+      y = rect.bottom + pad + gap;
+      break;
+  }
+
+  // Márgenes de seguridad para que no se salga de pantalla
+  const SAFE_X = 120; // ajusta si tu AdamAssistant es grande
+  const SAFE_TOP = headerH + 70;
+  const SAFE_BOTTOM = 140;
+
+  return {
+    x: clamp(x, SAFE_X, vw - SAFE_X),
+    y: clamp(y, SAFE_TOP, vh - SAFE_BOTTOM),
+  };
+}
+
 export default function SpotlightTour({
   open,
   onClose,
@@ -39,75 +88,75 @@ export default function SpotlightTour({
   const baseSteps: TourStep[] = useMemo(
     () => [
       {
-  id: "place-order",
-  target: '[data-tutorial="card-place-order"]',
-  title: "Place Order",
-  body: "Create a new order here: project → service → technique/machine → material → specifications (including file attachments).",
-  placement: "right",
-},
-{
-  id: "frequent-orders",
-  target: '[data-tutorial="card-frequent-orders"]',
-  title: "Frequent Orders",
-  body: "Shortcuts to common combinations. Select one to auto-fill and jump directly to specifications.",
-  placement: "left",
-},
-{
-  id: "calendar",
-  target: '[data-tutorial="nav-calendar"]',
-  title: "Calendar",
-  body: "Here you can review the lab's scheduled requests and consider the current workload. Please submit your requests in advance.",
-  placement: "bottom",
-},
-{
-  id: "about",
-  target: '[data-tutorial="nav-about"]',
-  title: "Information",
-  body: "Learn about prototyping, its phases, and the process we follow, as well as the equipment available to bring projects to life.",
-  placement: "bottom",
-},
-{
-  id: "collection",
-  target: '[data-tutorial="nav-collection"]',
-  title: "Collection",
-  body: "Gallery of lab prototypes/fixtures for reference and inspiration.",
-  placement: "bottom",
-},
-{
-  id: "projects",
-  target: '[data-tutorial="nav-projects"]',
-  title: "My Projects",
-  body: "View your orders grouped by project to check status or modify/add specifications.",
-  placement: "bottom",
-},
-{
-  id: "inventory",
-  target: '[data-tutorial="nav-inventory"]',
-  title: "Inventory",
-  body: "Check available lab materials/resources to plan ahead and avoid surprises.",
-  placement: "bottom",
-},
-{
-  id: "quoter",
-  target: '[data-tutorial="nav-quoter"]',
-  title: "Quoter",
-  body: "Cost estimation and quotations (admin only).",
-  placement: "bottom",
-},
-{
-  id: "analytics",
-  target: '[data-tutorial="nav-analytics"]',
-  title: "Analytics",
-  body: "Reports and trends for planning and budgeting (admin only).",
-  placement: "bottom",
-},
-{
-  id: "history",
-  target: '[data-tutorial="section-order-history"]',
-  title: "Order History",
-  body: "Quick access to your recent orders to modify or add specifications.",
-  placement: "top",
-},
+        id: "place-order",
+        target: '[data-tutorial="card-place-order"]',
+        title: "Place Order",
+        body: "Create a new order here: project → service → technique/machine → material → specifications (including file attachments).",
+        placement: "right",
+      },
+      {
+        id: "frequent-orders",
+        target: '[data-tutorial="card-frequent-orders"]',
+        title: "Frequent Orders",
+        body: "Shortcuts to common combinations. Select one to auto-fill and jump directly to specifications.",
+        placement: "left",
+      },
+      {
+        id: "calendar",
+        target: '[data-tutorial="nav-calendar"]',
+        title: "Calendar",
+        body: "Here you can review the lab's scheduled requests and consider the current workload. Please submit your requests in advance.",
+        placement: "bottom",
+      },
+      {
+        id: "about",
+        target: '[data-tutorial="nav-about"]',
+        title: "Information",
+        body: "Learn about prototyping, its phases, and the process we follow, as well as the equipment available to bring projects to life.",
+        placement: "bottom",
+      },
+      {
+        id: "collection",
+        target: '[data-tutorial="nav-collection"]',
+        title: "Collection",
+        body: "Gallery of lab prototypes/fixtures for reference and inspiration.",
+        placement: "bottom",
+      },
+      {
+        id: "projects",
+        target: '[data-tutorial="nav-projects"]',
+        title: "My Projects",
+        body: "View your orders grouped by project to check status or modify/add specifications.",
+        placement: "bottom",
+      },
+      {
+        id: "inventory",
+        target: '[data-tutorial="nav-inventory"]',
+        title: "Inventory",
+        body: "Check available lab materials/resources to plan ahead and avoid surprises.",
+        placement: "bottom",
+      },
+      {
+        id: "quoter",
+        target: '[data-tutorial="nav-quoter"]',
+        title: "Quoter",
+        body: "Cost estimation and quotations (admin only).",
+        placement: "bottom",
+      },
+      {
+        id: "analytics",
+        target: '[data-tutorial="nav-analytics"]',
+        title: "Analytics",
+        body: "Reports and trends for planning and budgeting (admin only).",
+        placement: "bottom",
+      },
+      {
+        id: "history",
+        target: '[data-tutorial="section-order-history"]',
+        title: "Order History",
+        body: "Quick access to your recent orders to modify or add specifications.",
+        placement: "top",
+      },
     ],
     []
   );
@@ -149,6 +198,20 @@ export default function SpotlightTour({
     setIdx(0);
   }, [open, baseSteps]);
 
+  // ✅ Agrega highlight al target actual (ej: iluminar palabras del menú)
+  useEffect(() => {
+    if (!open || !step) return;
+
+    const el = document.querySelector(step.target) as HTMLElement | null;
+    if (!el) return;
+
+    el.classList.add("tour-highlight");
+
+    return () => {
+      el.classList.remove("tour-highlight");
+    };
+  }, [open, step]);
+
   // Medición precisa del target (SIN scrollIntoView)
   useEffect(() => {
     if (!open || !step) return;
@@ -166,7 +229,6 @@ export default function SpotlightTour({
       setInView(isRectInViewport(r, 10));
     };
 
-    // Medir ahora + en el siguiente frame (por si hay layout)
     measure();
     requestAnimationFrame(measure);
 
@@ -200,7 +262,6 @@ export default function SpotlightTour({
   }, [open, steps.length]);
 
   const handleClose = () => {
-    // ✅ reset extra por si acaso
     document.documentElement.style.overflow = "";
     document.body.style.overflow = "";
     document.body.style.position = "";
@@ -234,12 +295,18 @@ export default function SpotlightTour({
         }
       : null;
 
-  // Anchor para ADAM:
-  // - si el target está visible: centro del elemento
-  // - si NO está visible: punto seguro debajo del header, centrado
+  // ✅ Anchor: ahora se coloca A UN LADO según placement, no al centro del target
   const anchor =
     rect && inView
-      ? { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 }
+      ? computeAnchorFromRect({
+          rect,
+          placement: step.placement ?? "bottom",
+          pad,
+          gap: 24, // separación entre spotlight y ADAM
+          vw,
+          vh,
+          headerH,
+        })
       : { x: vw * 0.62, y: headerH + 120 };
 
   const next = () => {
@@ -347,7 +414,11 @@ export default function SpotlightTour({
 
           {/* ADAM arriba del overlay */}
           <div className="fixed inset-0 pointer-events-none z-[10050]">
-            <AdamAssistant visible step={{ id: step.id, title: step.title, body: step.body }} anchor={anchor} />
+            <AdamAssistant
+              visible
+              step={{ id: step.id, title: step.title, body: step.body }}
+              anchor={anchor}
+            />
           </div>
         </motion.div>
       )}
