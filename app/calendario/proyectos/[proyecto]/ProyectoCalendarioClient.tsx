@@ -492,7 +492,7 @@ export default function ProyectoCalendarioClient({ proyecto }: { proyecto: strin
                             onChange={(e) =>
                               actualizarCampo(p.id, "status", e.target.value)
                             }
-                            className={statusPillClass(p.status || "enviado")}
+                          className={`${statusPillClass(p.status || "enviado")} [&>option]:text-black [&>option]:bg-white`}
                           >
                             <option value="enviado">Enviado</option>
                             <option value="visto">Visto</option>

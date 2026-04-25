@@ -167,28 +167,39 @@ function SegmentedProgress({
 
   // tarjetas por proyecto (solo con fecha real)
   const proyectosConFecha = useMemo(() => {
-    const map = new Map<string, { total: number; listos: number; ultima: number }>();
+  const map = new Map<string, { total: number; listos: number; ultima: number }>();
 
-    pedidosConFecha.forEach((p) => {
-      const key = p.proyecto || "Sin proyecto";
-      const status = (p.status || "").toLowerCase();
-      const isListo = status === "listo";
-      const ts = p.fechaEntregaReal ? new Date(p.fechaEntregaReal + "T00:00:00").getTime() : 0;
+  pedidosConFecha.forEach((p) => {
+    const status = (p.status || "").trim().toLowerCase();
 
-      const prev = map.get(key);
-      if (!prev) {
-        map.set(key, { total: 1, listos: isListo ? 1 : 0, ultima: ts });
-      } else {
-        map.set(key, {
-          total: prev.total + 1,
-          listos: prev.listos + (isListo ? 1 : 0),
-          ultima: Math.max(prev.ultima, ts),
-        });
-      }
-    });
+    // Los cancelados no cuentan para el avance
+    if (status === "cancelado") return;
 
-    return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
-  }, [pedidosConFecha]);
+    const key = p.proyecto || "Sin proyecto";
+    const isListo = status === "listo";
+    const ts = p.fechaEntregaReal
+      ? new Date(p.fechaEntregaReal + "T00:00:00").getTime()
+      : 0;
+
+    const prev = map.get(key);
+
+    if (!prev) {
+      map.set(key, {
+        total: 1,
+        listos: isListo ? 1 : 0,
+        ultima: ts,
+      });
+    } else {
+      map.set(key, {
+        total: prev.total + 1,
+        listos: prev.listos + (isListo ? 1 : 0),
+        ultima: Math.max(prev.ultima, ts),
+      });
+    }
+  });
+
+  return Array.from(map.entries()).sort(([a], [b]) => a.localeCompare(b));
+}, [pedidosConFecha]);
 
   // buscador en fechados (cuando buscas, mostramos tabla de resultados)
   const pedidosFechadosFiltrados = useMemo(() => {
@@ -450,7 +461,7 @@ function SegmentedProgress({
                     onChange={(e) =>
                       actualizarCampo(p.id, "status", e.target.value)
                     }
-                    className={statusPillClass(p.status || "enviado")}
+                  className={`${statusPillClass(p.status || "enviado")} [&>option]:text-black [&>option]:bg-white [&>option]:font-bold`}
                   >
                     <option value="enviado">Enviado</option>
                     <option value="visto">Visto</option>
