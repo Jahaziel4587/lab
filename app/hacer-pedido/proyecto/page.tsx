@@ -43,7 +43,7 @@ const proyectos: Proyecto[] = [
   // { nombre: "E024.Leg wrap", imagen: "/Bioana.jpeg" },
   { nombre: "E025.InjectMate", imagen: "/Bioana.jpeg" },
   { nombre: "E026.Birchconcepts", imagen: "/Bioana.jpeg" },
-  { nombre: "E028.Peniflx", imagen: "/Bioana.jpeg" },
+  { nombre: "E028.Peniflex", imagen: "/Bioana.jpeg" },
   { nombre: "E029.Zipstich", imagen: "/Bioana.jpeg" },
   { nombre: "E031.Orthodoxo Cople", imagen: "/Bioana.jpeg" },
   { nombre: "E033.Sport Care", imagen: "/Bioana.jpeg" },
