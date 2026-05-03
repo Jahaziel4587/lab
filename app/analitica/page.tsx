@@ -123,16 +123,16 @@ function extractMaterialCost(resolvedCalc: Record<string, any>): number {
 }
 
 const PIE_COLORS = [
-  "#111827",
-  "#10B981",
-  "#F59E0B",
-  "#4B5563",
-  "#9CA3AF",
-  "#3B82F6",
-  "#EC4899",
-  "#EF4444",
-  "#6366F1",
+  "#34D399",
   "#14B8A6",
+  "#60A5FA",
+  "#A78BFA",
+  "#FBBF24",
+  "#F472B6",
+  "#FB7185",
+  "#2DD4BF",
+  "#818CF8",
+  "#22C55E",
 ];
 
 export default function AnaliticaPage() {
@@ -279,6 +279,140 @@ export default function AnaliticaPage() {
 
     cargar();
   }, [isAdmin]);
+
+function MiniBreakdownTable({
+  title,
+  emptyText,
+  headers,
+  rows,
+}: {
+  title: string;
+  emptyText: string;
+  headers: string[];
+  rows: any[][];
+}) {
+  return (
+    <div className="rounded-3xl border border-white/10 bg-white/[0.035] overflow-hidden">
+      <div className="px-4 py-3 border-b border-white/10">
+        <h3 className="text-sm font-semibold text-white">{title}</h3>
+      </div>
+
+      {rows.length === 0 ? (
+        <p className="px-4 py-5 text-sm text-white/45">{emptyText}</p>
+      ) : (
+        <table className="w-full text-xs">
+          <thead className="bg-white/[0.02]">
+            <tr className="text-left text-white/50">
+              {headers.map((h) => (
+                <th key={h} className="px-4 py-3 font-semibold">
+                  {h}
+                </th>
+              ))}
+            </tr>
+          </thead>
+
+          <tbody className="divide-y divide-white/10">
+            {rows.map((row, idx) => (
+              <tr key={idx} className="hover:bg-emerald-500/[0.04] transition">
+                {row.map((cell, i) => (
+                  <td key={i} className="px-4 py-3 text-white/75">
+                    {cell}
+                  </td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </div>
+  );
+}
+
+function ChartCard({
+  title,
+  countLabel,
+  count,
+  total,
+  data,
+}: {
+  title: string;
+  countLabel: string;
+  count: number;
+  total: number;
+  data: { name: string; value: number; mxn: number }[];
+}) {
+  return (
+    <div className="rounded-3xl border border-white/10 bg-black/30 p-5 hover:bg-white/[0.04] transition">
+      <div className="flex items-start justify-between gap-4 mb-4">
+        <div>
+          <h3 className="text-base font-semibold text-white">{title}</h3>
+          <p className="mt-1 text-xs text-white/45">
+            Distribución por proyecto
+          </p>
+        </div>
+
+        <div className="text-right text-xs text-white/55">
+          <div>
+            {countLabel}:{" "}
+            <span className="font-semibold text-white">{count}</span>
+          </div>
+          <div className="mt-1">
+            Total:{" "}
+            <span className="font-semibold text-white">
+              {formatMoney(total)}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <div className="h-64">
+        <ResponsiveContainer width="100%" height="100%">
+          <PieChart>
+            <Pie
+              data={data}
+              dataKey="value"
+              nameKey="name"
+              outerRadius="78%"
+              paddingAngle={2}
+            >
+              {data.map((_entry, index) => (
+                <Cell
+                  key={index}
+                  fill={PIE_COLORS[index % PIE_COLORS.length]}
+                />
+              ))}
+            </Pie>
+
+            <Tooltip
+              contentStyle={{
+                background: "rgba(0,0,0,0.85)",
+                border: "1px solid rgba(255,255,255,0.12)",
+                borderRadius: "16px",
+                color: "white",
+              }}
+              labelStyle={{ color: "white" }}
+              itemStyle={{ color: "white" }}
+              formatter={(val: number, _name: string, props: any) => {
+                const payload = props.payload as any;
+                return [
+                  `${val} usos · ${formatMoney(payload.mxn)}`,
+                  "Proyecto",
+                ];
+              }}
+            />
+
+            <Legend
+              wrapperStyle={{
+                color: "rgba(255,255,255,0.65)",
+                fontSize: 12,
+              }}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  );
+}
 
   /* ==========================
    * Agregado por proyecto
@@ -639,307 +773,232 @@ applyCurrencyFormat(wsProj, [10, 12]);
     XLSX.writeFile(wb, "analitica_pedidos.xlsx");
   };
 
-  return (
-    <div className="max-w-7xl mx-auto mt-6 flex gap-6 text-black">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white rounded-2xl shadow p-4 space-y-2">
-        <h2 className="font-semibold mb-2">Analítica</h2>
-        <button
-          onClick={() => setView("proyecto")}
-          className={`w-full text-left px-3 py-2 rounded-lg border ${
-            view === "proyecto"
-              ? "bg-black text-white border-black"
-              : "bg-white hover:bg-gray-100"
-          }`}
-        >
-          Por proyecto
-        </button>
-        <button
-          onClick={() => setView("servicios")}
-          className={`w-full text-left px-3 py-2 rounded-lg border ${
-            view === "servicios"
-              ? "bg-black text-white border-black"
-              : "bg-white hover:bg-gray-100"
-          }`}
-        >
-          Servicios (gráficas)
-        </button>
-        <button
-          onClick={() => setView("materiales")}
-          className={`w-full text-left px-3 py-2 rounded-lg border ${
-            view === "materiales"
-              ? "bg-black text-white border-black"
-              : "bg-white hover:bg-gray-100"
-          }`}
-        >
-          Materiales (gráficas)
-        </button>
-      </aside>
+ return (
+  <div className="min-h-[calc(100vh-120px)] text-white">
+    <main className="mx-auto max-w-7xl px-5 sm:px-8 py-8 sm:py-10">
+      <div className="mb-6 flex flex-col lg:flex-row lg:items-end lg:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-semibold text-white">
+            Analítica
+          </h1>
+          <p className="mt-2 text-sm text-white/60 max-w-3xl">
+            Revisa el comportamiento de pedidos, servicios, materiales y costos registrados en las cotizaciones.
+          </p>
+        </div>
 
-      {/* Contenido principal */}
-      <main className="flex-1 bg-white rounded-2xl shadow p-6">
-        {/* ================ POR PROYECTO ================ */}
         {view === "proyecto" && (
-          <>
-            <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
-              <h1 className="text-xl font-semibold">
-                Analítica por proyecto
-              </h1>
+          <button
+            onClick={handleDownloadXLSX}
+            disabled={exportRows.length === 0}
+            className="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-emerald-400 to-teal-500 px-5 py-3 text-sm font-semibold text-black shadow-[0_18px_50px_-24px_rgba(45,212,191,0.75)] hover:brightness-110 hover:-translate-y-[1px] transition disabled:opacity-45 disabled:cursor-not-allowed"
+          >
+            Descargar XLSX
+          </button>
+        )}
+      </div>
+
+      {/* Tabs horizontales */}
+      <div className="relative rounded-3xl border border-white/10 bg-white/[0.035] backdrop-blur-2xl ring-1 ring-white/5 shadow-[0_30px_120px_-80px_rgba(0,0,0,0.95)] overflow-hidden mb-6">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-emerald-500/10 to-transparent" />
+
+        <div className="relative p-3 flex flex-col sm:flex-row gap-2">
+          {[
+            { key: "proyecto", label: "Por proyecto" },
+            { key: "servicios", label: "Servicios" },
+            { key: "materiales", label: "Materiales" },
+          ].map((tab) => {
+            const active = view === tab.key;
+
+            return (
               <button
-                onClick={handleDownloadXLSX}
-                className="px-4 py-2 rounded-lg bg-black text-white text-sm hover:opacity-90"
+                key={tab.key}
+                onClick={() => setView(tab.key as ViewKey)}
+                className={[
+                  "flex-1 rounded-2xl px-5 py-3 text-sm font-semibold transition border",
+                  active
+                    ? "bg-emerald-400/90 text-black border-emerald-300/40 shadow-[0_18px_50px_-26px_rgba(45,212,191,0.8)]"
+                    : "bg-white/[0.04] text-white/70 border-white/10 hover:bg-white/[0.08] hover:text-white",
+                ].join(" ")}
               >
-                Descargar XLSX (todos los pedidos)
+                {tab.label}
               </button>
-            </div>
+            );
+          })}
+        </div>
+      </div>
 
-            {loading && (
-              <p className="text-gray-500 text-sm mb-2">Cargando datos…</p>
-            )}
-            {error && (
-              <p className="text-red-600 text-sm mb-2">{error}</p>
-            )}
+      {/* Panel principal */}
+      <section className="relative rounded-3xl border border-white/10 bg-white/[0.035] backdrop-blur-2xl ring-1 ring-white/5 shadow-[0_30px_120px_-80px_rgba(0,0,0,0.95)] overflow-hidden">
+        <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-emerald-500/10 to-transparent" />
 
-            {!loading && !error && (
-              <>
-                <div className="mb-4 flex flex-wrap gap-4">
-                  <div className="px-4 py-3 rounded-xl bg-gray-100">
-                    <div className="text-xs text-gray-500">
-                      Total general (todas las líneas)
-                    </div>
-                    <div className="font-semibold text-lg">
-                      {formatMoney(totalGeneralMXN)}
-                    </div>
+        <div className="relative p-5 sm:p-7">
+          {loading && (
+            <p className="text-sm text-white/60">Cargando datos…</p>
+          )}
+
+          {error && (
+            <p className="text-sm text-red-300">{error}</p>
+          )}
+
+          {/* ================ POR PROYECTO ================ */}
+          {view === "proyecto" && !loading && !error && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-xl sm:text-2xl font-semibold text-white">
+                  Analítica por proyecto
+                </h2>
+                <p className="mt-2 text-sm text-white/60">
+                  Resumen de gasto total, cantidad de pedidos y desglose por servicios y materiales.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="rounded-3xl border border-emerald-400/20 bg-emerald-400/[0.06] p-5">
+                  <p className="text-sm text-white/55">Total general</p>
+                  <div className="mt-1 text-2xl font-semibold text-white">
+                    {formatMoney(totalGeneralMXN)}
                   </div>
-                  <div className="px-4 py-3 rounded-xl bg-gray-100">
-                    <div className="text-xs text-gray-500">
-                      Proyectos con gasto registrado
-                    </div>
-                    <div className="font-semibold text-lg">
-                      {proyectosStats.length}
-                    </div>
-                  </div>
+                  <p className="mt-2 text-xs text-white/45">
+                    Todas las líneas de cotización registradas.
+                  </p>
                 </div>
 
-                <div className="overflow-x-auto">
-                  <table className="min-w-full text-sm border rounded-lg overflow-hidden">
-                    <thead>
-                      <tr className="bg-gray-100 text-left">
-                        <th className="px-4 py-2">Proyecto</th>
-                        <th className="px-4 py-2">
-                          Cantidad de pedidos
-                          <br />
-                          <span className="text-xs text-gray-500">
-                            (rango de fechas)
-                          </span>
-                        </th>
-                        <th className="px-4 py-2">Total MXN</th>
-                        <th className="px-4 py-2"></th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {proyectosStats.map((p) => {
-                        const isOpen = openProyecto === p.proyecto;
-                        const serviciosOrdenados = Object.values(p.services).sort(
-                          (a, b) => b.totalMXN - a.totalMXN
-                        );
-                        const materialesOrdenados = Object.values(
-                          p.materials
-                        ).sort((a, b) => b.totalMXN - a.totalMXN);
+                <div className="rounded-3xl border border-white/10 bg-black/30 p-5">
+                  <p className="text-sm text-white/55">Proyectos con gasto registrado</p>
+                  <div className="mt-1 text-2xl font-semibold text-white">
+                    {proyectosStats.length}
+                  </div>
+                  <p className="mt-2 text-xs text-white/45">
+                    Proyectos con al menos una línea de cotización viva.
+                  </p>
+                </div>
+              </div>
 
-                        return (
-                          <Fragment key={p.proyecto}>
-                            <tr className="border-t">
-                              <td className="px-4 py-2 align-top">
-                                <div className="font-medium">
-                                  {p.proyecto}
+              <div className="relative rounded-3xl border border-white/10 bg-white/[0.035] overflow-hidden">
+                <table className="w-full text-sm table-fixed">
+                  <thead className="bg-white/[0.02]">
+                    <tr className="text-left text-[12px] tracking-wide text-white/55">
+                      <th className="py-3 px-4 font-semibold">Proyecto</th>
+                      <th className="py-3 px-4 font-semibold">Pedidos / Fechas</th>
+                      <th className="py-3 px-4 font-semibold">Total MXN</th>
+                      <th className="py-3 px-4 font-semibold text-right">Desglose</th>
+                    </tr>
+                  </thead>
+
+                  <tbody className="divide-y divide-white/10">
+                    {proyectosStats.map((p) => {
+                      const isOpen = openProyecto === p.proyecto;
+
+                      const serviciosOrdenados = Object.values(p.services).sort(
+                        (a, b) => b.totalMXN - a.totalMXN
+                      );
+
+                      const materialesOrdenados = Object.values(p.materials).sort(
+                        (a, b) => b.totalMXN - a.totalMXN
+                      );
+
+                      return (
+                        <Fragment key={p.proyecto}>
+                          <tr className="hover:bg-emerald-500/[0.04] transition align-top">
+                            <td className="px-4 py-4">
+                              <div className="font-semibold text-white break-words">
+                                {p.proyecto}
+                              </div>
+                            </td>
+
+                            <td className="px-4 py-4 text-white/75">
+                              <div className="font-semibold text-white/90">
+                                {p.pedidosIds.size} pedido
+                                {p.pedidosIds.size === 1 ? "" : "s"}
+                              </div>
+                              <div className="text-xs text-white/45 mt-1">
+                                {formatDate(p.fechaMin)} — {formatDate(p.fechaMax)}
+                              </div>
+                            </td>
+
+                            <td className="px-4 py-4 font-semibold text-white">
+                              {formatMoney(p.totalMXN)}
+                            </td>
+
+                            <td className="px-4 py-4 text-right">
+                              <button
+                                onClick={() =>
+                                  setOpenProyecto(isOpen ? null : p.proyecto)
+                                }
+                                className="rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-2 text-xs font-medium text-white/85 hover:bg-white/[0.08] transition"
+                              >
+                                {isOpen ? "Ocultar" : "Ver desglose"}
+                              </button>
+                            </td>
+                          </tr>
+
+                          {isOpen && (
+                            <tr className="bg-black/25">
+                              <td colSpan={4} className="px-4 py-5">
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                                  <MiniBreakdownTable
+                                    title="Servicios cobrados"
+                                    emptyText="No hay servicios registrados."
+                                    headers={["Servicio", "Veces usado", "Total MXN"]}
+                                    rows={serviciosOrdenados.map((info) => [
+                                      info.label,
+                                      info.count,
+                                      formatMoney(info.totalMXN),
+                                    ])}
+                                  />
+
+                                  <MiniBreakdownTable
+                                    title="Materiales cobrados"
+                                    emptyText="No hay materiales registrados."
+                                    headers={["Material", "Veces usado", "Total MXN"]}
+                                    rows={materialesOrdenados.map((info) => [
+                                      info.label,
+                                      info.count,
+                                      formatMoney(info.totalMXN),
+                                    ])}
+                                  />
                                 </div>
-                              </td>
-                              <td className="px-4 py-2 align-top">
-                                <div className="font-semibold">
-                                  {p.pedidosIds.size} pedido
-                                  {p.pedidosIds.size === 1 ? "" : "s"}
-                                </div>
-                                <div className="text-xs text-gray-500">
-                                  {formatDate(p.fechaMin)} —{" "}
-                                  {formatDate(p.fechaMax)}
-                                </div>
-                              </td>
-                              <td className="px-4 py-2 align-top font-semibold">
-                                {formatMoney(p.totalMXN)}
-                              </td>
-                              <td className="px-4 py-2 align-top text-right">
-                                <button
-                                  onClick={() =>
-                                    setOpenProyecto(
-                                      isOpen ? null : p.proyecto
-                                    )
-                                  }
-                                  className="text-xs px-3 py-1 rounded-lg border border-gray-300 hover:bg-gray-50"
-                                >
-                                  {isOpen
-                                    ? "Ocultar desglose"
-                                    : "Ver desglose"}
-                                </button>
                               </td>
                             </tr>
-                            {isOpen && (
-                              <tr className="border-t bg-gray-50/60">
-                                <td
-                                  colSpan={4}
-                                  className="px-4 py-3 space-y-4"
-                                >
-                                  <div>
-                                    <h3 className="text-sm font-semibold mb-2">
-                                      Servicios cobrados en este proyecto
-                                    </h3>
-                                    {serviciosOrdenados.length === 0 ? (
-                                      <p className="text-xs text-gray-500">
-                                        No hay servicios registrados.
-                                      </p>
-                                    ) : (
-                                      <div className="overflow-x-auto">
-                                        <table className="min-w-full text-xs border rounded">
-                                          <thead>
-                                            <tr className="bg-gray-100 text-left">
-                                              <th className="px-3 py-1.5">
-                                                Servicio
-                                              </th>
-                                              <th className="px-3 py-1.5">
-                                                Veces usado
-                                              </th>
-                                              <th className="px-3 py-1.5">
-                                                Total MXN
-                                              </th>
-                                            </tr>
-                                          </thead>
-                                          <tbody>
-                                            {serviciosOrdenados.map((info) => (
-                                              <tr
-                                                key={info.label}
-                                                className="border-t"
-                                              >
-                                                <td className="px-3 py-1.5">
-                                                  {info.label}
-                                                </td>
-                                                <td className="px-3 py-1.5">
-                                                  {info.count}
-                                                </td>
-                                                <td className="px-3 py-1.5">
-                                                  {formatMoney(
-                                                    info.totalMXN
-                                                  )}
-                                                </td>
-                                              </tr>
-                                            ))}
-                                          </tbody>
-                                        </table>
-                                      </div>
-                                    )}
-                                  </div>
+                          )}
+                        </Fragment>
+                      );
+                    })}
 
-                                  <div>
-                                    <h3 className="text-sm font-semibold mb-2">
-                                      Materiales cobrados en este proyecto
-                                    </h3>
-                                    {materialesOrdenados.length === 0 ? (
-                                      <p className="text-xs text-gray-500">
-                                        No hay materiales registrados.
-                                      </p>
-                                    ) : (
-                                      <div className="overflow-x-auto">
-                                        <table className="min-w-full text-xs border rounded">
-                                          <thead>
-                                            <tr className="bg-gray-100 text-left">
-                                              <th className="px-3 py-1.5">
-                                                Material
-                                              </th>
-                                              <th className="px-3 py-1.5">
-                                                Veces usado
-                                              </th>
-                                              <th className="px-3 py-1.5">
-                                                Total MXN
-                                              </th>
-                                            </tr>
-                                          </thead>
-                                          <tbody>
-                                            {materialesOrdenados.map((info) => (
-                                              <tr
-                                                key={info.label}
-                                                className="border-t"
-                                              >
-                                                <td className="px-3 py-1.5">
-                                                  {info.label}
-                                                </td>
-                                                <td className="px-3 py-1.5">
-                                                  {info.count}
-                                                </td>
-                                                <td className="px-3 py-1.5">
-                                                  {formatMoney(
-                                                    info.totalMXN
-                                                  )}
-                                                </td>
-                                              </tr>
-                                            ))}
-                                          </tbody>
-                                        </table>
-                                      </div>
-                                    )}
-                                  </div>
-                                </td>
-                              </tr>
-                            )}
-                          </Fragment>
-                        );
-                      })}
+                    {proyectosStats.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={4}
+                          className="px-4 py-10 text-center text-white/45"
+                        >
+                          No hay líneas de cotización viva registradas todavía.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
-                      {proyectosStats.length === 0 && (
-                        <tr>
-                          <td
-                            colSpan={4}
-                            className="px-4 py-6 text-center text-gray-500"
-                          >
-                            No hay líneas de cotización viva registradas
-                            todavía.
-                          </td>
-                        </tr>
-                      )}
-                    </tbody>
-                  </table>
-                </div>
-              </>
-            )}
-          </>
-        )}
-
-        {/* ================ SERVICIOS ================ */}
-        {view === "servicios" && (
-          <div>
-            <h1 className="text-xl font-semibold mb-4">
-              Analítica por servicios (basado en cotización)
-            </h1>
-
-            {loading && (
-              <p className="text-gray-500 text-sm mb-2">Cargando datos…</p>
-            )}
-            {error && (
-              <p className="text-red-600 text-sm mb-2">{error}</p>
-            )}
-
-            {!loading && !error && (
-              <>
-                <p className="text-sm text-gray-600 mb-4">
-                  Cada tarjeta muestra un servicio cobrado. La gráfica de pastel
-                  reparte las <strong>veces usado</strong> entre proyectos.
+          {/* ================ SERVICIOS ================ */}
+          {view === "servicios" && !loading && !error && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-xl sm:text-2xl font-semibold text-white">
+                  Analítica por servicios
+                </h2>
+                <p className="mt-2 text-sm text-white/60">
+                  Cada tarjeta muestra un servicio cobrado. La gráfica reparte las veces usado entre proyectos.
                 </p>
+              </div>
 
-                {serviceStats.length === 0 && (
-                  <p className="text-sm text-gray-500">
-                    No hay servicios registrados aún.
-                  </p>
-                )}
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {serviceStats.length === 0 ? (
+                <p className="text-sm text-white/45">
+                  No hay servicios registrados aún.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {serviceStats.map((svc, idxSvc) => {
                     const data = svc.proyectos.map((p) => ({
                       name: p.proyecto,
@@ -948,106 +1007,39 @@ applyCurrencyFormat(wsProj, [10, 12]);
                     }));
 
                     return (
-                      <div
+                      <ChartCard
                         key={idxSvc}
-                        className="border rounded-2xl p-4 bg-gray-50/60"
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <h2 className="text-sm font-semibold">
-                            {svc.serviceName}
-                          </h2>
-                          <div className="text-xs text-gray-500 text-right">
-                            <div>
-                              Veces total:{" "}
-                              <span className="font-semibold">
-                                {svc.totalCount}
-                              </span>
-                            </div>
-                            <div>
-                              Total MXN:{" "}
-                              <span className="font-semibold">
-                                {formatMoney(svc.totalMXN)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="h-56">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                              <Pie
-                                data={data}
-                                dataKey="value"
-                                nameKey="name"
-                                outerRadius="80%"
-                                paddingAngle={2}
-                              >
-                                {data.map((_entry, index) => (
-                                  <Cell
-                                    key={index}
-                                    fill={
-                                      PIE_COLORS[index % PIE_COLORS.length]
-                                    }
-                                  />
-                                ))}
-                              </Pie>
-                              <Tooltip
-                                formatter={(
-                                  val: number,
-                                  _name: string,
-                                  props: any
-                                ) => {
-                                  const payload = props.payload as any;
-                                  return [
-                                    `${val} usos · ${formatMoney(
-                                      payload.mxn
-                                    )}`,
-                                    "Proyecto",
-                                  ];
-                                }}
-                              />
-                              <Legend />
-                            </PieChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </div>
+                        title={svc.serviceName}
+                        countLabel="Veces total"
+                        count={svc.totalCount}
+                        total={svc.totalMXN}
+                        data={data}
+                      />
                     );
                   })}
                 </div>
-              </>
-            )}
-          </div>
-        )}
+              )}
+            </div>
+          )}
 
-        {/* ================ MATERIALES ================ */}
-        {view === "materiales" && (
-          <div>
-            <h1 className="text-xl font-semibold mb-4">
-              Analítica por materiales (basado en cotización)
-            </h1>
-
-            {loading && (
-              <p className="text-gray-500 text-sm mb-2">Cargando datos…</p>
-            )}
-            {error && (
-              <p className="text-red-600 text-sm mb-2">{error}</p>
-            )}
-
-            {!loading && !error && (
-              <>
-                <p className="text-sm text-gray-600 mb-4">
-                  Cada tarjeta muestra un material cobrado. La gráfica de pastel
-                  reparte las <strong>veces que se usó</strong> ese material
-                  entre proyectos.
+          {/* ================ MATERIALES ================ */}
+          {view === "materiales" && !loading && !error && (
+            <div className="space-y-6">
+              <div>
+                <h2 className="text-xl sm:text-2xl font-semibold text-white">
+                  Analítica por materiales
+                </h2>
+                <p className="mt-2 text-sm text-white/60">
+                  Cada tarjeta muestra un material cobrado. La gráfica reparte las veces que se usó entre proyectos.
                 </p>
+              </div>
 
-                {materialStats.length === 0 && (
-                  <p className="text-sm text-gray-500">
-                    No hay materiales registrados aún.
-                  </p>
-                )}
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {materialStats.length === 0 ? (
+                <p className="text-sm text-white/45">
+                  No hay materiales registrados aún.
+                </p>
+              ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   {materialStats.map((mat, idxMat) => {
                     const data = mat.proyectos.map((p) => ({
                       name: p.proyecto,
@@ -1056,77 +1048,23 @@ applyCurrencyFormat(wsProj, [10, 12]);
                     }));
 
                     return (
-                      <div
+                      <ChartCard
                         key={idxMat}
-                        className="border rounded-2xl p-4 bg-gray-50/60"
-                      >
-                        <div className="flex items-center justify-between mb-2">
-                          <h2 className="text-sm font-semibold">
-                            {mat.material}
-                          </h2>
-                          <div className="text-xs text-gray-500 text-right">
-                            <div>
-                              Veces total:{" "}
-                              <span className="font-semibold">
-                                {mat.totalCount}
-                              </span>
-                            </div>
-                            <div>
-                              Total MXN:{" "}
-                              <span className="font-semibold">
-                                {formatMoney(mat.totalMXN)}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="h-56">
-                          <ResponsiveContainer width="100%" height="100%">
-                            <PieChart>
-                              <Pie
-                                data={data}
-                                dataKey="value"
-                                nameKey="name"
-                                outerRadius="80%"
-                                paddingAngle={2}
-                              >
-                                {data.map((_entry, index) => (
-                                  <Cell
-                                    key={index}
-                                    fill={
-                                      PIE_COLORS[index % PIE_COLORS.length]
-                                    }
-                                  />
-                                ))}
-                              </Pie>
-                              <Tooltip
-                                formatter={(
-                                  val: number,
-                                  _name: string,
-                                  props: any
-                                ) => {
-                                  const payload = props.payload as any;
-                                  return [
-                                    `${val} usos · ${formatMoney(
-                                      payload.mxn
-                                    )}`,
-                                    "Proyecto",
-                                  ];
-                                }}
-                              />
-                              <Legend />
-                            </PieChart>
-                          </ResponsiveContainer>
-                        </div>
-                      </div>
+                        title={mat.material}
+                        countLabel="Veces total"
+                        count={mat.totalCount}
+                        total={mat.totalMXN}
+                        data={data}
+                      />
                     );
                   })}
                 </div>
-              </>
-            )}
-          </div>
-        )}
-      </main>
-    </div>
+              )}
+            </div>
+          )}
+        </div>
+      </section>
+    </main>
+  </div>
   );
 }

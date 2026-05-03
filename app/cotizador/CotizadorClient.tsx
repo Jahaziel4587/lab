@@ -21,24 +21,18 @@ import {
   type QueryConstraint,
   type QueryDocumentSnapshot,
   type QuerySnapshot,
-  // >>> NEW
   getDoc,
 } from "firebase/firestore";
-// >>> NEW
 import { useAuth } from "@/src/Context/AuthContext";
 
-/* =====================================
- * Tipos
- * ===================================== */
-
 type ViewKey = "cotizacion" | "calculadora" | "tabla" | "servicios";
-
 type FieldType = "number" | "text" | "select" | "boolean" | "time" | "dimensions";
+
 type ServiceField = {
-  key: string; // nombre de variable (snake_case)
-  label: string; // etiqueta visible
+  key: string;
+  label: string;
   type: FieldType;
-  options?: string[]; // para select
+  options?: string[];
 };
 
 type ServiceDoc = {
@@ -53,44 +47,54 @@ type GroupDoc = {
 };
 
 type RowDoc = {
-  key: string; // nombre de variable
-  value?: number | null; // solo para Tabla de costos (valor fijo)
-  expr?: string; // solo para Calculadora (fórmula)
-  inTotal?: boolean; // considerar en total (Calculadora)
+  key: string;
+  value?: number | null;
+  expr?: string;
+  inTotal?: boolean;
   createdAt?: any;
 };
 
 type SettingsDoc = {
   currency: "MXN" | "USD";
-  exchangeRate: number; // MXN por USD
-  iva: number; // 0.16 = 16%
+  exchangeRate: number;
+  iva: number;
 };
 
-/* =====================================
- * Constantes de colecciones
- * ===================================== */
-
-const COL_SERVICES = "services"; // { name, fields[] }
-const COL_COST_TABLES = "cost_tables"; // docs: { name } / subcoll rows
-const COL_CALCULATORS = "calculators"; // docs: { name } / subcoll rows
-const COL_SETTINGS = "cotizador_settings"; // doc único "default"
-
-/* =====================================
- * Utilidades
- * ===================================== */
+const COL_SERVICES = "services";
+const COL_COST_TABLES = "cost_tables";
+const COL_CALCULATORS = "calculators";
+const COL_SETTINGS = "cotizador_settings";
 
 const parser = new Parser();
 
-const snake = (s: string) =>
-  s
+const inputClass =
+  "mt-1 w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm text-white placeholder:text-white/35 outline-none focus:ring-2 focus:ring-emerald-400/25 focus:border-emerald-400/30";
+
+const selectClass =
+  "mt-1 w-full rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm text-white outline-none focus:ring-2 focus:ring-emerald-400/25 focus:border-emerald-400/30 [&>option]:bg-white [&>option]:text-black [&>option]:font-bold";
+
+const labelClass = "block text-sm font-medium text-white/75";
+
+const primaryBtn =
+  "inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-emerald-400 to-teal-500 px-4 py-2.5 text-sm font-semibold text-black shadow-[0_18px_50px_-24px_rgba(45,212,191,0.75)] hover:brightness-110 hover:-translate-y-[1px] transition disabled:opacity-45 disabled:cursor-not-allowed";
+
+const secondaryBtn =
+  "inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-2.5 text-sm font-medium text-white/85 hover:bg-white/[0.08] transition";
+
+const dangerBtn =
+  "inline-flex items-center justify-center rounded-2xl border border-red-400/20 bg-red-500/10 px-4 py-2 text-sm font-medium text-red-300 hover:bg-red-500/15 transition";
+
+function snake(s: string) {
+  return s
     .normalize("NFD")
-    // @ts-ignore - soporte para \p{Diacritic}
+    // @ts-ignore
     .replace(/\p{Diacritic}/gu, "")
     .toLowerCase()
     .trim()
     .replace(/\s+/g, "_")
     .replace(/[^a-z0-9_]/g, "_")
     .replace(/_{2,}/g, "_");
+}
 
 function safeEval(expr: string, vars: Record<string, number>): number | null {
   try {
@@ -121,12 +125,10 @@ function findConflicts(
   return null;
 }
 
-/* >>> NEW =====================================
- * Helper: asegurar el doc de Cotización Viva
- * ============================================ */
 async function ensureQuoteLiveDoc(pedidoId: string, settings: SettingsDoc | null) {
   const liveDocRef = doc(db, "pedidos", pedidoId, "quote_live", "live");
   const snap = await getDoc(liveDocRef);
+
   if (!snap.exists()) {
     await setDoc(liveDocRef, {
       currency: settings?.currency ?? "MXN",
@@ -144,12 +146,9 @@ async function ensureQuoteLiveDoc(pedidoId: string, settings: SettingsDoc | null
       updatedAt: serverTimestamp(),
     });
   }
+
   return liveDocRef;
 }
-
-/* =====================================
- * Hooks Firestore tipados
- * ===================================== */
 
 function useColl<T = DocumentData>(path: string, constraints: QueryConstraint[] = []) {
   const [data, setData] = useState<Array<{ id: string; data: T }>>([]);
@@ -178,22 +177,23 @@ function useSubColl<T = DocumentData>(parentPath: string, sub: string) {
 
   useEffect(() => {
     if (!parentPath) return;
+
     const ref = collection(db, `${parentPath}/${sub}`) as CollectionReference<T>;
     const q = query(ref, orderBy("createdAt", "asc")) as FsQuery<T>;
+
     const unsub = onSnapshot(q, (snap: QuerySnapshot<T>) => {
       const out: Array<{ id: string; data: T }> = [];
-      snap.forEach((d: QueryDocumentSnapshot<T>) => out.push({ id: d.id, data: d.data() as T }));
+      snap.forEach((d: QueryDocumentSnapshot<T>) =>
+        out.push({ id: d.id, data: d.data() as T })
+      );
       setData(out);
     });
+
     return () => unsub();
   }, [parentPath, sub]);
 
   return data;
 }
-
-/* =====================================
- * Página principal (CLIENT)
- * ===================================== */
 
 export default function CotizadorClient() {
   const router = useRouter();
@@ -213,106 +213,131 @@ export default function CotizadorClient() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [view]);
 
+  const menuItems: { key: ViewKey; label: string }[] = [
+    { key: "cotizacion", label: "Cotización" },
+    { key: "calculadora", label: "Calculadora" },
+    { key: "tabla", label: "Tabla de costos" },
+    { key: "servicios", label: "Servicios" },
+  ];
+
   return (
-    <div className="min-h-[calc(100vh-64px)]">
-      <div className="max-w-7xl mx-auto p-4 md:p-6 flex gap-4">
-        {/* Sidebar */}
-        <aside
-          className={[
-            "bg-white rounded-2xl shadow p-3 md:p-4 h-max sticky top-4 transition-all",
-            collapsed ? "w-14" : "w-64",
-          ].join(" ")}
-          aria-label="Menú del cotizador"
-        >
-          <div className="flex items-center justify-between mb-3">
-            {!collapsed && <h2 className="text-lg font-bold">Cotizador</h2>}
-            <button
-              aria-label="Alternar menú"
-              className="p-2 rounded-lg border hover:bg-neutral-100"
-              onClick={() => setCollapsed((v) => !v)}
-              title="Mostrar/ocultar menú"
-            >
-              <div className="w-5 space-y-1">
-                <div className="h-0.5 bg-black" />
-                <div className="h-0.5 bg-black" />
-                <div className="h-0.5 bg-black" />
-              </div>
-            </button>
-          </div>
+    <div className="min-h-[calc(100vh-120px)] text-white">
+      <div className="mx-auto max-w-7xl px-5 sm:px-8 py-8 sm:py-10">
+        <div className="mb-6">
+          <h1 className="text-2xl sm:text-3xl font-semibold text-white">
+            Cotizador
+          </h1>
+          <p className="mt-2 text-sm text-white/60">
+            Administra servicios, tablas de costos, calculadoras y cotizaciones vivas.
+          </p>
+        </div>
 
-          <nav className="flex flex-col gap-2">
-            {[
-              { key: "cotizacion", label: "Cotización" },
-              { key: "calculadora", label: "Calculadora" },
-              { key: "tabla", label: "Tabla de costos" },
-              { key: "servicios", label: "Servicios" },
-            ].map(({ key, label }) => {
-              const active = view === (key as ViewKey);
-              return (
+        <div className="flex flex-col lg:flex-row gap-5">
+          <aside
+            className={[
+              "relative h-max lg:sticky lg:top-24 rounded-3xl border border-white/10 bg-white/[0.035] backdrop-blur-2xl ring-1 ring-white/5 shadow-[0_30px_120px_-80px_rgba(0,0,0,0.95)] overflow-hidden transition-all",
+              collapsed ? "lg:w-20" : "lg:w-72",
+            ].join(" ")}
+            aria-label="Menú del cotizador"
+          >
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-emerald-500/10 to-transparent" />
+
+            <div className="relative p-4">
+              <div className="flex items-center gap-3 mb-4">
                 <button
-                  key={key}
-                  onClick={() => setView(key as ViewKey)}
-                  title={label}
-                  className={[
-                    "group w-full px-3 py-2 rounded-xl border transition flex items-center gap-2",
-                    active
-                      ? "bg-black text-white border-black"
-                      : "bg-white text-black border-neutral-300 hover:bg-neutral-100",
-                  ].join(" ")}
+                  aria-label="Alternar menú"
+                  className="h-11 w-11 shrink-0 rounded-2xl border border-white/10 bg-white/[0.05] hover:bg-white/[0.08] transition flex items-center justify-center"
+                  onClick={() => setCollapsed((v) => !v)}
+                  title="Mostrar/ocultar menú"
                 >
-                  <span
-                    className={[
-                      "inline-block w-2.5 h-2.5 rounded-full",
-                      active ? "bg-white" : "bg-black",
-                    ].join(" ")}
-                  />
-                  {!collapsed && <span className="truncate">{label}</span>}
+                  <div className="w-5 space-y-1">
+                    <div className="h-0.5 bg-white/80" />
+                    <div className="h-0.5 bg-white/80" />
+                    <div className="h-0.5 bg-white/80" />
+                  </div>
                 </button>
-              );
-            })}
-          </nav>
-        </aside>
 
-        {/* Panel derecho */}
-        <section className="flex-1 bg-white rounded-2xl shadow p-4 md:p-6">
-          {view === "cotizacion" && <CotizacionPanel />}
-          {view === "servicios" && <ServiciosPanel />}
-          {view === "tabla" && <TablaCostosPanel />}
-          {view === "calculadora" && <CalculadoraPanel />}
-        </section>
+                {!collapsed && (
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">Panel</h2>
+                    <p className="text-xs text-white/45">Módulos del cotizador</p>
+                  </div>
+                )}
+              </div>
+
+              <nav className="flex flex-col gap-2">
+                {menuItems.map(({ key, label }) => {
+                  const active = view === key;
+
+                  return (
+                    <button
+                      key={key}
+                      onClick={() => setView(key)}
+                      title={label}
+                      className={[
+                        "group w-full px-3 py-3 rounded-2xl border transition flex items-center gap-3 text-sm",
+                        active
+                          ? "bg-emerald-400/90 text-black border-emerald-300/40 shadow-[0_18px_50px_-26px_rgba(45,212,191,0.8)]"
+                          : "bg-white/[0.04] text-white/75 border-white/10 hover:bg-white/[0.08] hover:text-white",
+                      ].join(" ")}
+                    >
+                      <span
+                        className={[
+                          "inline-block h-2.5 w-2.5 rounded-full",
+                          active ? "bg-black" : "bg-emerald-300/70",
+                        ].join(" ")}
+                      />
+                      {!collapsed && <span className="truncate font-medium">{label}</span>}
+                    </button>
+                  );
+                })}
+              </nav>
+            </div>
+          </aside>
+
+          <section className="relative flex-1 rounded-3xl border border-white/10 bg-white/[0.035] backdrop-blur-2xl ring-1 ring-white/5 shadow-[0_30px_120px_-80px_rgba(0,0,0,0.95)] overflow-hidden">
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-gradient-to-b from-emerald-500/10 to-transparent" />
+
+            <div className="relative p-5 sm:p-7">
+              {view === "cotizacion" && <CotizacionPanel />}
+              {view === "servicios" && <ServiciosPanel />}
+              {view === "tabla" && <TablaCostosPanel />}
+              {view === "calculadora" && <CalculadoraPanel />}
+            </div>
+          </section>
+        </div>
       </div>
     </div>
   );
 }
 
-/* =====================================
- * Panel: Cotización (flujo + moneda + total + adjuntar)
- * ===================================== */
-
 function CotizacionPanel() {
   const [settings, setSettings] = useState<SettingsDoc | null>(null);
-  // >>> NEW
   const { user } = useAuth?.() ?? { user: null };
 
-  // >>> NEW: leer parámetros de la URL para preseleccionar proyecto/pedido
   const search = useSearchParams();
   const proyectoParam = search.get("proyecto") || "";
   const tituloParam = search.get("titulo") || "";
 
-  // Crea/lee settings default
   useEffect(() => {
     const ref = doc(db, COL_SETTINGS, "default");
-    // Asegura doc con defaults (merge evita sobreescrituras involuntarias)
     setDoc(ref, { currency: "MXN", exchangeRate: 17, iva: 0.16 }, { merge: true });
+
     const unsub = onSnapshot(ref, (snap) => {
-      const data = (snap.data() || { currency: "MXN", exchangeRate: 17, iva: 0.16 }) as SettingsDoc;
+      const data = (snap.data() || {
+        currency: "MXN",
+        exchangeRate: 17,
+        iva: 0.16,
+      }) as SettingsDoc;
+
       setSettings(data);
     });
+
     return () => unsub();
   }, []);
 
-  // Proyectos desde pedidos (únicos por campo "proyecto" o titulo)
   const pedidos = useColl<any>("pedidos");
+
   const proyectos = useMemo(() => {
     const set = new Set<string>();
     pedidos.forEach((p) => {
@@ -323,6 +348,7 @@ function CotizacionPanel() {
   }, [pedidos]);
 
   const [project, setProject] = useState<string>("");
+
   const pedidosDelProyecto = useMemo(() => {
     return pedidos.filter((p) => {
       const name = p.data.proyecto || p.data.titulo || "Sin nombre";
@@ -330,73 +356,60 @@ function CotizacionPanel() {
     });
   }, [pedidos, project]);
 
-  // >>> NEW: preseleccionar proyecto si viene en query y aún no se ha elegido
   useEffect(() => {
-    if (!project && proyectoParam) {
-      setProject(proyectoParam);
-    }
+    if (!project && proyectoParam) setProject(proyectoParam);
   }, [project, proyectoParam]);
 
   const [pedidoId, setPedidoId] = useState<string>("");
 
-  // >>> NEW: preseleccionar pedido por título (y proyecto si aplica)
   useEffect(() => {
     if (!pedidoId && tituloParam && pedidos.length) {
-      let found =
+      const found =
         pedidos.find((p) => {
           const projName = p.data.proyecto || p.data.titulo || "Sin nombre";
-          return (
-            p.data.titulo === tituloParam &&
-            (!proyectoParam || projName === proyectoParam)
-          );
-        }) ||
-        pedidos.find((p) => p.data.titulo === tituloParam);
+          return p.data.titulo === tituloParam && (!proyectoParam || projName === proyectoParam);
+        }) || pedidos.find((p) => p.data.titulo === tituloParam);
 
-      if (found) {
-        setPedidoId(found.id);
-      }
+      if (found) setPedidoId(found.id);
     }
   }, [pedidoId, tituloParam, proyectoParam, pedidos]);
 
-  // Servicios disponibles
   const services = useColl<ServiceDoc>(COL_SERVICES);
-
   const [serviceId, setServiceId] = useState<string>("");
-
-  // Respuestas (variables) de cotización
   const [answers, setAnswers] = useState<Record<string, number>>({});
   const [selects, setSelects] = useState<Record<string, string>>({});
+
   const selService = services.find((s) => s.id === serviceId)?.data;
 
-  // Contexto de costos (desde tabla de costos) — merge
   const costTablesGroups = useColl<GroupDoc>(COL_COST_TABLES);
   const [selectedCostGroup, setSelectedCostGroup] = useState<string>("");
+
   const costRows = useSubColl<RowDoc>(
     selectedCostGroup ? `${COL_COST_TABLES}/${selectedCostGroup}` : "",
     "rows"
   );
+
   const costVars = useMemo(() => {
     const out: Record<string, number> = {};
     costRows.forEach((r) => {
-      if (r.data.key && typeof r.data.value === "number") out[r.data.key] = r.data.value!;
+      if (r.data.key && typeof r.data.value === "number") out[r.data.key] = r.data.value;
     });
     return out;
   }, [costRows]);
 
-  // Calculadora del servicio seleccionado (grupo elegido)
   const calcGroups = useColl<GroupDoc>(COL_CALCULATORS);
   const [activeCalcGroup, setActiveCalcGroup] = useState<string>("");
+
   const calcRows = useSubColl<RowDoc>(
     activeCalcGroup ? `${COL_CALCULATORS}/${activeCalcGroup}` : "",
     "rows"
   );
 
-  // >>> NEW: estado para evitar doble click y manejar "loading"
   const [isAttaching, setIsAttaching] = useState(false);
 
-  // >>> NEW: sincronizar automáticamente tabla de costos y calculadora con el servicio seleccionado
   useEffect(() => {
     if (!serviceId) return;
+
     const svc = services.find((s) => s.id === serviceId)?.data;
     if (!svc) return;
 
@@ -418,24 +431,28 @@ function CotizacionPanel() {
     activeCalcGroup,
   ]);
 
-  // Resolver calculadora con prioridad: calc > answers > tabla
   const resolvedCalc = useMemo(() => {
     const result: Record<string, number> = {};
-    // iteramos varias pasadas por dependencias cruzadas
+
     for (let pass = 0; pass < 6; pass++) {
       let progress = false;
+
       calcRows.forEach((r) => {
         if (!r.data.key || !r.data.expr) return;
         if (result[r.data.key] !== undefined) return;
+
         const ctx = buildContext(costVars, answers, result);
-        const v = safeEval(r.data.expr!, ctx);
+        const v = safeEval(r.data.expr, ctx);
+
         if (v !== null) {
           result[r.data.key] = v;
           progress = true;
         }
       });
+
       if (!progress) break;
     }
+
     return result;
   }, [calcRows, costVars, answers]);
 
@@ -451,223 +468,206 @@ function CotizacionPanel() {
   const displayTotal = currency === "MXN" ? total : total / rate;
 
   return (
-    <div className="space-y-6 text-neutral-900">
-      <h3 className="text-xl font-semibold">Cotización</h3>
+    <div className="space-y-6">
+      <PanelHeader
+        title="Cotización"
+        description="Selecciona un pedido, configura el servicio y adjúntalo a la cotización viva."
+      />
 
-      {/* Moneda */}
-      <div className="flex flex-wrap items-end gap-3 p-3 bg-neutral-50 rounded-xl border border-neutral-200">
-        <div>
-          <label className="block text-sm font-medium">Moneda</label>
-          <select
-            className="mt-1 border border-neutral-300 rounded-lg px-3 py-2"
-            value={currency}
-            onChange={async (e) => {
-              const val = e.target.value as "MXN" | "USD";
-              await setDoc(doc(db, COL_SETTINGS, "default"), { currency: val }, { merge: true });
-            }}
-          >
-            <option value="MXN">MXN</option>
-            <option value="USD">USD</option>
-          </select>
+      <div className="rounded-3xl border border-white/10 bg-black/30 p-5">
+        <h4 className="text-base font-semibold text-white">Configuración general</h4>
+
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className={labelClass}>Moneda</label>
+            <select
+              className={selectClass}
+              value={currency}
+              onChange={async (e) => {
+                const val = e.target.value as "MXN" | "USD";
+                await setDoc(doc(db, COL_SETTINGS, "default"), { currency: val }, { merge: true });
+              }}
+            >
+              <option value="MXN">MXN</option>
+              <option value="USD">USD</option>
+            </select>
+          </div>
+
+          <div>
+            <label className={labelClass}>Tasa USD → MXN</label>
+            <input
+              type="number"
+              step="1"
+              className={inputClass}
+              value={rate}
+              onChange={async (e) => {
+                const v = parseFloat(e.target.value) || 0;
+                await setDoc(
+                  doc(db, COL_SETTINGS, "default"),
+                  { exchangeRate: v },
+                  { merge: true }
+                );
+              }}
+            />
+          </div>
+
+          <div>
+            <label className={labelClass}>IVA</label>
+            <input
+              type="number"
+              step="1"
+              className={inputClass}
+              value={settings?.iva ?? 0.16}
+              onChange={async (e) => {
+                const v = parseFloat(e.target.value) || 0;
+                await setDoc(doc(db, COL_SETTINGS, "default"), { iva: v }, { merge: true });
+              }}
+            />
+          </div>
         </div>
+      </div>
 
-        <div>
-          <label className="block text-sm font-medium">Tasa USD→MXN</label>
-          <input
-            type="number"
-            step="1"
-            className="mt-1 border border-neutral-300 rounded-lg px-3 py-2 w-32 placeholder-neutral-500"
-            value={rate}
-            onChange={async (e) => {
-              const v = parseFloat(e.target.value) || 0;
-              await setDoc(doc(db, COL_SETTINGS, "default"), { exchangeRate: v }, { merge: true });
-            }}
-          />
+      <div className="rounded-3xl border border-white/10 bg-black/30 p-5">
+        <h4 className="text-base font-semibold text-white">Datos de la cotización</h4>
+
+        <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div>
+            <label className={labelClass}>1) Proyecto a cotizar</label>
+            <select
+              className={selectClass}
+              value={project}
+              onChange={(e) => {
+                setProject(e.target.value);
+                setPedidoId("");
+              }}
+            >
+              <option value="">— Selecciona —</option>
+              {proyectos.map((p) => (
+                <option key={p} value={p}>
+                  {p}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className={labelClass}>2) Pedido del proyecto</label>
+            <select
+              className={selectClass}
+              value={pedidoId}
+              onChange={(e) => setPedidoId(e.target.value)}
+            >
+              <option value="">— Selecciona —</option>
+              {pedidosDelProyecto.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.data.titulo || p.data.proyecto || p.id}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div>
+            <label className={labelClass}>3) Servicio</label>
+            <select
+              className={selectClass}
+              value={serviceId}
+              onChange={(e) => setServiceId(e.target.value)}
+            >
+              <option value="">— Selecciona —</option>
+              {services.map((s) => (
+                <option key={s.id} value={s.id}>
+                  {s.data.name}
+                </option>
+              ))}
+            </select>
+          </div>
         </div>
-
-        <div>
-          <label className="block text-sm font-medium">IVA</label>
-          <input
-            type="number"
-            step="1"
-            className="mt-1 border border-neutral-300 rounded-lg px-3 py-2 w-24"
-            value={settings?.iva ?? 0.16}
-            onChange={async (e) => {
-              const v = parseFloat(e.target.value) || 0;
-              await setDoc(doc(db, COL_SETTINGS, "default"), { iva: v }, { merge: true });
-            }}
-          />
-        </div>
       </div>
 
-      {/* Paso 1: Proyecto */}
-      <div>
-        <label className="block text-sm font-medium">1) Proyecto a cotizar</label>
-        <select
-          className="mt-1 border border-neutral-300 rounded-lg px-3 py-2"
-          value={project}
-          onChange={(e) => {
-            setProject(e.target.value);
-            setPedidoId("");
-          }}
-        >
-          <option value="">— Selecciona —</option>
-          {proyectos.map((p) => (
-            <option key={p} value={p}>
-              {p}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Paso 2: Pedido */}
-      <div>
-        <label className="block text-sm font-medium">2) Pedido del proyecto</label>
-        <select
-          className="mt-1 border border-neutral-300 rounded-lg px-3 py-2"
-          value={pedidoId}
-          onChange={(e) => setPedidoId(e.target.value)}
-        >
-          <option value="">— Selecciona —</option>
-          {pedidosDelProyecto.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.data.titulo || p.data.proyecto || p.id}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Paso 3: Servicio */}
-      <div>
-        <label className="block text-sm font-medium">3) Servicio</label>
-        <select
-          className="mt-1 border border-neutral-300 rounded-lg px-3 py-2"
-          value={serviceId}
-          onChange={(e) => setServiceId(e.target.value)}
-        >
-          <option value="">— Selecciona —</option>
-          {services.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.data.name}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      {/* Campos dinámicos por Servicio */}
       {selService && (
-        <div className="space-y-3">
-          <h4 className="font-semibold">Parámetros del servicio</h4>
-          {selService.fields.map((f) =>
-            f.type === "select" ? (
-              <ServiceSelectInput
-                key={f.key}
-                field={f}
-                value={selects[f.key]}
-                onChange={(val) => {
-                  setSelects((s) => ({ ...s, [f.key]: val }));
-                  // one-hot solo para selects
-                  const base = `is_${f.key}_`;
-                  setAnswers((prev) => {
-                    const next = { ...prev };
-                    (f.options || []).forEach((opt) => {
-                      next[`${base}${snake(opt)}`] = 0;
+        <div className="rounded-3xl border border-white/10 bg-black/30 p-5">
+          <h4 className="text-base font-semibold text-white">Parámetros del servicio</h4>
+
+          <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
+            {selService.fields.map((f) =>
+              f.type === "select" ? (
+                <ServiceSelectInput
+                  key={f.key}
+                  field={f}
+                  value={selects[f.key]}
+                  onChange={(val) => {
+                    setSelects((s) => ({ ...s, [f.key]: val }));
+
+                    const base = `is_${f.key}_`;
+                    setAnswers((prev) => {
+                      const next = { ...prev };
+
+                      (f.options || []).forEach((opt) => {
+                        next[`${base}${snake(opt)}`] = 0;
+                      });
+
+                      if (val) next[`${base}${snake(val)}`] = 1;
+                      return next;
                     });
-                    if (val) next[`${base}${snake(val)}`] = 1;
-                    return next;
-                  });
-                }}
-              />
-            ) : f.type === "text" ? (
-              <ServiceTextInput
-                key={f.key}
-                field={f}
-                value={selects[f.key]}
-                onChange={(val) => setSelects((s) => ({ ...s, [f.key]: val }))}
-              />
-            ) : (
-              <ServiceFieldInput
-                key={f.key}
-                field={f}
-                value={answers[f.key]}
-                onChange={(val) => {
-                  if (val === null) {
-                    setAnswers(({ [f.key]: _omit, ...rest }) => rest);
-                    return;
-                  }
-                  const conflict = findConflicts(f.key, [
-                    { where: "tabla", has: f.key in Object(costVars) },
-                    { where: "cotizacion", has: f.key in answers },
-                    { where: "calculadora", has: false },
-                  ]);
-                  if (conflict && !(f.key in answers)) alert(conflict);
-                  setAnswers((a) => ({ ...a, [f.key]: val }));
-                }}
-              />
-            )
-          )}
+                  }}
+                />
+              ) : f.type === "text" ? (
+                <ServiceTextInput
+                  key={f.key}
+                  field={f}
+                  value={selects[f.key]}
+                  onChange={(val) => setSelects((s) => ({ ...s, [f.key]: val }))}
+                />
+              ) : (
+                <ServiceFieldInput
+                  key={f.key}
+                  field={f}
+                  value={answers[f.key]}
+                  onChange={(val) => {
+                    if (val === null) {
+                      setAnswers(({ [f.key]: _omit, ...rest }) => rest);
+                      return;
+                    }
+
+                    const conflict = findConflicts(f.key, [
+                      { where: "tabla", has: f.key in Object(costVars) },
+                      { where: "cotizacion", has: f.key in answers },
+                      { where: "calculadora", has: false },
+                    ]);
+
+                    if (conflict && !(f.key in answers)) alert(conflict);
+
+                    setAnswers((a) => ({ ...a, [f.key]: val }));
+                  }}
+                />
+              )
+            )}
+          </div>
         </div>
       )}
 
-      {/* Selección de Tabla/Calculadora */}
-      <div className="flex flex-wrap gap-3 items-end">
-        <div>
-          <label className="block text-sm font-medium">Tabla de costos aplicada</label>
-          <select
-            className="mt-1 border border-neutral-300 rounded-lg px-3 py-2"
-            value={selectedCostGroup}
-            onChange={(e) => setSelectedCostGroup(e.target.value)}
-          >
-            <option value="">— Ninguna —</option>
-            {costTablesGroups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.data.name}
-              </option>
-            ))}
-          </select>
+      <div className="rounded-3xl border border-emerald-400/20 bg-emerald-400/[0.06] p-5">
+        <p className="text-sm text-white/55">Total estimado</p>
+        <div className="mt-1 text-2xl font-semibold text-white">
+          {currency} {displayTotal.toFixed(2)}
         </div>
-
-        <div>
-          <label className="block text-sm font-medium">Calculadora</label>
-          <select
-            className="mt-1 border border-neutral-300 rounded-lg px-3 py-2"
-            value={activeCalcGroup}
-            onChange={(e) => setActiveCalcGroup(e.target.value)}
-          >
-            <option value="">— Calculadora —</option>
-            {calcGroups.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.data.name}
-              </option>
-            ))}
-          </select>
-        </div>
-      </div>
-
-      {/* Total */}
-      <div className="p-4 border border-neutral-200 rounded-xl bg-neutral-50">
-        <div className="text-lg font-semibold">
-          Total: {currency} {displayTotal.toFixed(2)}
-        </div>
-        <p className="text-sm text-neutral-500">
-          (Suma de filas marcadas "inTotal" en la Calculadora seleccionada)
+        <p className="mt-2 text-sm text-white/50">
+          Suma de filas marcadas como <span className="text-white/70">inTotal</span> en la
+          calculadora vinculada al servicio.
         </p>
       </div>
 
-      {/* Adjuntar servicio → Cotización Viva */}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-3">
         <button
-          className="px-4 py-2 rounded-xl bg-black text-white hover:opacity-90 disabled:opacity-50"
-          disabled={!pedidoId || !serviceId || isAttaching} // >>> NEW
+          className={primaryBtn}
+          disabled={!pedidoId || !serviceId || isAttaching}
           onClick={async () => {
-            // >>> NEW: guard adicional por si acaso
             if (isAttaching) return;
             if (!pedidoId || !serviceId || !selService) return;
 
             try {
-              setIsAttaching(true); // >>> NEW
+              setIsAttaching(true);
 
-              // asegurar contenedor
               await ensureQuoteLiveDoc(pedidoId, settings);
 
               const serviceName = selService.name;
@@ -676,46 +676,56 @@ function CotizacionPanel() {
               const costGroupName =
                 costTablesGroups.find((g) => g.id === selectedCostGroup)?.data?.name || "";
 
-              // payload de línea
-              const linePayload = {
-                serviceId,
-                serviceName,
-                calcGroupId: activeCalcGroup || null,
-                calcGroupName,
-                costGroupId: selectedCostGroup || null,
-                costGroupName,
-                answers,
-                selects,
-                resolvedCalc, // útil para auditoría/desglose
-                subtotalMXN: total, // base en MXN
-                displayCurrency: settings?.currency ?? "MXN",
-                displayTotal: displayTotal,
-                createdBy: user?.uid || null,
-                createdAt: serverTimestamp(),
-              };
-
               await addDoc(
                 collection(db, "pedidos", pedidoId, "quote_live", "live", "lines"),
-                linePayload
+                {
+                  serviceId,
+                  serviceName,
+                  calcGroupId: activeCalcGroup || null,
+                  calcGroupName,
+                  costGroupId: selectedCostGroup || null,
+                  costGroupName,
+                  answers,
+                  selects,
+                  resolvedCalc,
+                  subtotalMXN: total,
+                  displayCurrency: settings?.currency ?? "MXN",
+                  displayTotal,
+                  createdBy: user?.uid || null,
+                  createdAt: serverTimestamp(),
+                }
               );
 
-              // >>> NEW: limpiar selección de servicio y parámetros
               setServiceId("");
               setAnswers({});
               setSelects({});
               setSelectedCostGroup("");
               setActiveCalcGroup("");
 
-              // feedback simple
               alert("Servicio agregado a la Cotización Viva del pedido.");
             } finally {
-              setIsAttaching(false); // >>> NEW
+              setIsAttaching(false);
             }
           }}
         >
           {isAttaching ? "Adjuntando..." : "Adjuntar servicio a la cotización"}
         </button>
       </div>
+    </div>
+  );
+}
+
+function PanelHeader({
+  title,
+  description,
+}: {
+  title: string;
+  description: string;
+}) {
+  return (
+    <div>
+      <h3 className="text-xl sm:text-2xl font-semibold text-white">{title}</h3>
+      <p className="mt-2 text-sm text-white/60 max-w-3xl">{description}</p>
     </div>
   );
 }
@@ -729,19 +739,14 @@ function ServiceSelectInput({
   value?: string;
   onChange: (v: string) => void;
 }) {
-  const opts = field.options || [];
   return (
     <div>
-      <label className="block text-sm font-medium text-neutral-800">
-        {field.label} ({field.key})
+      <label className={labelClass}>
+        {field.label} <span className="text-white/35">({field.key})</span>
       </label>
-      <select
-        className="mt-1 border border-neutral-300 rounded-lg px-3 py-2 w-full"
-        value={value ?? ""}
-        onChange={(e) => onChange(e.target.value)}
-      >
+      <select className={selectClass} value={value ?? ""} onChange={(e) => onChange(e.target.value)}>
         <option value="">— Selecciona —</option>
-        {opts.map((o, i) => (
+        {(field.options || []).map((o, i) => (
           <option key={i} value={o}>
             {o}
           </option>
@@ -762,15 +767,14 @@ function ServiceTextInput({
 }) {
   return (
     <div>
-      <label className="block text-sm font-medium text-neutral-800">
-        {field.label} ({field.key})
+      <label className={labelClass}>
+        {field.label} <span className="text-white/35">({field.key})</span>
       </label>
       <input
         type="text"
-        className="mt-1 border border-neutral-300 rounded-lg px-3 py-2 w-full placeholder-neutral-500 text-neutral-900"
+        className={inputClass}
         value={value ?? ""}
         onChange={(e) => onChange(e.target.value)}
-        placeholder=""
       />
     </div>
   );
@@ -787,32 +791,32 @@ function ServiceFieldInput({
 }) {
   if (field.type === "boolean") {
     return (
-      <label className="flex items-center gap-2 text-neutral-800">
+      <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80">
         <input
           type="checkbox"
           checked={!!value}
           onChange={(e) => onChange(e.target.checked ? 1 : 0)}
+          className="accent-emerald-400"
         />
         {field.label}
       </label>
     );
   }
-  // Simplificación: number/text/time/dimensions → number. Permitimos vacío.
+
   return (
     <div>
-      <label className="block text-sm font-medium text-neutral-800">
-        {field.label} ({field.key})
+      <label className={labelClass}>
+        {field.label} <span className="text-white/35">({field.key})</span>
       </label>
       <input
         type="number"
         step="1"
-        className="mt-1 border border-neutral-300 rounded-lg px-3 py-2 w-full placeholder-neutral-500 text-neutral-900"
+        className={inputClass}
         value={value === undefined ? "" : value}
         onChange={(e) => {
           const raw = e.target.value;
-          if (raw === "") {
-            onChange(null); // permite borrar sin que aparezca 0
-          } else {
+          if (raw === "") onChange(null);
+          else {
             const num = Number(raw);
             if (!Number.isNaN(num)) onChange(num);
           }
@@ -823,10 +827,6 @@ function ServiceFieldInput({
   );
 }
 
-/* =====================================
- * Panel: Servicios (CRUD)
- * ===================================== */
-
 function ServiciosPanel() {
   const services = useColl<ServiceDoc>(COL_SERVICES);
 
@@ -836,52 +836,60 @@ function ServiciosPanel() {
   const [newFieldOptions, setNewFieldOptions] = useState("");
 
   return (
-    <div className="space-y-6 text-neutral-900">
-      <div className="flex items-end gap-2">
-        <div>
-          <label className="block text-sm font-medium">Nuevo servicio</label>
-          <input
-            className="mt-1 border border-neutral-300 rounded-lg px-3 py-2"
-            placeholder="Nombre"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </div>
-        {newFieldType === "select" && (
+    <div className="space-y-6">
+      <PanelHeader
+        title="Servicios"
+        description="Crea servicios y define los campos que después se usarán en la cotización."
+      />
+
+      <div className="rounded-3xl border border-white/10 bg-black/30 p-5">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-end">
           <div>
-            <label className="block text-sm font-medium">Opciones (coma separadas)</label>
+            <label className={labelClass}>Nuevo servicio</label>
             <input
-              className="mt-1 border border-neutral-300 rounded-lg px-3 py-2"
-              placeholder="Ej: PLA, ABS, PETG"
-              value={newFieldOptions}
-              onChange={(e) => setNewFieldOptions(e.target.value)}
+              className={inputClass}
+              placeholder="Nombre"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
             />
           </div>
-        )}
-        <button
-          className="px-3 py-2 rounded-lg bg-black text-white hover:opacity-90"
-          onClick={async () => {
-            const n = name.trim();
-            if (!n) return;
-            await addDoc(collection(db, COL_SERVICES), {
-              name: n,
-              fields: [],
-              createdAt: serverTimestamp(),
-            } as ServiceDoc);
-            setName("");
-          }}
-        >
-          + Agregar
-        </button>
+
+          <button
+            className={primaryBtn}
+            onClick={async () => {
+              const n = name.trim();
+              if (!n) return;
+
+              await addDoc(collection(db, COL_SERVICES), {
+                name: n,
+                fields: [],
+                createdAt: serverTimestamp(),
+              } as ServiceDoc);
+
+              setName("");
+            }}
+          >
+            + Agregar
+          </button>
+        </div>
       </div>
 
-      <div className="grid gap-4">
+      <div className="grid gap-5">
         {services.map((s) => (
-          <div key={s.id} className="border border-neutral-200 rounded-xl p-3">
-            <div className="flex items-center justify-between">
-              <h4 className="font-semibold">{s.data.name}</h4>
+          <div
+            key={s.id}
+            className="rounded-3xl border border-white/10 bg-black/30 p-5 hover:bg-white/[0.04] transition"
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <h4 className="text-lg font-semibold text-white">{s.data.name}</h4>
+                <p className="text-sm text-white/45">
+                  {s.data.fields?.length || 0} campos configurados
+                </p>
+              </div>
+
               <button
-                className="text-sm text-red-600 hover:underline"
+                className={dangerBtn}
                 onClick={async () => {
                   await deleteDoc(doc(db, COL_SERVICES, s.id));
                 }}
@@ -890,31 +898,37 @@ function ServiciosPanel() {
               </button>
             </div>
 
-            {/* Campos */}
-            <div className="mt-2 space-y-2">
-              {s.data.fields?.map((f, idx) => (
-                <div key={idx} className="flex items-center gap-2 text-neutral-700">
-                  <span className="text-sm w-40 truncate">{f.label}</span>
-                  <span className="text-xs text-neutral-500">({f.key})</span>
-                </div>
-              ))}
+            <div className="mt-4 flex flex-wrap gap-2">
+              {s.data.fields?.length ? (
+                s.data.fields.map((f, idx) => (
+                  <div
+                    key={idx}
+                    className="rounded-full border border-white/10 bg-white/[0.05] px-3 py-1.5 text-sm text-white/75"
+                  >
+                    {f.label}
+                    <span className="ml-2 text-white/35">({f.key})</span>
+                  </div>
+                ))
+              ) : (
+                <p className="text-sm text-white/45">Este servicio aún no tiene campos.</p>
+              )}
             </div>
 
-            {/* Agregar campo */}
-            <div className="mt-3 flex flex-wrap items-end gap-2">
+            <div className="mt-5 grid grid-cols-1 md:grid-cols-[1fr_180px_1fr_auto] gap-3 items-end">
               <div>
-                <label className="block text-sm font-medium">Nuevo campo</label>
+                <label className={labelClass}>Nuevo campo</label>
                 <input
-                  className="mt-1 border border-neutral-300 rounded-lg px-3 py-2"
+                  className={inputClass}
                   placeholder="Etiqueta"
                   value={newFieldLabel}
                   onChange={(e) => setNewFieldLabel(e.target.value)}
                 />
               </div>
+
               <div>
-                <label className="block text-sm font-medium">Tipo</label>
+                <label className={labelClass}>Tipo</label>
                 <select
-                  className="mt-1 border border-neutral-300 rounded-lg px-3 py-2"
+                  className={selectClass}
                   value={newFieldType}
                   onChange={(e) => setNewFieldType(e.target.value as FieldType)}
                 >
@@ -926,22 +940,46 @@ function ServiciosPanel() {
                   <option value="dimensions">dimensions</option>
                 </select>
               </div>
+
+              <div>
+                <label className={labelClass}>Opciones</label>
+                <input
+                  disabled={newFieldType !== "select"}
+                  className={`${inputClass} disabled:opacity-40`}
+                  placeholder="Ej: PLA, ABS, PETG"
+                  value={newFieldOptions}
+                  onChange={(e) => setNewFieldOptions(e.target.value)}
+                />
+              </div>
+
               <button
-                className="px-3 py-2 rounded-lg bg-black text-white hover:opacity-90"
+                className={secondaryBtn}
                 onClick={async () => {
                   const lab = newFieldLabel.trim();
                   if (!lab) return;
+
                   const key = snake(lab);
-                  const payload: ServiceField = { key, label: lab, type: newFieldType } as ServiceField;
+                  const payload: ServiceField = {
+                    key,
+                    label: lab,
+                    type: newFieldType,
+                  };
+
                   if (newFieldType === "select") {
                     const opts = newFieldOptions
                       .split(",")
                       .map((t) => t.trim())
                       .filter(Boolean);
-                    (payload as any).options = opts;
+
+                    payload.options = opts;
                   }
+
                   const updated = [...(s.data.fields || []), payload];
-                  await updateDoc(doc(db, COL_SERVICES, s.id), { fields: updated });
+
+                  await updateDoc(doc(db, COL_SERVICES, s.id), {
+                    fields: updated,
+                  });
+
                   setNewFieldLabel("");
                   setNewFieldOptions("");
                 }}
@@ -956,10 +994,6 @@ function ServiciosPanel() {
   );
 }
 
-/* =====================================
- * Panel: Tabla de costos (grupos + filas con valores fijos)
- * ===================================== */
-
 function TablaCostosPanel() {
   const groups = useColl<GroupDoc>(COL_COST_TABLES);
   const [selected, setSelected] = useState<string>("");
@@ -970,41 +1004,47 @@ function TablaCostosPanel() {
   const [varValue, setVarValue] = useState<number | "">("");
 
   return (
-    <div className="space-y-6 text-neutral-900">
-      <div className="flex items-end gap-2">
-        <div>
-          <label className="block text-sm font-medium">Nueva subcategoría</label>
-          <input
-            className="mt-1 border border-neutral-300 rounded-lg px-3 py-2"
-            placeholder="Nombre"
-            value={groupName}
-            onChange={(e) => setGroupName(e.target.value)}
-          />
+    <div className="space-y-6">
+      <PanelHeader
+        title="Tabla de costos"
+        description="Crea subcategorías y variables de costo fijo en MXN."
+      />
+
+      <div className="rounded-3xl border border-white/10 bg-black/30 p-5">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-end">
+          <div>
+            <label className={labelClass}>Nueva subcategoría</label>
+            <input
+              className={inputClass}
+              placeholder="Nombre"
+              value={groupName}
+              onChange={(e) => setGroupName(e.target.value)}
+            />
+          </div>
+
+          <button
+            className={primaryBtn}
+            onClick={async () => {
+              const n = groupName.trim();
+              if (!n) return;
+
+              const ref = await addDoc(collection(db, COL_COST_TABLES), {
+                name: n,
+                createdAt: serverTimestamp(),
+              });
+
+              setGroupName("");
+              setSelected(ref.id);
+            }}
+          >
+            + Agregar
+          </button>
         </div>
-        <button
-          className="px-3 py-2 rounded-lg bg-black text-white hover:opacity-90"
-          onClick={async () => {
-            const n = groupName.trim();
-            if (!n) return;
-            const ref = await addDoc(collection(db, COL_COST_TABLES), {
-              name: n,
-              createdAt: serverTimestamp(),
-            });
-            setGroupName("");
-            setSelected(ref.id);
-          }}
-        >
-          + Agregar
-        </button>
       </div>
 
-      <div className="flex gap-2 items-center">
-        <label className="text-sm">Subcategoría:</label>
-        <select
-          className="border border-neutral-300 rounded-lg px-3 py-2"
-          value={selected}
-          onChange={(e) => setSelected(e.target.value)}
-        >
+      <div>
+        <label className={labelClass}>Subcategoría</label>
+        <select className={selectClass} value={selected} onChange={(e) => setSelected(e.target.value)}>
           <option value="">— Selecciona —</option>
           {groups.map((g) => (
             <option key={g.id} value={g.id}>
@@ -1014,103 +1054,89 @@ function TablaCostosPanel() {
         </select>
       </div>
 
-      {/* Tabla dos columnas */}
-      <div className="border border-neutral-200 rounded-xl overflow-hidden">
-        <table className="min-w-full text-sm">
-          <thead className="bg-neutral-100">
-            <tr>
-              <th className="text-left px-3 py-2 w-1/2 text-neutral-700 font-medium">Variable</th>
-              <th className="text-left px-3 py-2 w-1/2 text-neutral-700 font-medium">Valor (MXN)</th>
-            </tr>
-          </thead>
-          <tbody className="text-neutral-800">
-            {rows.map((r) => (
-              <tr key={r.id} className="border-t border-neutral-200">
-                <td className="px-3 py-2">{r.data.key}</td>
-                <td className="px-3 py-2">{r.data.value ?? "—"}</td>
-              </tr>
-            ))}
-            {selected && (
-              <tr className="border-t border-neutral-200 bg-neutral-50">
-                <td className="px-3 py-2">
-                  <input
-                    className="border border-neutral-300 rounded-lg px-2 py-1 w-full"
-                    placeholder="nombre_variable"
-                    value={varName}
-                    onChange={(e) => setVarName(snake(e.target.value))}
-                  />
-                </td>
-                <td className="px-3 py-2">
-                  <input
-                    type="number"
-                    step="1"
-                    className="border border-neutral-300 rounded-lg px-2 py-1 w-full"
-                    placeholder="0"
-                    value={varValue}
-                    onChange={(e) =>
-                      setVarValue(e.target.value === "" ? "" : parseFloat(e.target.value))
-                    }
-                  />
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      <DarkTable
+        headers={["Variable", "Valor (MXN)"]}
+        rows={rows.map((r) => [r.data.key, r.data.value ?? "—"])}
+        footer={
+          selected ? (
+            <>
+              <td className="px-4 py-3">
+                <input
+                  className={inputClass}
+                  placeholder="nombre_variable"
+                  value={varName}
+                  onChange={(e) => setVarName(snake(e.target.value))}
+                />
+              </td>
+              <td className="px-4 py-3">
+                <input
+                  type="number"
+                  step="1"
+                  className={inputClass}
+                  placeholder="0"
+                  value={varValue}
+                  onChange={(e) =>
+                    setVarValue(e.target.value === "" ? "" : parseFloat(e.target.value))
+                  }
+                />
+              </td>
+            </>
+          ) : null
+        }
+      />
 
       {selected && (
-        <div className="flex gap-2">
-          <button
-            className="px-3 py-2 rounded-lg bg-black text-white hover:opacity-90"
-            onClick={async () => {
-              const k = varName.trim();
-              if (!k || varValue === "") return;
-              const conflict = findConflicts(k, [
-                { where: "tabla", has: rows.some((r) => r.data.key === k) },
-                { where: "cotizacion", has: false },
-                { where: "calculadora", has: false },
-              ]);
-              if (conflict) {
-                alert(conflict);
-                return;
-              }
-              await addDoc(collection(db, `${COL_COST_TABLES}/${selected}/rows`), {
-                key: k,
-                value: Number(varValue),
-                createdAt: serverTimestamp(),
-              } as RowDoc);
-              setVarName("");
-              setVarValue("");
-            }}
-          >
-            + Agregar fila
-          </button>
-        </div>
+        <button
+          className={primaryBtn}
+          onClick={async () => {
+            const k = varName.trim();
+            if (!k || varValue === "") return;
+
+            const conflict = findConflicts(k, [
+              { where: "tabla", has: rows.some((r) => r.data.key === k) },
+              { where: "cotizacion", has: false },
+              { where: "calculadora", has: false },
+            ]);
+
+            if (conflict) {
+              alert(conflict);
+              return;
+            }
+
+            await addDoc(collection(db, `${COL_COST_TABLES}/${selected}/rows`), {
+              key: k,
+              value: Number(varValue),
+              createdAt: serverTimestamp(),
+            } as RowDoc);
+
+            setVarName("");
+            setVarValue("");
+          }}
+        >
+          + Agregar fila
+        </button>
       )}
     </div>
   );
 }
-
-/* =====================================
- * Panel: Calculadora (grupos + filas con fórmulas + barra de fórmula)
- * ===================================== */
 
 function CalculadoraPanel() {
   const groups = useColl<GroupDoc>(COL_CALCULATORS);
   const [selected, setSelected] = useState<string>("");
   const rows = useSubColl<RowDoc>(selected ? `${COL_CALCULATORS}/${selected}` : "", "rows");
 
-  // Contexto para vista previa: tabla de costos elegida
   const allCostGroups = useColl<GroupDoc>(COL_COST_TABLES);
   const [costGroupForPreview, setCostGroupForPreview] = useState<string>("");
+
   const costRows = useSubColl<RowDoc>(
     costGroupForPreview ? `${COL_COST_TABLES}/${costGroupForPreview}` : "",
     "rows"
   );
+
   const costVars = useMemo(() => {
     const out: Record<string, number> = {};
     costRows.forEach((r) => {
-      if (r.data.key && typeof r.data.value === "number") out[r.data.key] = r.data.value!;
+      if (r.data.key && typeof r.data.value === "number") out[r.data.key] = r.data.value;
     });
     return out;
   }, [costRows]);
@@ -1120,27 +1146,31 @@ function CalculadoraPanel() {
   const [expr, setExpr] = useState("");
   const [inTotal, setInTotal] = useState(true);
 
-  // Fila en edición (barra de fórmula)
   const [editingRow, setEditingRow] = useState<string | null>(null);
   const currentRow = rows.find((r) => r.id === editingRow);
 
-  // Vista previa de cálculos
   const previewValues = useMemo(() => {
     const result: Record<string, number> = {};
+
     for (let pass = 0; pass < 6; pass++) {
       let progress = false;
+
       rows.forEach((r) => {
         if (!r.data.expr || !r.data.key) return;
         if (result[r.data.key] !== undefined) return;
+
         const ctx = buildContext(costVars, {}, result);
         const v = safeEval(r.data.expr, ctx);
+
         if (v !== null) {
           result[r.data.key] = v;
           progress = true;
         }
       });
+
       if (!progress) break;
     }
+
     return result;
   }, [rows, costVars]);
 
@@ -1149,43 +1179,48 @@ function CalculadoraPanel() {
     .reduce((a, r) => a + (previewValues[r.data.key] ?? 0), 0);
 
   return (
-    <div className="space-y-6 text-neutral-900">
-      {/* Subcategorías */}
-      <div className="flex items-end gap-2">
-        <div>
-          <label className="block text-sm font-medium">Nueva subcategoría</label>
-          <input
-            className="mt-1 border border-neutral-300 rounded-lg px-3 py-2"
-            placeholder="Nombre"
-            value={groupName}
-            onChange={(e) => setGroupName(e.target.value)}
-          />
+    <div className="space-y-6">
+      <PanelHeader
+        title="Calculadora"
+        description="Crea fórmulas por subcategoría y define qué variables entran al total."
+      />
+
+      <div className="rounded-3xl border border-white/10 bg-black/30 p-5">
+        <div className="grid grid-cols-1 md:grid-cols-[1fr_auto] gap-4 items-end">
+          <div>
+            <label className={labelClass}>Nueva subcategoría</label>
+            <input
+              className={inputClass}
+              placeholder="Nombre"
+              value={groupName}
+              onChange={(e) => setGroupName(e.target.value)}
+            />
+          </div>
+
+          <button
+            className={primaryBtn}
+            onClick={async () => {
+              const n = groupName.trim();
+              if (!n) return;
+
+              const ref = await addDoc(collection(db, COL_CALCULATORS), {
+                name: n,
+                createdAt: serverTimestamp(),
+              });
+
+              setGroupName("");
+              setSelected(ref.id);
+            }}
+          >
+            + Agregar
+          </button>
         </div>
-        <button
-          className="px-3 py-2 rounded-lg bg-black text-white hover:opacity-90"
-          onClick={async () => {
-            const n = groupName.trim();
-            if (!n) return;
-            const ref = await addDoc(collection(db, COL_CALCULATORS), {
-              name: n,
-              createdAt: serverTimestamp(),
-            });
-            setGroupName("");
-            setSelected(ref.id);
-          }}
-        >
-          + Agregar
-        </button>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <div className="flex items-center gap-2">
-          <label className="text-sm">Subcategoría:</label>
-          <select
-            className="border border-neutral-300 rounded-lg px-3 py-2"
-            value={selected}
-            onChange={(e) => setSelected(e.target.value)}
-          >
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label className={labelClass}>Subcategoría</label>
+          <select className={selectClass} value={selected} onChange={(e) => setSelected(e.target.value)}>
             <option value="">— Selecciona —</option>
             {groups.map((g) => (
               <option key={g.id} value={g.id}>
@@ -1195,10 +1230,10 @@ function CalculadoraPanel() {
           </select>
         </div>
 
-        <div className="flex items-center gap-2">
-          <label className="text-sm">Tabla de costos (preview):</label>
+        <div>
+          <label className={labelClass}>Tabla de costos (preview)</label>
           <select
-            className="border border-neutral-300 rounded-lg px-3 py-2"
+            className={selectClass}
             value={costGroupForPreview}
             onChange={(e) => setCostGroupForPreview(e.target.value)}
           >
@@ -1210,109 +1245,100 @@ function CalculadoraPanel() {
             ))}
           </select>
         </div>
-
-        {editingRow && (
-          <div className="flex-1">
-            <label className="block text-sm font-medium">Barra de fórmula</label>
-            <input
-              className="mt-1 border border-neutral-300 rounded-lg px-3 py-2 w-full"
-              placeholder="Ej: costo_material + tiempo_pre * tarifa_hora"
-              value={currentRow?.data.expr ?? ""}
-              onChange={async (e) => {
-                const v = e.target.value;
-                await updateDoc(doc(db, `${COL_CALCULATORS}/${selected}/rows`, editingRow), {
-                  expr: v,
-                });
-              }}
-            />
-          </div>
-        )}
       </div>
 
-      {/* Tabla dos columnas */}
-      <div className="border border-neutral-200 rounded-xl overflow-hidden">
-        <table className="min-w-full text-sm">
-          <thead className="bg-neutral-100">
-            <tr>
-              <th className="text-left px-3 py-2 w-1/2 text-neutral-700 font-medium">Variable</th>
-              <th className="text-left px-3 py-2 w-1/2 text-neutral-700 font-medium">
-                Valor (preview)
-              </th>
-            </tr>
-          </thead>
-          <tbody className="text-neutral-800">
-            {rows.map((r) => (
-              <tr key={r.id} className="border-t border-neutral-200 hover:bg-neutral-50">
-                <td className="px-3 py-2">
-                  <button
-                    className="underline"
-                    onClick={() => setEditingRow(r.id)}
-                    title="Editar fórmula"
-                  >
-                    {r.data.key}
-                  </button>
-                  <span className="ml-2 text-xs text-neutral-500">
-                    {r.data.inTotal ? "[total]" : ""}
-                  </span>
-                </td>
-                <td className="px-3 py-2">{previewValues[r.data.key] ?? "—"}</td>
-              </tr>
-            ))}
-            {selected && (
-              <tr className="border-t border-neutral-200 bg-neutral-50">
-                <td className="px-3 py-2">
-                  <input
-                    className="border border-neutral-300 rounded-lg px-2 py-1 w-full"
-                    placeholder="nombre_variable"
-                    value={varName}
-                    onChange={(e) => setVarName(snake(e.target.value))}
-                  />
-                </td>
-                <td className="px-3 py-2">
-                  <input
-                    className="border border-neutral-300 rounded-lg px-2 py-1 w-full"
-                    placeholder="Ej: costo_rojo / costo_rosa"
-                    value={expr}
-                    onChange={(e) => setExpr(e.target.value)}
-                  />
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+      {editingRow && (
+        <div className="rounded-3xl border border-emerald-400/20 bg-emerald-400/[0.06] p-5">
+          <label className={labelClass}>Barra de fórmula</label>
+          <input
+            className={inputClass}
+            placeholder="Ej: costo_material + tiempo_pre * tarifa_hora"
+            value={currentRow?.data.expr ?? ""}
+            onChange={async (e) => {
+              const v = e.target.value;
+
+              await updateDoc(doc(db, `${COL_CALCULATORS}/${selected}/rows`, editingRow), {
+                expr: v,
+              });
+            }}
+          />
+        </div>
+      )}
+
+      <DarkTable
+        headers={["Variable", "Valor (preview)"]}
+        rows={rows.map((r) => [
+          <button
+            key={r.id}
+            className="text-emerald-300 hover:text-emerald-200 underline underline-offset-4"
+            onClick={() => setEditingRow(r.id)}
+            title="Editar fórmula"
+          >
+            {r.data.key}
+            {r.data.inTotal ? <span className="ml-2 text-xs text-white/45">[total]</span> : null}
+          </button>,
+          previewValues[r.data.key] ?? "—",
+        ])}
+        footer={
+          selected ? (
+            <>
+              <td className="px-4 py-3">
+                <input
+                  className={inputClass}
+                  placeholder="nombre_variable"
+                  value={varName}
+                  onChange={(e) => setVarName(snake(e.target.value))}
+                />
+              </td>
+              <td className="px-4 py-3">
+                <input
+                  className={inputClass}
+                  placeholder="Ej: costo_rojo / costo_rosa"
+                  value={expr}
+                  onChange={(e) => setExpr(e.target.value)}
+                />
+              </td>
+            </>
+          ) : null
+        }
+      />
 
       {selected && (
-        <div className="flex items-center gap-3">
-          <label className="flex items-center gap-2 text-sm">
+        <div className="flex flex-wrap items-center gap-4">
+          <label className="flex items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-white/80">
             <input
               type="checkbox"
               checked={inTotal}
               onChange={(e) => setInTotal(e.target.checked)}
+              className="accent-emerald-400"
             />
             Incluir esta fila en Total
           </label>
 
           <button
-            className="px-3 py-2 rounded-lg bg-black text-white hover:opacity-90"
+            className={primaryBtn}
             onClick={async () => {
               const k = varName.trim();
               if (!k || !expr.trim()) return;
+
               const conflict = findConflicts(k, [
                 { where: "tabla", has: false },
                 { where: "cotizacion", has: false },
                 { where: "calculadora", has: rows.some((r) => r.data.key === k) },
               ]);
+
               if (conflict) {
                 alert(conflict);
                 return;
               }
+
               await addDoc(collection(db, `${COL_CALCULATORS}/${selected}/rows`), {
                 key: k,
                 expr,
                 inTotal,
                 createdAt: serverTimestamp(),
               } as RowDoc);
+
               setVarName("");
               setExpr("");
               setInTotal(true);
@@ -1323,9 +1349,66 @@ function CalculadoraPanel() {
         </div>
       )}
 
-      <div className="p-3 border border-neutral-200 rounded-xl bg-neutral-50">
-        <div className="font-semibold">Subtotal (preview): MXN {subtotal.toFixed(2)}</div>
+      <div className="rounded-3xl border border-emerald-400/20 bg-emerald-400/[0.06] p-5">
+        <p className="text-sm text-white/55">Subtotal preview</p>
+        <div className="mt-1 text-2xl font-semibold text-white">
+          MXN {subtotal.toFixed(2)}
+        </div>
       </div>
+    </div>
+  );
+}
+
+function DarkTable({
+  headers,
+  rows,
+  footer,
+}: {
+  headers: string[];
+  rows: any[][];
+  footer?: React.ReactNode;
+}) {
+  return (
+    <div className="relative rounded-3xl border border-white/10 bg-white/[0.035] backdrop-blur-2xl ring-1 ring-white/5 shadow-[0_30px_120px_-80px_rgba(0,0,0,0.95)] overflow-hidden">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-emerald-500/10 to-transparent" />
+
+      <table className="relative w-full text-sm table-fixed">
+        <thead className="bg-white/[0.02]">
+          <tr className="text-left text-[12px] tracking-wide text-white/55">
+            {headers.map((h) => (
+              <th key={h} className="py-3 px-4 font-semibold">
+                {h}
+              </th>
+            ))}
+          </tr>
+        </thead>
+
+        <tbody className="divide-y divide-white/10">
+          {rows.map((row, idx) => (
+            <tr key={idx} className="hover:bg-emerald-500/[0.04] transition">
+              {row.map((cell, i) => (
+                <td key={i} className="px-4 py-3 text-white/80 break-words">
+                  {cell}
+                </td>
+              ))}
+            </tr>
+          ))}
+
+          {rows.length === 0 && !footer && (
+            <tr>
+              <td className="px-4 py-10 text-center text-white/45" colSpan={headers.length}>
+                No hay registros todavía.
+              </td>
+            </tr>
+          )}
+
+          {footer && (
+            <tr className="bg-white/[0.025] hover:bg-emerald-500/[0.04] transition">
+              {footer}
+            </tr>
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }
