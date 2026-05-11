@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   addDoc,
   collection,
@@ -347,7 +347,7 @@ export default function TelemedPage() {
     await cargarDatos();
     alert("Personal actualizado correctamente.");
   };
-
+const fileInputRef = useRef<HTMLInputElement | null>(null);
   const pacientesFiltrados = useMemo(() => {
     if (!sesion || sesion.rol !== "centro") return [];
 
@@ -375,54 +375,61 @@ export default function TelemedPage() {
       e.doctorMatricula === sesion?.matricula
   );
 
-  const subirEstudio = async () => {
-    if (!pacienteSeleccionado || !archivo || !nombreEstudio || !doctorAsignado) {
-      alert("Completa todos los campos y selecciona un archivo.");
-      return;
+const subirEstudio = async () => {
+  if (!pacienteSeleccionado || !archivo || !nombreEstudio || !doctorAsignado || !fechaLimite) {
+    alert("Completa todos los campos y selecciona un archivo.");
+    return;
+  }
+
+  const [doctorNombre, doctorMatricula] = doctorAsignado.split("|||");
+
+  try {
+    setSubiendo(true);
+
+    const nombreSeguro = archivo.name.replace(/\s+/g, "_");
+    const nombreStorage = `${Date.now()}-${nombreSeguro}`;
+    const storageRef = ref(storage, `telemed/${nombreStorage}`);
+
+    await uploadBytes(storageRef, archivo);
+    const url = await getDownloadURL(storageRef);
+
+    await addDoc(collection(db, "telemed_estudios"), {
+      pacienteId: pacienteSeleccionado.id,
+      pacienteNombre: pacienteSeleccionado.nombre,
+      pacienteMatricula: pacienteSeleccionado.matricula,
+      centroId: sesion.centroId,
+      centroNombre: sesion.centroNombre,
+      doctorNombre,
+      doctorMatricula,
+      nombreEstudio,
+      archivoURL: url,
+      archivoNombre: archivo.name,
+      diagnostico: "",
+      fechaLimiteDiagnostico: fechaLimite,
+      citaSolicitada: false,
+      citaHorario: "",
+      createdAt: serverTimestamp(),
+    });
+
+    alert("Estudio agregado correctamente.");
+
+    setNombreEstudio("");
+    setDoctorAsignado("");
+    setFechaLimite("");
+    setArchivo(null);
+
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
     }
 
-    const [doctorNombre, doctorMatricula] = doctorAsignado.split("|||");
-
-    try {
-      setSubiendo(true);
-
-      const nombreStorage = `${Date.now()}-${archivo.name}`;
-      const storageRef = ref(storage, `telemed/${nombreStorage}`);
-
-      await uploadBytes(storageRef, archivo);
-      const url = await getDownloadURL(storageRef);
-
-      await addDoc(collection(db, "telemed_estudios"), {
-        pacienteId: pacienteSeleccionado.id,
-        pacienteNombre: pacienteSeleccionado.nombre,
-        pacienteMatricula: pacienteSeleccionado.matricula,
-        centroId: sesion.centroId,
-        centroNombre: sesion.centroNombre,
-        doctorNombre,
-        doctorMatricula,
-        nombreEstudio,
-        archivoURL: url,
-        archivoNombre: archivo.name,
-        diagnostico: "",
-        fechaLimiteDiagnostico: fechaLimite,
-        citaSolicitada: false,
-        citaHorario: "",
-        createdAt: serverTimestamp(),
-      });
-
-      alert("Estudio agregado correctamente.");
-      setNombreEstudio("");
-      setDoctorAsignado("");
-      setFechaLimite("");
-      setArchivo(null);
-      await cargarDatos();
-    } catch (error) {
-      console.error(error);
-      alert("Error al subir el estudio.");
-    } finally {
-      setSubiendo(false);
-    }
-  };
+    await cargarDatos();
+  } catch (error: any) {
+    console.error("Error al subir estudio:", error);
+    alert(`Error al subir el estudio: ${error?.message || "Revisa permisos de Firebase Storage"}`);
+  } finally {
+    setSubiendo(false);
+  }
+};
 
   const guardarDiagnostico = async () => {
     if (!estudioAbierto) return;
@@ -873,14 +880,23 @@ export default function TelemedPage() {
                         className="w-full rounded-xl border border-white/10 bg-black px-4 py-3"
                       />
 
-                      <input
-                        type="file"
-                        accept=".dcm,.zip"
-                        onChange={(e) =>
-                          setArchivo(e.target.files?.[0] || null)
-                        }
-                        className="w-full rounded-xl border border-white/10 bg-black px-4 py-3"
-                      />
+                     <label className="group flex cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-cyan-400/40 bg-cyan-400/[0.04] px-5 py-8 text-center transition hover:bg-cyan-400/[0.08]">
+  <span className="text-sm font-semibold text-cyan-200">
+    {archivo ? archivo.name : "Seleccionar archivo DICOM o ZIP"}
+  </span>
+
+  <span className="mt-2 text-xs text-white/45">
+    Formatos permitidos: .dcm o .zip
+  </span>
+
+  <input
+    ref={fileInputRef}
+    type="file"
+    accept=".dcm,.zip"
+    onChange={(e) => setArchivo(e.target.files?.[0] || null)}
+    className="hidden"
+  />
+</label>
 
                       <button
                         onClick={subirEstudio}
