@@ -322,9 +322,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             <Link href="/hacer-pedido/proyecto" className="hover:text-white transition">
               Place Order
             </Link>
-            <Link href="/inventario" className="hover:text-white transition">
-              Inventary
-            </Link>
+            
             {isAdmin && (
               <Link href="/cotizador" className="hover:text-white transition">
                 Quoter
