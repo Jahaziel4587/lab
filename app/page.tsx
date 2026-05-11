@@ -152,6 +152,10 @@ export default function Home() {
   };
 
   // Handlers
+
+const handleTelemedicina = () => router.push("/telemed");
+
+
   const handleNuevoPedido = () => router.push("/hacer-pedido/proyecto");
 
   const handlePedidoFrecuenteClick = (pf: PedidoFrecuente) => {
@@ -194,6 +198,31 @@ export default function Home() {
               <p className="mt-3 text-xs text-white/55">
                 Select: project → service → technique → material → specifications.
               </p>
+
+<div className="mt-5 rounded-2xl border border-cyan-400/20 bg-cyan-400/[0.06] p-4">
+  <p className="text-xs uppercase tracking-[0.25em] text-cyan-200/80">
+    Academic Demo
+  </p>
+
+  <h2 className="mt-2 text-lg font-semibold text-white">
+    Telemedicine DICOM Platform
+  </h2>
+
+  <p className="mt-2 text-sm text-white/65">
+    Temporary module for uploading and downloading medical imaging studies.
+  </p>
+
+  <button
+    onClick={handleTelemedicina}
+    className="mt-4 w-full rounded-xl border border-cyan-300/30 bg-white/[0.04] px-4 py-3 text-sm font-semibold text-cyan-100
+      hover:bg-cyan-400/10 hover:border-cyan-300/50 transition"
+  >
+    Open Telemedicine Demo
+  </button>
+</div>
+
+
+
             </div>
 
             {/* ✅ ADAM siempre visible debajo del Place Order */}
