@@ -175,9 +175,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             <Link data-tutorial="nav-place-order" href="/hacer-pedido/proyecto" className="hover:text-white transition">
               Place Order
             </Link>
-            <Link data-tutorial="nav-inventory" href="/inventario" className="hover:text-white transition">
-              Inventory
-            </Link>
+           
 
             {isAdmin && (
               <Link data-tutorial="nav-quoter" href="/cotizador" className="hover:text-white transition">
