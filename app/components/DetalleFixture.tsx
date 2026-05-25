@@ -54,6 +54,19 @@ type FixtureVersion = {
   firmas?: Record<string, any>;
 };
 
+type ApprovalRole = "pm" | "disenador" | "encargado";
+type Decision = "aprobado" | "rechazado";
+
+type UserPermissionData = {
+  email?: string;
+  nombre?: string;
+  apellido?: string;
+  displayName?: string;
+  pmProjects?: string[];
+  isDesigner?: boolean;
+  processOwnerOf?: string[];
+};
+
 type LinkedPedido = {
   id: string;
   titulo?: string;
@@ -107,6 +120,8 @@ export default function DetalleFixture({
   const [betaDesc, setBetaDesc] = useState("");
   const [betaFiles, setBetaFiles] = useState<File[]>([]);
 
+  const [userData, setUserData] = useState<UserPermissionData | null>(null);
+
   const conceptoInputRef = useRef<HTMLInputElement | null>(null);
   const pruebaInputRef = useRef<HTMLInputElement | null>(null);
   const betaInputRef = useRef<HTMLInputElement | null>(null);
@@ -116,6 +131,57 @@ export default function DetalleFixture({
   const alcance = solicitud?.alcance || {};
   const inputs = solicitud?.inputs || {};
   const firmaPM = solicitud?.firmaPM || {};
+
+  const normalizePermissionValue = (value: string) =>
+    String(value || "")
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .trim()
+      .toLowerCase()
+      .replace(/&/g, "y")
+      .replace(/\s+/g, "_")
+      .replace(/[^a-z0-9_]/g, "");
+
+  const userDisplayName =
+    userData?.displayName ||
+    [userData?.nombre, userData?.apellido].filter(Boolean).join(" ") ||
+    user?.displayName ||
+    user?.email ||
+    "Usuario";
+
+  const pedidoProyecto = String(pedido?.proyecto || "").trim();
+
+  const fixtureProcesses = (() => {
+    const raw =
+      pedido?.proceso ||
+      pedido?.procesoFixture ||
+      solicitud?.proceso ||
+      solicitud?.alcance?.proceso ||
+      solicitud?.alcance?.procesos ||
+      [];
+
+    const list = Array.isArray(raw) ? raw : [raw];
+
+    return list
+      .map((p: any) => normalizePermissionValue(String(p || "")))
+      .filter(Boolean);
+  })();
+
+  const canApprovePM = !!userData?.pmProjects?.some(
+    (project) => String(project || "").trim() === pedidoProyecto
+  );
+
+  const canApproveDesigner = userData?.isDesigner === true;
+
+  const canApproveProcessOwner = !!userData?.processOwnerOf?.some((process) =>
+    fixtureProcesses.includes(normalizePermissionValue(process))
+  );
+
+  const canApproveRole = (role: ApprovalRole) => {
+    if (role === "pm") return canApprovePM;
+    if (role === "disenador") return canApproveDesigner;
+    return canApproveProcessOwner;
+  };
 
   const cardClass =
     "rounded-3xl border border-white/10 bg-white/[0.04] p-5 md:p-6 shadow-[0_25px_80px_rgba(0,0,0,0.35)] backdrop-blur";
@@ -218,10 +284,39 @@ export default function DetalleFixture({
     }
   };
 
-const isPedidoOwner =
-  user?.email &&
-  pedido?.correoUsuario &&
-  user.email === pedido.correoUsuario;
+  const loadUserPermissions = async () => {
+    if (!user?.email) {
+      setUserData(null);
+      return;
+    }
+
+    try {
+      const snap = await getDocs(collection(db, "users"));
+      let found: UserPermissionData | null = null;
+
+      snap.forEach((docSnap) => {
+        const data = docSnap.data() as any;
+        if (String(data?.email || "").toLowerCase() === String(user.email).toLowerCase()) {
+          found = {
+            email: data.email,
+            nombre: data.nombre,
+            apellido: data.apellido,
+            displayName: data.displayName,
+            pmProjects: Array.isArray(data.pmProjects) ? data.pmProjects : [],
+            isDesigner: data.isDesigner === true,
+            processOwnerOf: Array.isArray(data.processOwnerOf)
+              ? data.processOwnerOf
+              : [],
+          };
+        }
+      });
+
+      setUserData(found);
+    } catch (error) {
+      console.error("Error cargando permisos del usuario:", error);
+      setUserData(null);
+    }
+  };
 
   const loadLinkedPedidos = async () => {
     try {
@@ -252,6 +347,10 @@ const isPedidoOwner =
     loadSubcollections();
     loadLinkedPedidos();
   }, [pedidoId]);
+
+  useEffect(() => {
+    loadUserPermissions();
+  }, [user?.email]);
 
   const uploadFiles = async (
     files: File[],
@@ -383,32 +482,81 @@ const isPedidoOwner =
     }
   };
 
+  const getExistingFirma = (item: FixtureVersion, role: ApprovalRole) => {
+    const firma = item.firmas?.[role];
+    if (!firma) return null;
+
+    return {
+      ...firma,
+      correo: firma.correo || firma.approvedByEmail || "",
+      nombre: firma.nombre || firma.approvedByName || "",
+      fecha: firma.fecha || firma.approvedAt || "",
+      rejectReason: firma.rejectReason || "",
+    };
+  };
+
+  const canEditExistingDecision = (item: FixtureVersion, role: ApprovalRole) => {
+    const firma = getExistingFirma(item, role);
+    if (!firma?.correo || !user?.email) return true;
+    return String(firma.correo).toLowerCase() === String(user.email).toLowerCase();
+  };
+
+  const validateRoleDecision = (
+    item: FixtureVersion,
+    role: ApprovalRole,
+    decision: Decision,
+    rejectReason?: string
+  ) => {
+    if (!canApproveRole(role)) {
+      alert("Tu cuenta no tiene permisos para tomar esta decisión.");
+      return false;
+    }
+
+    if (!canEditExistingDecision(item, role)) {
+      alert("Solo la cuenta que tomó esta decisión puede editarla.");
+      return false;
+    }
+
+    if (decision === "rechazado" && !String(rejectReason || "").trim()) {
+      alert("Agrega una breve explicación del rechazo.");
+      return false;
+    }
+
+    return true;
+  };
+
+  const buildFirmaPayload = (decision: Decision, rejectReason?: string) => ({
+    decision,
+    correo: user?.email || "",
+    nombre: userDisplayName,
+    fecha: new Date().toISOString(),
+    approvedByEmail: user?.email || "",
+    approvedByName: userDisplayName,
+    approvedAt: new Date().toISOString(),
+    rejectReason: decision === "rechazado" ? String(rejectReason || "").trim() : "",
+  });
+
   const decidirConcepto = async (
     concepto: FixtureVersion,
-    decision: "aprobado" | "rechazado"
+    decision: Decision,
+    rejectReason?: string
   ) => {
-    if (user?.email !== pedido?.correoUsuario) {
-  alert(
-    "Solo el Project Manager que creó la solicitud puede aprobar o rechazar."
-  );
-  return;
-    }
+    if (!validateRoleDecision(concepto, "pm", decision, rejectReason)) return;
 
     try {
       setLoading(true);
+
+      const prevFirmas = concepto.firmas || {};
+      const nuevasFirmas = {
+        ...prevFirmas,
+        pm: buildFirmaPayload(decision, rejectReason),
+      };
 
       await updateDoc(
         doc(db, "pedidos", pedidoId, "fixture_conceptos", concepto.id),
         {
           status: decision,
-          firmas: {
-            pm: {
-              decision,
-              correo: user?.email || "",
-              nombre: user?.displayName || "",
-              fecha: new Date().toISOString(),
-            },
-          },
+          firmas: nuevasFirmas,
         }
       );
 
@@ -423,7 +571,9 @@ const isPedidoOwner =
 
       await registrarHistorial(
         `concepto_${decision}`,
-        `El concepto ${concepto.versionLabel} fue ${decision}.`
+        `El concepto ${concepto.versionLabel} fue ${decision} por ${userDisplayName}${
+          decision === "rechazado" ? `. Motivo: ${String(rejectReason || "").trim()}` : "."
+        }`
       );
 
       await loadSubcollections();
@@ -480,10 +630,11 @@ const isPedidoOwner =
 
   const decidirPrueba = async (
     prueba: FixtureVersion,
-    rol: "pm" | "disenador" | "encargado",
-    decision: "aprobado" | "rechazado"
+    rol: ApprovalRole,
+    decision: Decision,
+    rejectReason?: string
   ) => {
-    if (!isAdmin) return;
+    if (!validateRoleDecision(prueba, rol, decision, rejectReason)) return;
 
     try {
       setLoading(true);
@@ -492,15 +643,10 @@ const isPedidoOwner =
 
       const nuevasFirmas = {
         ...prevFirmas,
-        [rol]: {
-          decision,
-          correo: user?.email || "",
-          nombre: user?.displayName || "",
-          fecha: new Date().toISOString(),
-        },
+        [rol]: buildFirmaPayload(decision, rejectReason),
       };
 
-      const allRoles = ["pm", "disenador", "encargado"];
+      const allRoles: ApprovalRole[] = ["pm", "disenador", "encargado"];
 
       const completa = allRoles.every(
         (r) => nuevasFirmas[r]?.decision === "aprobado"
@@ -515,7 +661,7 @@ const isPedidoOwner =
         status: completa ? "aprobado" : rechazada ? "rechazado" : "pendiente",
       });
 
-      if (completa) {
+      if (completa && !rechazada) {
         await updateDoc(doc(db, "pedidos", pedidoId), {
           faseFixture: "spec_draft",
         });
@@ -537,7 +683,9 @@ const isPedidoOwner =
 
         await registrarHistorial(
           "confirmacion_conceptual_rechazada",
-          `La prueba ${prueba.versionLabel} fue rechazada.`
+          `La prueba ${prueba.versionLabel} fue rechazada por ${userDisplayName}. Motivo: ${String(
+            rejectReason || ""
+          ).trim()}`
         );
       }
 
@@ -596,9 +744,10 @@ const isPedidoOwner =
   const decidirBeta = async (
     beta: FixtureVersion,
     rol: "pm" | "encargado",
-    decision: "aprobado" | "rechazado"
+    decision: Decision,
+    rejectReason?: string
   ) => {
-    if (!isAdmin) return;
+    if (!validateRoleDecision(beta, rol, decision, rejectReason)) return;
 
     try {
       setLoading(true);
@@ -607,12 +756,7 @@ const isPedidoOwner =
 
       const nuevasFirmas = {
         ...prevFirmas,
-        [rol]: {
-          decision,
-          correo: user?.email || "",
-          nombre: user?.displayName || "",
-          fecha: new Date().toISOString(),
-        },
+        [rol]: buildFirmaPayload(decision, rejectReason),
       };
 
       const completa =
@@ -628,7 +772,7 @@ const isPedidoOwner =
         status: completa ? "aprobado" : rechazada ? "rechazado" : "pendiente",
       });
 
-      if (completa) {
+      if (completa && !rechazada) {
         await updateDoc(doc(db, "pedidos", pedidoId), {
           faseFixture: "spec_final",
         });
@@ -637,7 +781,22 @@ const isPedidoOwner =
 
         await registrarHistorial(
           "beta_aprobada",
-          `La propuesta ${beta.versionLabel} fue aprobada.`
+          `La propuesta ${beta.versionLabel} fue aprobada por PM y encargado.`
+        );
+      }
+
+      if (rechazada) {
+        await updateDoc(doc(db, "pedidos", pedidoId), {
+          faseFixture: "fase_beta",
+        });
+
+        setFaseActual("fase_beta");
+
+        await registrarHistorial(
+          "beta_rechazada",
+          `La propuesta ${beta.versionLabel} fue rechazada por ${userDisplayName}. Motivo: ${String(
+            rejectReason || ""
+          ).trim()}`
         );
       }
 
@@ -652,6 +811,12 @@ const isPedidoOwner =
 
   const generarSpecDraft = async () => {
     if (!isAdmin) return;
+
+    const pruebaAprobada = pruebas.some((p) => p.status === "aprobado");
+    if (!pruebaAprobada) {
+      alert("No se puede registrar la Spec Draft hasta que PM, diseñador y encargado aprueben una prueba.");
+      return;
+    }
 
     try {
       setLoading(true);
@@ -684,6 +849,12 @@ const isPedidoOwner =
 
   const generarSpecFinal = async () => {
     if (!isAdmin) return;
+
+    const betaAprobada = betas.some((b) => b.status === "aprobado");
+    if (!betaAprobada) {
+      alert("No se puede registrar la Spec Final hasta que PM y encargado aprueben una Beta.");
+      return;
+    }
 
     try {
       setLoading(true);
@@ -905,24 +1076,18 @@ const isPedidoOwner =
           <VersionList
             title="Conceptos registrados"
             items={conceptos}
-            renderActions={(item) =>
-              isPedidoOwner && item.status === "pendiente" ? (
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    className={btnPrimary}
-                    onClick={() => decidirConcepto(item, "aprobado")}
-                  >
-                    Aprobar
-                  </button>
-                  <button
-                    className={btnDanger}
-                    onClick={() => decidirConcepto(item, "rechazado")}
-                  >
-                    Rechazar
-                  </button>
-                </div>
-              ) : null
-            }
+            renderActions={(item) => (
+              <ApprovalRow
+                label="PM"
+                approvalKey="pm"
+                firma={item.firmas?.pm}
+                currentUserEmail={user?.email}
+                canApprove={canApprovePM}
+                onDecision={(decision, reason) =>
+                  decidirConcepto(item, decision, reason)
+                }
+              />
+            )}
           />
         </section>
       );
@@ -1008,30 +1173,40 @@ const isPedidoOwner =
           <VersionList
             title="Pruebas pendientes / confirmadas"
             items={pruebas}
-            renderActions={(item) =>
-              isAdmin ? (
-                <div className="grid gap-3">
-                  <ApprovalRow
-                    label="PM"
-                    value={item.firmas?.pm?.decision}
-                    onApprove={() => decidirPrueba(item, "pm", "aprobado")}
-                    onReject={() => decidirPrueba(item, "pm", "rechazado")}
-                  />
-                  <ApprovalRow
-                    label="Diseñador"
-                    value={item.firmas?.disenador?.decision}
-                    onApprove={() => decidirPrueba(item, "disenador", "aprobado")}
-                    onReject={() => decidirPrueba(item, "disenador", "rechazado")}
-                  />
-                  <ApprovalRow
-                    label="Encargado del proceso"
-                    value={item.firmas?.encargado?.decision}
-                    onApprove={() => decidirPrueba(item, "encargado", "aprobado")}
-                    onReject={() => decidirPrueba(item, "encargado", "rechazado")}
-                  />
-                </div>
-              ) : null
-            }
+            renderActions={(item) => (
+              <div className="grid gap-3">
+                <ApprovalRow
+                  label="PM"
+                  approvalKey="pm"
+                  firma={item.firmas?.pm}
+                  currentUserEmail={user?.email}
+                  canApprove={canApprovePM}
+                  onDecision={(decision, reason) =>
+                    decidirPrueba(item, "pm", decision, reason)
+                  }
+                />
+                <ApprovalRow
+                  label="Diseñador"
+                  approvalKey="disenador"
+                  firma={item.firmas?.disenador}
+                  currentUserEmail={user?.email}
+                  canApprove={canApproveDesigner}
+                  onDecision={(decision, reason) =>
+                    decidirPrueba(item, "disenador", decision, reason)
+                  }
+                />
+                <ApprovalRow
+                  label="Encargado del proceso"
+                  approvalKey="encargado"
+                  firma={item.firmas?.encargado}
+                  currentUserEmail={user?.email}
+                  canApprove={canApproveProcessOwner}
+                  onDecision={(decision, reason) =>
+                    decidirPrueba(item, "encargado", decision, reason)
+                  }
+                />
+              </div>
+            )}
           />
         </section>
       );
@@ -1104,24 +1279,30 @@ const isPedidoOwner =
           <VersionList
             title="Betas registradas"
             items={betas}
-            renderActions={(item) =>
-              isAdmin ? (
-                <div className="grid gap-3">
-                  <ApprovalRow
-                    label="PM"
-                    value={item.firmas?.pm?.decision}
-                    onApprove={() => decidirBeta(item, "pm", "aprobado")}
-                    onReject={() => decidirBeta(item, "pm", "rechazado")}
-                  />
-                  <ApprovalRow
-                    label="Encargado del proceso"
-                    value={item.firmas?.encargado?.decision}
-                    onApprove={() => decidirBeta(item, "encargado", "aprobado")}
-                    onReject={() => decidirBeta(item, "encargado", "rechazado")}
-                  />
-                </div>
-              ) : null
-            }
+            renderActions={(item) => (
+              <div className="grid gap-3">
+                <ApprovalRow
+                  label="PM"
+                  approvalKey="pm"
+                  firma={item.firmas?.pm}
+                  currentUserEmail={user?.email}
+                  canApprove={canApprovePM}
+                  onDecision={(decision, reason) =>
+                    decidirBeta(item, "pm", decision, reason)
+                  }
+                />
+                <ApprovalRow
+                  label="Encargado del proceso"
+                  approvalKey="encargado"
+                  firma={item.firmas?.encargado}
+                  currentUserEmail={user?.email}
+                  canApprove={canApproveProcessOwner}
+                  onDecision={(decision, reason) =>
+                    decidirBeta(item, "encargado", decision, reason)
+                  }
+                />
+              </div>
+            )}
           />
         </section>
       );
@@ -1420,38 +1601,154 @@ function VersionList({
 
 function ApprovalRow({
   label,
-  value,
-  onApprove,
-  onReject,
+  approvalKey,
+  firma,
+  currentUserEmail,
+  canApprove,
+  onDecision,
 }: {
   label: string;
-  value?: string;
-  onApprove: () => void;
-  onReject: () => void;
+  approvalKey: ApprovalRole;
+  firma?: any;
+  currentUserEmail?: string;
+  canApprove: boolean;
+  onDecision: (decision: Decision, reason?: string) => void;
 }) {
+  const normalizedFirma = {
+    ...firma,
+    decision: firma?.decision || "",
+    correo: firma?.correo || firma?.approvedByEmail || "",
+    nombre: firma?.nombre || firma?.approvedByName || "",
+    fecha: firma?.fecha || firma?.approvedAt || "",
+    rejectReason: firma?.rejectReason || "",
+  };
+
+  const alreadyAnswered =
+    normalizedFirma.decision === "aprobado" ||
+    normalizedFirma.decision === "rechazado";
+
+  const isOwner =
+    !!normalizedFirma.correo &&
+    !!currentUserEmail &&
+    String(normalizedFirma.correo).toLowerCase() ===
+      String(currentUserEmail).toLowerCase();
+
+  const [editing, setEditing] = useState(false);
+  const [reason, setReason] = useState(normalizedFirma.rejectReason || "");
+
+  useEffect(() => {
+    setReason(normalizedFirma.rejectReason || "");
+    setEditing(false);
+  }, [normalizedFirma.decision, normalizedFirma.rejectReason]);
+
+  const statusClass =
+    normalizedFirma.decision === "aprobado"
+      ? "border-emerald-300/30 bg-emerald-400/10 text-emerald-100"
+      : normalizedFirma.decision === "rechazado"
+      ? "border-red-300/30 bg-red-400/10 text-red-100"
+      : "border-yellow-300/30 bg-yellow-400/10 text-yellow-100";
+
+  const showDecisionControls = canApprove && (!alreadyAnswered || isOwner || editing);
+
   return (
-    <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
-      <div>
-        <p className="text-sm font-semibold text-white/80">{label}</p>
-        <p className="text-xs text-white/45">Estado: {value || "pendiente"}</p>
-      </div>
+    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div className="min-w-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="text-sm font-semibold text-white/85">{label}</p>
+            <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${statusClass}`}>
+              {normalizedFirma.decision || "pendiente"}
+            </span>
+          </div>
 
-      <div className="flex gap-2">
-        <button
-          type="button"
-          onClick={onApprove}
-          className="rounded-lg border border-emerald-300/25 bg-emerald-400/10 px-3 py-1.5 text-xs text-emerald-100 hover:bg-emerald-400/20"
-        >
-          Aprobado
-        </button>
+          {alreadyAnswered && normalizedFirma.nombre && (
+            <p className="mt-2 text-xs text-white/60">
+              {normalizedFirma.decision === "aprobado" ? "Aprobado por" : "Rechazado por"}{" "}
+              <span className="font-semibold text-white/85">
+                {normalizedFirma.nombre}
+              </span>
+            </p>
+          )}
 
-        <button
-          type="button"
-          onClick={onReject}
-          className="rounded-lg border border-red-300/25 bg-red-400/10 px-3 py-1.5 text-xs text-red-100 hover:bg-red-400/20"
-        >
-          Rechazado
-        </button>
+          {alreadyAnswered && normalizedFirma.fecha && (
+            <p className="mt-1 text-[11px] text-white/35">
+              {normalizedFirma.fecha}
+            </p>
+          )}
+
+          {normalizedFirma.decision === "rechazado" &&
+            normalizedFirma.rejectReason && (
+              <div className="mt-3 rounded-xl border border-red-300/20 bg-red-400/10 px-3 py-2 text-xs leading-relaxed text-red-100">
+                Motivo: {normalizedFirma.rejectReason}
+              </div>
+            )}
+
+          {!canApprove && !alreadyAnswered && (
+            <p className="mt-2 text-xs text-yellow-100/75">
+              Pendiente de aprobación. Tu cuenta no está asignada para este rol.
+            </p>
+          )}
+
+          {alreadyAnswered && !isOwner && (
+            <p className="mt-2 text-xs text-white/35">
+              Esta decisión solo puede editarla la cuenta que la registró.
+            </p>
+          )}
+        </div>
+
+        {showDecisionControls && (
+          <div className="flex w-full flex-col gap-2 sm:w-[280px] sm:items-end">
+            {(!alreadyAnswered || editing) && (
+              <>
+                <textarea
+                  value={reason}
+                  onChange={(e) => setReason(e.target.value)}
+                  placeholder="Motivo de rechazo"
+                  className="min-h-[82px] w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-white placeholder:text-white/35 outline-none focus:ring-2 focus:ring-emerald-400/20"
+                />
+
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onDecision("aprobado");
+                      setEditing(false);
+                    }}
+                    className="rounded-lg border border-emerald-300/25 bg-emerald-400/10 px-3 py-1.5 text-xs text-emerald-100 hover:bg-emerald-400/20"
+                  >
+                    Aprobar
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (!reason.trim()) {
+                        alert("Agrega una breve explicación del rechazo.");
+                        return;
+                      }
+
+                      onDecision("rechazado", reason);
+                      setEditing(false);
+                    }}
+                    className="rounded-lg border border-red-300/25 bg-red-400/10 px-3 py-1.5 text-xs text-red-100 hover:bg-red-400/20"
+                  >
+                    Rechazar
+                  </button>
+                </div>
+              </>
+            )}
+
+            {alreadyAnswered && isOwner && !editing && (
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/75 hover:bg-white/10"
+              >
+                Editar decisión
+              </button>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
