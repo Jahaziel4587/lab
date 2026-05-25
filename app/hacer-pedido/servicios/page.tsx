@@ -14,7 +14,7 @@ const servicios: ServicioItem[] = [
   { key: "Corte", label: "Corte", code: "01" },
   { key: "Grabado", label: "Grabado", code: "02" },
   { key: "Impresión", label: "Impresión", code: "03" },
-  { key: "Fixture", label: "Diseño de fixture", code: "04" },
+  { key: "Fixture", label: "Fixturing & Jigs", code: "04" },
   { key: "Necesidad", label: "Necesidad", code: "05", route: "/hacer-pedido/especificaciones" },
 ];
 
@@ -46,6 +46,14 @@ export default function ServiciosPage() {
       router.push(item.route || "/hacer-pedido/especificaciones");
       return;
     }
+
+  if (item.key === "Fixture") {
+    localStorage.removeItem("maquina");
+    localStorage.removeItem("material");
+    localStorage.removeItem("tecnica");
+    router.push("/hacer-pedido/fixturing");
+    return;
+  }
 
     router.push("/hacer-pedido/maquinas");
   };

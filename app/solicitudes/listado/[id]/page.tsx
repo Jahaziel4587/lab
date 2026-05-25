@@ -27,7 +27,7 @@ import { db, storage } from "@/src/firebase/firebaseConfig";
 import { FiArrowLeft, FiX, FiChevronUp, FiChevronDown } from "react-icons/fi";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import { useAuth } from "@/src/Context/AuthContext";
-
+import DetalleFixture from "@/app/components/DetalleFixture";
 // ---- Tipos ----
 type QuoteMeta = {
   currency?: "MXN" | "USD";
@@ -1179,6 +1179,17 @@ export default function DetallePedidoPage() {
   if (!pedido) {
     return <div className="mx-auto max-w-7xl px-4 sm:px-8 py-10 text-white/80">Cargando…</div>;
   }
+
+if (pedido.tipoPedido === "fixture") {
+  return (
+    <DetalleFixture
+      pedido={pedido}
+      pedidoId={id as string}
+      isAdmin={isAdmin}
+      user={user}
+    />
+  );
+}
 
   // ======== Render ========
   return (
