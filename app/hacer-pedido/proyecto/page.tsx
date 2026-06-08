@@ -28,6 +28,7 @@ const proyectos: Proyecto[] = [
   { nombre: "015.QIKCap disposible", imagen: "/Bioana.jpeg" },
   { nombre: "016.Portacad shield", imagen: "/Bioana.jpeg" },
   { nombre: "017.JNM", imagen: "/Bioana.jpeg" },
+  { nombre: "019.Orthotek", imagen: "/Bioana.jpeg" },
   { nombre: "027.XSCRUB", imagen: "/XSCRUB.jpeg" },
   { nombre: "030.MUV", imagen: "/Bioana.jpeg" },
   // { nombre: "E010.Orthodoxo", imagen: "/Bioana.jpeg" },
@@ -46,8 +47,11 @@ const proyectos: Proyecto[] = [
   { nombre: "E028.Peniflex", imagen: "/Bioana.jpeg" },
   { nombre: "E029.Zipstich", imagen: "/Bioana.jpeg" },
   { nombre: "E031.Orthodoxo Cople", imagen: "/Bioana.jpeg" },
-  { nombre: "E033.Sport Care", imagen: "/Bioana.jpeg" },
+  { nombre: "E033.Sport Care Blister Packaging", imagen: "/Bioana.jpeg" },
   { nombre: "E034.Sage guard", imagen: "/Bioana.jpeg" },
+  { nombre: "E035.Sheplus", imagen: "/Bioana.jpeg" },
+  { nombre: "E036.OsteoOne", imagen: "/Bioana.jpeg" },
+  { nombre: "E037.CAFE", imagen: "/Bioana.jpeg" },
   { nombre: "Otro", imagen: "/otro.jpg" },
 ];
 
