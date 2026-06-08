@@ -28,7 +28,6 @@ const proyectos: Proyecto[] = [
   { nombre: "015.QIKCap disposible", imagen: "/Bioana.jpeg" },
   { nombre: "016.Portacad shield", imagen: "/Bioana.jpeg" },
   { nombre: "017.JNM", imagen: "/Bioana.jpeg" },
-  { nombre: "019.Orthotek", imagen: "/Bioana.jpeg" },
   { nombre: "027.XSCRUB", imagen: "/XSCRUB.jpeg" },
   { nombre: "030.MUV", imagen: "/Bioana.jpeg" },
   // { nombre: "E010.Orthodoxo", imagen: "/Bioana.jpeg" },
