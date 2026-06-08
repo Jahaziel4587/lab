@@ -245,6 +245,22 @@ function SegmentedProgress({
   }
 };
 
+const calendarPedidoClass = (status?: string) => {
+  const base =
+    "block text-xs rounded-lg px-2 py-1 truncate border transition";
+
+  switch ((status || "").trim().toLowerCase()) {
+    case "listo":
+      return `${base} bg-emerald-500/20 text-emerald-200 border-emerald-400/40 hover:bg-emerald-500/30`;
+    case "cancelado":
+      return `${base} bg-red-500/20 text-red-200 border-red-400/40 hover:bg-red-500/30`;
+    case "en proceso":
+      return `${base} bg-yellow-500/20 text-yellow-200 border-yellow-400/40 hover:bg-yellow-500/30`;
+    default:
+      return `${base} bg-white/5 text-white/85 border-white/10 hover:bg-white/10`;
+  }
+};
+
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-10">
@@ -342,14 +358,14 @@ function SegmentedProgress({
                             {isAdmin ? (
                               <Link
                                 href={`/solicitudes/listado/${p.id}`}
-                                className="block text-xs text-white/85 hover:text-white bg-white/5 hover:bg-white/10 border border-white/10 rounded-lg px-2 py-1 truncate"
+                               className={calendarPedidoClass(p.status)}
                                 title={p.titulo}
                               >
                                 {p.titulo}
                               </Link>
                             ) : (
                               <div
-                                className="text-xs text-white/85 bg-white/5 border border-white/10 rounded-lg px-2 py-1 truncate"
+                                className={calendarPedidoClass(p.status)}
                                 title={p.titulo}
                               >
                                 {p.titulo}
