@@ -153,7 +153,6 @@ export default function Home() {
 
   // Handlers
 
-const handleTelemedicina = () => router.push("/telemed");
 
 
   const handleNuevoPedido = () => router.push("/hacer-pedido/proyecto");

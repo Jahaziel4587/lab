@@ -13,38 +13,7 @@ import { db } from "../../src/firebase/firebaseConfig";
 import { useAuth } from "../../src/Context/AuthContext";
 import { FiArrowRight } from "react-icons/fi";
 
-const proyectosImagenes: { [key: string]: string } = {
-  "001.Ocumetics": "/ocumetics.jpeg",
-  "002.Labella": "/Bioana.jpeg",
-  "004.Solvein": "/Bioana.jpeg",
-  "005.XSONXS Wound Heads": "/XSONX.png",
-  "006.AGMI": "/Bioana.jpeg",
-  "007.LumeNXT": "/LumeNXT.jpg",
-  "008.Panter": "/Bioana.jpeg",
-  "009.Recopad": "/Bioana.jpeg",
-  "010.Juno": "/Bioana.jpeg",
-  "013.T-EZ": "/Bioana.jpeg",
-  "014.QIKCap handle": "/Bioana.jpeg",
-  "015.QIKCap disposible": "/Bioana.jpeg",
-  "016.Portacad shield": "/Bioana.jpeg",
-  "017.JNM": "/Bioana.jpeg",
-  "027.XSCRUB": "/Bioana.jpeg",
-  "030.MUV": "/Bioana.jpeg",
-  "E011.Orthodoxo Anclas": "/Bioana.jpeg",
-  "E012.Falcon View": "/Bioana.jpeg",
-  "E019.Othotek": "/Bioana.jpeg",
-  "E020.Hero Cap": "/Bioana.jpeg",
-  "E022.Injectable Dermis": "/Bioana.jpeg",
-  "E023.DiViDiaper": "/Bioana.jpeg",
-  "E025.InjectMate": "/Bioana.jpeg",
-  "E026.Birchconcepts": "/Bioana.jpeg",
-  "E028.Peniflex": "/Bioana.jpeg",
-  "E029.Zipstich": "/Bioana.jpeg",
-  "E031.Orthodoxo Cople": "/Bioana.jpeg",
-  "E033.Sport Care": "/Bioana.jpeg",
-  "E034.Sage guard": "/Bioana.jpeg",
-  "Otro": "/otro.jpg",
-};
+
 
 type ProyectoMeta = {
   total: number;

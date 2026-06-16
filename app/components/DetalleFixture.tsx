@@ -100,6 +100,9 @@ export default function DetalleFixture({
   const [linkedPedidos, setLinkedPedidos] = useState<LinkedPedido[]>([]);
 
   const [loading, setLoading] = useState(false);
+
+  const [generatingPdf, setGeneratingPdf] = useState(false);
+
   const [faseActual, setFaseActual] = useState(
     pedido?.faseFixture || "proof_of_concept_solicitud"
   );
@@ -885,22 +888,81 @@ export default function DetalleFixture({
     }
   };
 
+const descargarSolicitudFormalPDF = async () => {
+  try {
+    setGeneratingPdf(true);
+
+    const response = await fetch(
+      `/api/fixtures/${pedidoId}/solicitud-formal-pdf`,
+      {
+        method: "POST",
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => null);
+      throw new Error(
+        errorData?.detail ||
+          errorData?.error ||
+          "No se pudo generar el PDF."
+      );
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+
+    const safeTitle = String(
+      pedido?.titulo || pedido?.io || "solicitud-formal"
+    )
+      .replace(/[^\w\dáéíóúÁÉÍÓÚñÑ.-]+/g, "_")
+      .replace(/_+/g, "_");
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${safeTitle}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+
+    window.URL.revokeObjectURL(url);
+  } catch (error) {
+    console.error("Error descargando PDF:", error);
+    alert(
+      error instanceof Error
+        ? error.message
+        : "No se pudo descargar la solicitud formal."
+    );
+  } finally {
+    setGeneratingPdf(false);
+  }
+};
+
   const renderTabContent = () => {
     if (activeTab === "resumen") {
       return (
         <section className={cardClass}>
           <div className="flex items-start justify-between gap-4">
             <div>
-              <h2 className="text-xl font-semibold">
-                Resumen de solicitud formal
-              </h2>
-              <p className="mt-1 text-sm text-white/55">
-                Esta información se considera congelada como base del proceso.
-              </p>
-            </div>
+  <h2 className="text-xl font-semibold">
+    Resumen de solicitud formal
+  </h2>
+  <p className="mt-1 text-sm text-white/55">
+    Esta información se considera congelada como base del proceso.
+  </p>
+
+  <button
+    type="button"
+    onClick={descargarSolicitudFormalPDF}
+    disabled={generatingPdf}
+    className={`${btnPrimary} mt-4`}
+  >
+    <FiFileText />
+    {generatingPdf ? "Generando PDF..." : "Descargar PDF"}
+  </button>
+</div>
 
             <span className="rounded-full border border-emerald-300/30 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-100">
-              {pedido?.status || "en proceso"}
+              {pedido?.status || "En proceso"}
             </span>
           </div>
 
@@ -1350,8 +1412,8 @@ export default function DetalleFixture({
         </h1>
 
         <p className="mt-3 max-w-3xl text-sm text-white/60">
-          Expediente formal del fixture: solicitud, concepto de diseño, prueba,
-          confirmación conceptual, Spec Draft, Beta y Spec Final.
+          Expediente formal del fixture: Solicitud, Concepto de diseño, Prueba,
+          Confirmación conceptual, SPEC Draft, Beta y SPEC Final.
         </p>
       </div>
 
