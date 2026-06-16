@@ -841,7 +841,7 @@ export default function DetalleFixture({
         "Se generó la Spec Draft como guía para la versión beta."
       );
 
-      alert("Spec Draft registrada. Después conectamos aquí la generación PDF.");
+      alert("Spec Draft registrada. Después conectamos aquí la generación DOCX.");
     } catch (error) {
       console.error(error);
       alert("No se pudo registrar la Spec Draft.");
@@ -879,7 +879,7 @@ export default function DetalleFixture({
         "Se registró la Spec Final para formato QMS."
       );
 
-      alert("Spec Final registrada. Después conectamos aquí la generación PDF QMS.");
+      alert("Spec Final registrada. Después conectamos aquí la generación DOCX QMS.");
     } catch (error) {
       console.error(error);
       alert("No se pudo registrar la Spec Final.");
@@ -893,7 +893,7 @@ const descargarSolicitudFormalPDF = async () => {
     setGeneratingPdf(true);
 
     const response = await fetch(
-      `/api/fixtures/${pedidoId}/solicitud-formal-pdf`,
+      `/api/fixtures/${pedidoId}/solicitud-formal-docx`,
       {
         method: "POST",
       }
@@ -904,7 +904,7 @@ const descargarSolicitudFormalPDF = async () => {
       throw new Error(
         errorData?.detail ||
           errorData?.error ||
-          "No se pudo generar el PDF."
+          "No se pudo generar el DOCX."
       );
     }
 
@@ -919,14 +919,14 @@ const descargarSolicitudFormalPDF = async () => {
 
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${safeTitle}.pdf`;
+    a.download = `${safeTitle}.docx`;
     document.body.appendChild(a);
     a.click();
     a.remove();
 
     window.URL.revokeObjectURL(url);
   } catch (error) {
-    console.error("Error descargando PDF:", error);
+    console.error("Error descargando DOCX:", error);
     alert(
       error instanceof Error
         ? error.message
@@ -957,7 +957,7 @@ const descargarSolicitudFormalPDF = async () => {
     className={`${btnPrimary} mt-4`}
   >
     <FiFileText />
-    {generatingPdf ? "Generando PDF..." : "Descargar PDF"}
+    {generatingPdf ? "Generando DOCX..." : "Descargar DOCX"}
   </button>
 </div>
 
