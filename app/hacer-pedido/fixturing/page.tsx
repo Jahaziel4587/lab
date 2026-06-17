@@ -85,9 +85,9 @@ export default function FixturingPage() {
   ];
 
   const tituloFinal = useMemo(() => {
-    if (!io.trim()) return "";
-    return `FXT. ${proyecto || "SIN PROYECTO"}. ${io.trim()}`;
-  }, [io, proyecto]);
+    if (!titulo.trim()) return "";
+    return `FXT. ${proyecto || "SIN PROYECTO"}. ${titulo.trim()}`;
+  }, [titulo, proyecto]);
 
   const updateEquipo = (index: number, value: string) => {
     setEquipos((prev) =>
