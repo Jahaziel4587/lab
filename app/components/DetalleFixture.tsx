@@ -27,6 +27,8 @@ import {
   FiFileText,
   FiLink,
   FiTrash2,
+  FiChevronDown,
+  FiChevronRight,
 } from "react-icons/fi";
 import { db, storage } from "@/src/firebase/firebaseConfig";
 
@@ -116,6 +118,7 @@ export default function DetalleFixture({
   const [conceptoDesc, setConceptoDesc] = useState("");
   const [conceptoSpecs, setConceptoSpecs] = useState<string[]>([""]);
   const [conceptoFiles, setConceptoFiles] = useState<File[]>([]);
+  const [expandedConceptIds, setExpandedConceptIds] = useState<string[]>([]);
 
   const [pruebaDesc, setPruebaDesc] = useState("");
   const [pruebaFiles, setPruebaFiles] = useState<File[]>([]);
@@ -321,6 +324,38 @@ export default function DetalleFixture({
     }
   };
 
+const getFreshUserPermissions = async (): Promise<UserPermissionData | null> => {
+  if (!user?.email) return null;
+
+  const snap = await getDocs(collection(db, "users"));
+  let found: UserPermissionData | null = null;
+
+  snap.forEach((docSnap) => {
+    const data = docSnap.data() as any;
+
+    if (
+      String(data?.email || "").toLowerCase() ===
+      String(user.email).toLowerCase()
+    ) {
+      found = {
+        email: data.email,
+        nombre: data.nombre,
+        apellido: data.apellido,
+        displayName: data.displayName,
+        pmProjects: Array.isArray(data.pmProjects) ? data.pmProjects : [],
+        isDesigner: data.isDesigner === true,
+        processOwnerOf: Array.isArray(data.processOwnerOf)
+          ? data.processOwnerOf
+          : [],
+      };
+    }
+  });
+
+  setUserData(found);
+  return found;
+};
+
+
   const loadLinkedPedidos = async () => {
     try {
       const snap = await getDocs(collection(db, "pedidos"));
@@ -475,7 +510,7 @@ export default function DetalleFixture({
       setConceptoDesc("");
       setConceptoSpecs([""]);
       setConceptoFiles([]);
-
+      setExpandedConceptIds((prev) => prev.filter((id) => id !== "new"));
       await loadSubcollections();
     } catch (error) {
       console.error(error);
@@ -499,9 +534,7 @@ export default function DetalleFixture({
   };
 
   const canEditExistingDecision = (item: FixtureVersion, role: ApprovalRole) => {
-    const firma = getExistingFirma(item, role);
-    if (!firma?.correo || !user?.email) return true;
-    return String(firma.correo).toLowerCase() === String(user.email).toLowerCase();
+    return canApproveRole(role);
   };
 
   const validateRoleDecision = (
@@ -540,11 +573,25 @@ export default function DetalleFixture({
   });
 
   const decidirConcepto = async (
-    concepto: FixtureVersion,
-    decision: Decision,
-    rejectReason?: string
-  ) => {
-    if (!validateRoleDecision(concepto, "pm", decision, rejectReason)) return;
+  concepto: FixtureVersion,
+  decision: Decision,
+  rejectReason?: string
+) => {
+  const freshUserData = await getFreshUserPermissions();
+
+  const freshCanApprovePM = !!freshUserData?.pmProjects?.some(
+    (project) => String(project || "").trim() === pedidoProyecto
+  );
+
+  if (!freshCanApprovePM) {
+    alert("Solo una cuenta PM asignada al proyecto puede aprobar o rechazar el concepto de diseño.");
+    return;
+  }
+
+  if (decision === "rechazado" && !String(rejectReason || "").trim()) {
+    alert("Agrega una breve explicación del rechazo.");
+    return;
+  }
 
     try {
       setLoading(true);
@@ -988,7 +1035,7 @@ const descargarSolicitudFormalPDF = async () => {
                 label="Para qué sí se usará"
                 value={alcance?.descripcion}
               />
-              <Info
+              <InfoText
                 label="Proceso donde se usará"
                 value={(alcance?.procesos || []).join(", ")}
               />
@@ -1030,16 +1077,16 @@ const descargarSolicitudFormalPDF = async () => {
               )}
 
               <div className="mt-4 grid gap-3 md:grid-cols-2">
-                <Info
+                <InfoText
                   label="Temperatura máxima"
                   value={inputs?.temperaturaMax}
                 />
-                <Info
+                <InfoText
                   label="Detalle rigidez / dureza"
                   value={inputs?.rigidezDetalle}
                 />
-                <Info label="Referencia DWG" value={inputs?.referenciaDWG} />
-                <Info label="Tiempo para trabajar" value={inputs?.tiempoTrabajo} />
+                <InfoText label="Referencia DWG" value={inputs?.referenciaDWG} />
+                <InfoText label="Tiempo para trabajar" value={inputs?.tiempoTrabajo} />
               </div>
 
               <InfoText label="Información extra" value={inputs?.extra} />
@@ -1059,98 +1106,252 @@ const descargarSolicitudFormalPDF = async () => {
     }
 
     if (activeTab === "concepto") {
+      const toggleConcept = (id: string) => {
+        setExpandedConceptIds((prev) =>
+          prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
+        );
+      };
+
+      const isNewConceptOpen = expandedConceptIds.includes("new");
+
       return (
         <section className={cardClass}>
-          <h2 className="text-xl font-semibold">Concepto de diseño</h2>
-          <p className="mt-1 text-sm text-white/55">
-            Propuesta rápida del equipo de prototipado. Puede tener versiones VA,
-            VB, VC…
-          </p>
+          <div className="flex flex-wrap items-start justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-semibold">Concepto de diseño</h2>
+              <p className="mt-1 text-sm text-white/55">
+                Las versiones se registran como VA, VB, VC… y se recorren hacia la derecha.
+                Cada versión puede desplegarse o comprimirse.
+              </p>
+            </div>
 
-          {isAdmin && (
-            <form onSubmit={guardarConcepto} className="mt-5 space-y-4">
-              <div className="rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
-                Nueva versión: <strong>{nextConceptLabel}</strong>
-              </div>
-
-              <textarea
-                className={`${inputClass} min-h-[110px]`}
-                value={conceptoDesc}
-                onChange={(e) => setConceptoDesc(e.target.value)}
-                placeholder="Descripción del concepto de diseño..."
-              />
-  <FilePicker
-                label="Adjuntar archivos del concepto"
-                files={conceptoFiles}
-                inputRef={conceptoInputRef}
-                onChange={(list) =>
-                  addFiles(list, setConceptoFiles, conceptoInputRef)
-                }
-                onRemove={(i) => removeFile(i, setConceptoFiles)}
-              />
-
-
-              <div className="space-y-3">
-  <p className="text-sm font-semibold text-white/80">
-    Especificaciones extra encontradas sobre la solicitud formal
-  </p>
-
-  {conceptoSpecs.map((spec, index) => (
-    <div key={index} className="flex gap-3">
-      <input
-        className={inputClass}
-        value={spec}
-        onChange={(e) => updateSpec(index, e.target.value)}
-        placeholder="Ej. requiere mayor soporte lateral..."
-      />
-
-      {index === conceptoSpecs.length - 1 && (
-        <button
-          type="button"
-          onClick={addSpec}
-          className="shrink-0 rounded-xl border border-white/12 bg-white/5 px-4 py-2 text-sm text-white/85 transition hover:bg-white/10"
-          title="Agregar especificación"
-        >
-          <FiPlus />
-        </button>
-      )}
-
-      {conceptoSpecs.length > 1 && (
-        <button
-          type="button"
-          onClick={() => removeSpec(index)}
-          className={btnDanger}
-          title="Eliminar especificación"
-        >
-          <FiX />
-        </button>
-      )}
-    </div>
-  ))}
-</div>
-
-              <button disabled={loading} className={btnPrimary}>
-                <FiCheck /> Guardar concepto
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (!expandedConceptIds.includes("new")) {
+                    setExpandedConceptIds((prev) => [...prev, "new"]);
+                  }
+                }}
+                className={btnPrimary}
+              >
+                <FiPlus /> Agregar {nextConceptLabel}
               </button>
-            </form>
+            )}
+          </div>
+
+  <div className="mt-6">
+  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
+              {conceptos.map((item, index) => {
+                const isOpen = expandedConceptIds.includes(item.id);
+                const fecha =
+                  item.createdAt?.toDate?.() instanceof Date
+                    ? item.createdAt.toDate().toLocaleString()
+                    : "Fecha no disponible";
+
+                return (
+                  <div
+                    key={item.id}
+                    className={`w-full rounded-2xl border p-4 transition ${
+                      item.status === "aprobado"
+                        ? "border-emerald-300/30 bg-emerald-400/10"
+                        : item.status === "rechazado"
+                        ? "border-red-300/30 bg-red-400/10"
+                        : "border-white/10 bg-black/20"
+                    }`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => toggleConcept(item.id)}
+                      className="flex w-full items-center justify-between gap-3 text-left"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-xs uppercase tracking-[0.22em] text-white/40">
+                          Versión {index + 1}
+                        </p>
+                        <p className="mt-1 text-lg font-semibold text-white/90">
+                          {item.versionLabel}
+                        </p>
+                        <p className="mt-1 text-xs text-white/45">{fecha}</p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${
+                            item.status === "aprobado"
+                              ? "border-emerald-300/30 bg-emerald-400/10 text-emerald-100"
+                              : item.status === "rechazado"
+                              ? "border-red-300/30 bg-red-400/10 text-red-100"
+                              : "border-yellow-300/30 bg-yellow-400/10 text-yellow-100"
+                          }`}
+                        >
+                          {item.status || "pendiente"}
+                        </span>
+                        {isOpen ? <FiChevronDown /> : <FiChevronRight />}
+                      </div>
+                    </button>
+
+                    {isOpen && (
+                      <div className="mt-4 border-t border-white/10 pt-4">
+                        {item.descripcion && (
+                          <p className="whitespace-pre-wrap text-sm leading-relaxed text-white/75">
+                            {item.descripcion}
+                          </p>
+                        )}
+
+                        {item.especificacionesExtra &&
+                          item.especificacionesExtra.length > 0 && (
+                            <div className="mt-4">
+                              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/40">
+                                Especificaciones extra
+                              </p>
+                              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-white/70">
+                                {item.especificacionesExtra.map((s, i) => (
+                                  <li key={i}>{s}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+
+                        {item.archivos && item.archivos.length > 0 && (
+                          <div className="mt-4 space-y-1">
+                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/40">
+                              Archivos
+                            </p>
+                            {item.archivos.map((file) => (
+                              <a
+                                key={file.url}
+                                href={file.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block truncate text-sm text-emerald-200 underline decoration-white/20 hover:text-emerald-100"
+                              >
+                                {file.name}
+                              </a>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="mt-4">
+                          <ApprovalRow
+                            label="Firma PM"
+                            approvalKey="pm"
+                            firma={item.firmas?.pm}
+                            currentUserEmail={user?.email}
+                            canApprove={canApprovePM}
+                            onDecision={(decision, reason) =>
+                              decidirConcepto(item, decision, reason)
+                            }
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+
+             {isAdmin && (conceptos.length === 0 || isNewConceptOpen) && (
+  <div className="w-full rounded-2xl border border-emerald-300/20 bg-emerald-400/10 p-4">
+                  <button
+                    type="button"
+                    onClick={() => toggleConcept("new")}
+                    className="flex w-full items-center justify-between gap-3 text-left"
+                  >
+                    <div>
+                      <p className="text-xs uppercase tracking-[0.22em] text-emerald-100/60">
+                        Nueva versión
+                      </p>
+                      <p className="mt-1 text-lg font-semibold text-emerald-50">
+                        {nextConceptLabel}
+                      </p>
+                      <p className="mt-1 text-xs text-emerald-50/55">
+                        Carga descripción, archivos y especificaciones.
+                      </p>
+                    </div>
+                    {isNewConceptOpen ? <FiChevronDown /> : <FiChevronRight />}
+                  </button>
+{isNewConceptOpen && (
+  <form
+    onSubmit={guardarConcepto}
+    className="mt-4 space-y-4 border-t border-emerald-100/10 pt-4"
+  >
+    <div className="space-y-3">
+      <p className="text-sm font-semibold text-white/80">
+        Especificaciones extra encontradas sobre la solicitud formal
+      </p>
+
+      {conceptoSpecs.map((spec, index) => (
+        <div key={index} className="flex gap-3">
+          <input
+            className={inputClass}
+            value={spec}
+            onChange={(e) => updateSpec(index, e.target.value)}
+            placeholder="Ej. requiere mayor soporte lateral..."
+          />
+
+          {index === conceptoSpecs.length - 1 && (
+            <button
+              type="button"
+              onClick={addSpec}
+              className="shrink-0 rounded-xl border border-white/12 bg-white/5 px-4 py-2 text-sm text-white/85 transition hover:bg-white/10"
+              title="Agregar especificación"
+            >
+              <FiPlus />
+            </button>
           )}
 
-          <VersionList
-            title="Conceptos registrados"
-            items={conceptos}
-            renderActions={(item) => (
-              <ApprovalRow
-                label="PM"
-                approvalKey="pm"
-                firma={item.firmas?.pm}
-                currentUserEmail={user?.email}
-                canApprove={canApprovePM}
-                onDecision={(decision, reason) =>
-                  decidirConcepto(item, decision, reason)
-                }
-              />
-            )}
-          />
+          {conceptoSpecs.length > 1 && (
+            <button
+              type="button"
+              onClick={() => removeSpec(index)}
+              className={btnDanger}
+              title="Eliminar especificación"
+            >
+              <FiX />
+            </button>
+          )}
+        </div>
+      ))}
+    </div>
+
+    <div className="space-y-3">
+      <p className="text-sm font-semibold text-white/80">
+        Concepto de diseño
+      </p>
+
+      <textarea
+        className={`${inputClass} min-h-[110px]`}
+        value={conceptoDesc}
+        onChange={(e) => setConceptoDesc(e.target.value)}
+        placeholder="La idea de diseño consiste en..."
+      />
+    </div>
+
+    <FilePicker
+      label="Adjuntar archivos del concepto"
+      files={conceptoFiles}
+      inputRef={conceptoInputRef}
+      onChange={(list) =>
+        addFiles(list, setConceptoFiles, conceptoInputRef)
+      }
+      onRemove={(i) => removeFile(i, setConceptoFiles)}
+    />
+
+    <button disabled={loading} className={btnPrimary}>
+      <FiCheck /> Guardar concepto
+    </button>
+  </form>
+)}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {!isAdmin && conceptos.length === 0 && (
+            <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">
+              Aún no hay conceptos registrados.
+            </div>
+          )}
         </section>
       );
     }
@@ -1418,7 +1619,7 @@ const descargarSolicitudFormalPDF = async () => {
       </div>
 
       <div className="mt-8 rounded-3xl border border-white/10 bg-white/[0.035] p-5 md:p-6">
-        <div className="flex flex-wrap gap-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-7">
           {tabs.map((tab, index) => {
             const selected = activeTab === tab.key;
 
@@ -1427,7 +1628,7 @@ const descargarSolicitudFormalPDF = async () => {
                 key={tab.key}
                 type="button"
                 onClick={() => setActiveTab(tab.key)}
-                className={`rounded-full border px-4 py-2 text-xs font-semibold transition ${
+                className={`w-full rounded-full border px-4 py-2 text-center text-xs font-semibold transition ${
                   selected
                     ? "border-emerald-300/60 bg-emerald-400/20 text-emerald-50 shadow-[0_0_25px_rgba(16,185,129,0.18)]"
                     : tab.done
@@ -1689,18 +1890,16 @@ function ApprovalRow({
     normalizedFirma.decision === "aprobado" ||
     normalizedFirma.decision === "rechazado";
 
-  const isOwner =
-    !!normalizedFirma.correo &&
-    !!currentUserEmail &&
-    String(normalizedFirma.correo).toLowerCase() ===
-      String(currentUserEmail).toLowerCase();
-
-  const [editing, setEditing] = useState(false);
+  const [signingOpen, setSigningOpen] = useState(false);
+  const [decision, setDecision] = useState<Decision | "">(
+    normalizedFirma.decision || ""
+  );
   const [reason, setReason] = useState(normalizedFirma.rejectReason || "");
 
   useEffect(() => {
+    setDecision(normalizedFirma.decision || "");
     setReason(normalizedFirma.rejectReason || "");
-    setEditing(false);
+    setSigningOpen(false);
   }, [normalizedFirma.decision, normalizedFirma.rejectReason]);
 
   const statusClass =
@@ -1710,7 +1909,20 @@ function ApprovalRow({
       ? "border-red-300/30 bg-red-400/10 text-red-100"
       : "border-yellow-300/30 bg-yellow-400/10 text-yellow-100";
 
-  const showDecisionControls = canApprove && (!alreadyAnswered || isOwner || editing);
+  const submitDecision = () => {
+    if (!decision) {
+      alert("Selecciona aprobado o rechazado.");
+      return;
+    }
+
+    if (decision === "rechazado" && !reason.trim()) {
+      alert("Agrega una breve explicación del rechazo.");
+      return;
+    }
+
+    onDecision(decision, decision === "rechazado" ? reason : "");
+    setSigningOpen(false);
+  };
 
   return (
     <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
@@ -1747,71 +1959,65 @@ function ApprovalRow({
 
           {!canApprove && !alreadyAnswered && (
             <p className="mt-2 text-xs text-yellow-100/75">
-              Pendiente de aprobación. Tu cuenta no está asignada para este rol.
-            </p>
-          )}
-
-          {alreadyAnswered && !isOwner && (
-            <p className="mt-2 text-xs text-white/35">
-              Esta decisión solo puede editarla la cuenta que la registró.
+              Pendiente de firma. Tu cuenta no está asignada como {approvalKey === "pm" ? "PM del proyecto" : label}.
             </p>
           )}
         </div>
 
-        {showDecisionControls && (
-          <div className="flex w-full flex-col gap-2 sm:w-[280px] sm:items-end">
-            {(!alreadyAnswered || editing) && (
-              <>
-                <textarea
-                  value={reason}
-                  onChange={(e) => setReason(e.target.value)}
-                  placeholder="Motivo de rechazo"
-                  className="min-h-[82px] w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-white placeholder:text-white/35 outline-none focus:ring-2 focus:ring-emerald-400/20"
-                />
-
-                <div className="flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      onDecision("aprobado");
-                      setEditing(false);
-                    }}
-                    className="rounded-lg border border-emerald-300/25 bg-emerald-400/10 px-3 py-1.5 text-xs text-emerald-100 hover:bg-emerald-400/20"
-                  >
-                    Aprobar
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (!reason.trim()) {
-                        alert("Agrega una breve explicación del rechazo.");
-                        return;
-                      }
-
-                      onDecision("rechazado", reason);
-                      setEditing(false);
-                    }}
-                    className="rounded-lg border border-red-300/25 bg-red-400/10 px-3 py-1.5 text-xs text-red-100 hover:bg-red-400/20"
-                  >
-                    Rechazar
-                  </button>
-                </div>
-              </>
-            )}
-
-            {alreadyAnswered && isOwner && !editing && (
-              <button
-                type="button"
-                onClick={() => setEditing(true)}
-                className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/75 hover:bg-white/10"
-              >
-                Editar decisión
-              </button>
-            )}
-          </div>
+        {canApprove && (
+          <button
+            type="button"
+            onClick={() => setSigningOpen((prev) => !prev)}
+            className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/75 hover:bg-white/10"
+          >
+            {alreadyAnswered ? "Editar firma" : "Firmar"}
+          </button>
         )}
       </div>
+
+      {signingOpen && canApprove && (
+        <div className="mt-4 grid gap-3 border-t border-white/10 pt-4">
+          <label className="text-xs font-semibold uppercase tracking-[0.18em] text-white/40">
+            Decisión
+          </label>
+
+          <select
+            value={decision}
+            onChange={(e) => setDecision(e.target.value as Decision | "")}
+            className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-emerald-400/20"
+          >
+            <option value="">Seleccionar decisión</option>
+            <option value="aprobado">Aprobado</option>
+            <option value="rechazado">Rechazado</option>
+          </select>
+
+          {decision === "rechazado" && (
+            <textarea
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+              placeholder="Razón del rechazo o cambio de decisión..."
+              className="min-h-[82px] w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-white placeholder:text-white/35 outline-none focus:ring-2 focus:ring-emerald-400/20"
+            />
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={submitDecision}
+              className="rounded-lg border border-emerald-300/25 bg-emerald-400/10 px-3 py-1.5 text-xs text-emerald-100 hover:bg-emerald-400/20"
+            >
+              Guardar firma
+            </button>
+            <button
+              type="button"
+              onClick={() => setSigningOpen(false)}
+              className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/75 hover:bg-white/10"
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
