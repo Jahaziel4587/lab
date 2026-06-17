@@ -1097,7 +1097,7 @@ const descargarSolicitudFormalPDF = async () => {
             </Block>
 
             <Block title="Firma solicitud formal">
-              <Info label="Firmado por" value={firmaPM?.correo} />
+              <Info label="Firmado por" value={userDisplayName} />
               <Info label="Fecha" value={firmaPM?.fecha} />
             </Block>
           </div>
