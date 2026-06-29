@@ -811,6 +811,9 @@ export default function DetalleFixture({
           removeSpec={removeSpec}
           onGuardarConcepto={guardarConcepto}
           onDecidirConcepto={decidirConcepto}
+          linkedPedidos={linkedPedidos}
+          pedidoId={pedidoId}
+          pedidoProyecto={pedido?.proyecto || ""}
         />
       );
     }
@@ -831,6 +834,8 @@ export default function DetalleFixture({
           addFiles={addFiles}
           removeFile={removeFile}
           onGuardarPrueba={guardarPrueba}
+          pedidoId={pedidoId}
+          pedidoProyecto={pedido?.proyecto || ""}
         />
       );
     }
@@ -878,6 +883,9 @@ export default function DetalleFixture({
           removeFile={removeFile}
           onGuardarBeta={guardarBeta}
           onDecidirBeta={decidirBeta}
+          linkedPedidos={linkedPedidos}
+          pedidoId={pedidoId}
+          pedidoProyecto={pedido?.proyecto || ""}
         />
       );
     }

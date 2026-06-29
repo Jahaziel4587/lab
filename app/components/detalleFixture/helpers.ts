@@ -13,3 +13,24 @@ export const formatFirebaseDate = (value: any) => {
     ? value.toDate().toLocaleString()
     : "Fecha no disponible";
 };
+
+export const buildFixtureOrderUrl = ({
+  proyecto,
+  fixtureId,
+  fixtureFase,
+  fixtureVersion,
+}: {
+  proyecto: string;
+  fixtureId: string;
+  fixtureFase: "concepto" | "prueba" | "beta";
+  fixtureVersion: string;
+}) => {
+  const params = new URLSearchParams({
+    proyecto,
+    fixtureRelacionadoId: fixtureId,
+    fixtureRelacionadoFase: fixtureFase,
+    fixtureRelacionadoVersion: fixtureVersion,
+  });
+
+  return `/hacer-pedido/servicios?${params.toString()}`;
+};

@@ -1,20 +1,72 @@
 "use client";
 
-import type {
-  Dispatch,
-  FormEvent,
-  RefObject,
-  SetStateAction,
-} from "react";
-import { FiCheck, FiChevronDown, FiChevronRight, FiPlus, FiX } from "react-icons/fi";
-import type { Decision, FixtureVersion } from "../types";
+import type { Dispatch, FormEvent, RefObject, SetStateAction } from "react";
+import { useRouter } from "next/navigation";
+import {
+  FiCheck,
+  FiChevronDown,
+  FiChevronRight,
+  FiPlus,
+  FiX,
+  FiLink,
+} from "react-icons/fi";
+import type { Decision, FixtureVersion, LinkedPedido } from "../types";
 import { cardClass, inputClass, btnPrimary, btnDanger } from "../styles";
-import { formatFirebaseDate } from "../helpers";
+import { formatFirebaseDate, buildFixtureOrderUrl } from "../helpers";
 import FilePicker from "../components/FilePicker";
 import ApprovalRow from "../components/ApprovalRow";
 
+function PedidosAsociados({
+  pedidos,
+}: {
+  pedidos: LinkedPedido[];
+}) {
+  const router = useRouter();
+
+  const total = pedidos.reduce((sum, p) => sum + Number(p.subtotal || 0), 0);
+
+  if (pedidos.length === 0) {
+    return (
+      <p className="mt-3 text-xs text-white/45">
+        No hay pedidos asociados a esta versión.
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
+      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/40">
+        Pedidos asociados
+      </p>
+
+      <ul className="mt-2 space-y-2">
+        {pedidos.map((p) => (
+          <li key={p.id}>
+            <button
+              type="button"
+              onClick={() => router.push(`/solicitudes/listado/${p.id}`)}
+              className="inline-flex items-center gap-2 text-sm text-emerald-200 underline decoration-white/20 hover:text-emerald-100"
+            >
+              <FiLink />
+              {p.titulo || p.id}{" "}
+              {p.subtotal ? `(MXN ${Number(p.subtotal).toFixed(2)})` : ""}
+            </button>
+          </li>
+        ))}
+      </ul>
+
+      <p className="mt-3 text-sm font-semibold text-white/85">
+        Total: MXN {total.toFixed(2)}
+      </p>
+    </div>
+  );
+}
+
 export default function ConceptoDiseno({
   conceptos,
+  linkedPedidos,
+  pedidoId,
+  pedidoProyecto,
   isAdmin,
   loading,
   nextConceptLabel,
@@ -37,6 +89,9 @@ export default function ConceptoDiseno({
   onDecidirConcepto,
 }: {
   conceptos: FixtureVersion[];
+  linkedPedidos: LinkedPedido[];
+  pedidoId: string;
+  pedidoProyecto: string;
   isAdmin: boolean;
   loading: boolean;
   nextConceptLabel: string;
@@ -69,6 +124,8 @@ export default function ConceptoDiseno({
     reason?: string
   ) => void;
 }) {
+  const router = useRouter();
+
   const toggleConcept = (id: string) => {
     setExpandedConceptIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
@@ -83,8 +140,7 @@ export default function ConceptoDiseno({
         <div>
           <h2 className="text-xl font-semibold">Concepto de diseño</h2>
           <p className="mt-1 text-sm text-white/55">
-            Las versiones se registran como VA, VB, VC… y se recorren hacia la
-            derecha. Cada versión puede desplegarse o comprimirse.
+            Las versiones se registran como VA, VB, VC… Cada versión puede tener pedidos asociados.
           </p>
         </div>
 
@@ -108,6 +164,12 @@ export default function ConceptoDiseno({
           {conceptos.map((item, index) => {
             const isOpen = expandedConceptIds.includes(item.id);
             const fecha = formatFirebaseDate(item.createdAt);
+
+            const pedidosDeVersion = linkedPedidos.filter(
+              (p) =>
+                p.fixtureRelacionadoFase === "concepto" &&
+                p.fixtureRelacionadoVersion === item.versionLabel
+            );
 
             return (
               <div
@@ -161,23 +223,15 @@ export default function ConceptoDiseno({
 
                     {item.especificacionesExtra &&
                       item.especificacionesExtra.length > 0 && (
-                        <div className="mt-4">
-                          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/40">
-                            Especificaciones extra
-                          </p>
-                          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-white/70">
-                            {item.especificacionesExtra.map((s, i) => (
-                              <li key={i}>{s}</li>
-                            ))}
-                          </ul>
-                        </div>
+                        <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-white/70">
+                          {item.especificacionesExtra.map((s, i) => (
+                            <li key={i}>{s}</li>
+                          ))}
+                        </ul>
                       )}
 
                     {item.archivos && item.archivos.length > 0 && (
                       <div className="mt-4 space-y-1">
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/40">
-                          Archivos
-                        </p>
                         {item.archivos.map((file) => (
                           <a
                             key={file.url}
@@ -191,6 +245,27 @@ export default function ConceptoDiseno({
                         ))}
                       </div>
                     )}
+
+                    <div className="mt-4 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() =>
+                          router.push(
+                            buildFixtureOrderUrl({
+                              proyecto: pedidoProyecto,
+                              fixtureId: pedidoId,
+                              fixtureFase: "concepto",
+                              fixtureVersion: item.versionLabel,
+                            })
+                          )
+                        }
+                        className={btnPrimary}
+                      >
+                        <FiPlus /> Realizar pedido
+                      </button>
+                    </div>
+
+                    <PedidosAsociados pedidos={pedidosDeVersion} />
 
                     <div className="mt-4">
                       <ApprovalRow

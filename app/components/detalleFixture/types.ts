@@ -42,6 +42,9 @@ export type LinkedPedido = {
   servicio?: string;
   subtotal?: number;
   status?: string;
+   fixtureRelacionadoId?: string;
+  fixtureRelacionadoFase?: "concepto" | "prueba" | "beta";
+  fixtureRelacionadoVersion?: string;
 };
 
 export type TabKey =

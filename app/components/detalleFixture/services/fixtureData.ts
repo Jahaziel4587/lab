@@ -1,4 +1,4 @@
-import { collection, getDocs, orderBy, query } from "firebase/firestore";
+import { collection, getDocs, getDoc , orderBy, query } from "firebase/firestore";
 import { db } from "@/src/firebase/firebaseConfig";
 import type {
   FixtureVersion,
@@ -75,23 +75,34 @@ export const getLinkedPedidos = async (
   pedidoId: string
 ): Promise<LinkedPedido[]> => {
   const snap = await getDocs(collection(db, "pedidos"));
-  const rows: LinkedPedido[] = [];
+  const pending: Promise<LinkedPedido>[] = [];
 
   snap.forEach((d) => {
     const data = d.data() as any;
 
     if (data.fixtureRelacionadoId === pedidoId) {
-      rows.push({
-        id: d.id,
-        titulo: data.titulo,
-        servicio: data.servicio,
-        subtotal: data.subtotalMXN || data.totalMXN || 0,
-        status: data.status,
-      });
+      pending.push(
+        (async () => {
+          const quoteTotal = await getPedidoQuoteTotal(d.id);
+
+          return {
+            id: d.id,
+            titulo: data.titulo,
+            servicio: data.servicio,
+            subtotal:
+              quoteTotal ||
+              Number(data.subtotalMXN || data.totalMXN || data.costo || 0),
+            status: data.status,
+            fixtureRelacionadoId: data.fixtureRelacionadoId,
+            fixtureRelacionadoFase: data.fixtureRelacionadoFase,
+            fixtureRelacionadoVersion: data.fixtureRelacionadoVersion,
+          };
+        })()
+      );
     }
   });
 
-  return rows;
+  return Promise.all(pending);
 };
 
 export const getUserPermissionsByEmail = async (
@@ -124,4 +135,19 @@ export const getUserPermissionsByEmail = async (
   });
 
   return found;
+};
+
+const getPedidoQuoteTotal = async (pedidoId: string): Promise<number> => {
+  const linesSnap = await getDocs(
+    collection(db, "pedidos", pedidoId, "quote_live", "live", "lines")
+  );
+
+  let total = 0;
+
+  linesSnap.forEach((line) => {
+    const data = line.data() as any;
+    total += Number(data.subtotalMXN || 0);
+  });
+
+  return total;
 };

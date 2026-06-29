@@ -12,7 +12,7 @@ import {
   getDocs,
 } from "firebase/firestore";
 import { auth, db, storage } from "@/src/firebase/firebaseConfig";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { FiX, FiUpload, FiVideo, FiArrowLeft } from "react-icons/fi";
 
 export default function EspecificacionesPage() {
@@ -37,6 +37,24 @@ export default function EspecificacionesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const router = useRouter();
+const searchParams = useSearchParams();
+
+const fixtureRelacionadoId =
+  searchParams.get("fixtureRelacionadoId") ||
+  localStorage.getItem("fixtureRelacionadoId");
+
+const fixtureRelacionadoFase =
+  searchParams.get("fixtureRelacionadoFase") ||
+  localStorage.getItem("fixtureRelacionadoFase");
+
+const fixtureRelacionadoVersion =
+  searchParams.get("fixtureRelacionadoVersion") ||
+  localStorage.getItem("fixtureRelacionadoVersion");
+
+const fixtureRelacionadoProyecto =
+  searchParams.get("proyecto") ||
+  localStorage.getItem("fixtureRelacionadoProyecto");
+
 
   // ---------- UI helpers ----------
   const baseButton =
@@ -221,7 +239,10 @@ export default function EspecificacionesPage() {
     setSubiendo(true);
 
     try {
-      const proyecto = localStorage.getItem("proyecto") || "Sin proyecto";
+      const proyecto =
+  fixtureRelacionadoProyecto ||
+  localStorage.getItem("proyecto") ||
+  "Sin proyecto";
       const servicio = localStorage.getItem("servicio") || "Sin servicio";
       const maquina = localStorage.getItem("maquina") || "Sin máquina";
       const material = localStorage.getItem("material") || "Sin material";
@@ -252,21 +273,30 @@ export default function EspecificacionesPage() {
       }
 
       await setDoc(nuevoDocRef, {
-        titulo: tituloFinalUnico,
-        descripcion: explicacion,
-        fechaLimite: fecha,
-        proyecto,
-        servicio,
-        maquina,
-        material,
-        usuario,
-        archivos: archivosSubidos,
-        videoURL: urlDelVideo,
-        timestamp: serverTimestamp(),
-        correoUsuario: usuario,
-      });
+  titulo: tituloFinalUnico,
+  descripcion: explicacion,
+  fechaLimite: fecha,
+  proyecto,
+  servicio,
+  maquina,
+  material,
+  usuario,
+  archivos: archivosSubidos,
+  videoURL: urlDelVideo,
+  timestamp: serverTimestamp(),
+  correoUsuario: usuario,
+
+  fixtureRelacionadoId: fixtureRelacionadoId || null,
+  fixtureRelacionadoFase: fixtureRelacionadoFase || null,
+  fixtureRelacionadoVersion: fixtureRelacionadoVersion || null,
+  fixtureRelacionadoProyecto: fixtureRelacionadoProyecto || null,
+});
 
       alert("✅ Pedido enviado con éxito");
+      localStorage.removeItem("fixtureRelacionadoId");
+localStorage.removeItem("fixtureRelacionadoFase");
+localStorage.removeItem("fixtureRelacionadoVersion");
+localStorage.removeItem("fixtureRelacionadoProyecto");
       router.push("/");
     } catch (err: any) {
       console.error(err);
