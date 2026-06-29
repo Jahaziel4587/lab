@@ -1,90 +1,45 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, FormEvent } from "react";
-import type { Dispatch, ReactNode, RefObject, SetStateAction } from "react";
-import { useRouter } from "next/navigation";
+import type { Dispatch, RefObject, SetStateAction } from "react";
 import {
   addDoc,
   collection,
   doc,
-  getDocs,
-  orderBy,
-  query,
-  serverTimestamp,
   updateDoc,
 } from "firebase/firestore";
+import { FiArrowLeft } from "react-icons/fi";
+import { db } from "@/src/firebase/firebaseConfig";
+
+import type {
+  Props,
+  FixtureVersion,
+  ApprovalRole,
+  Decision,
+  UserPermissionData,
+  LinkedPedido,
+  TabKey,
+} from "./detalleFixture/types";
+
+import { btnSoft } from "./detalleFixture/styles";
+import { normalizePermissionValue } from "./detalleFixture/helpers";
+
+import { uploadFixtureFiles } from "./detalleFixture/services/fixtureStorage";
+import { registrarHistorialFixture } from "./detalleFixture/services/fixtureHistorial";
 import {
-  ref as storageRef,
-  uploadBytes,
-  getDownloadURL,
-} from "firebase/storage";
-import {
-  FiArrowLeft,
-  FiUpload,
-  FiCheck,
-  FiX,
-  FiPlus,
-  FiFileText,
-  FiLink,
-  FiTrash2,
-  FiChevronDown,
-  FiChevronRight,
-} from "react-icons/fi";
-import { db, storage } from "@/src/firebase/firebaseConfig";
+  getFixtureSubcollections,
+  getLinkedPedidos,
+  getUserPermissionsByEmail,
+} from "./detalleFixture/services/fixtureData";
+import { buildFixtureFirmaPayload } from "./detalleFixture/services/fixtureDecisiones";
 
-type Props = {
-  pedido: any;
-  pedidoId: string;
-  isAdmin: boolean;
-  user: any;
-};
-
-type UploadedFile = {
-  name: string;
-  url: string;
-};
-
-type FixtureVersion = {
-  id: string;
-  versionLabel: string;
-  descripcion?: string;
-  especificacionesExtra?: string[];
-  archivos?: UploadedFile[];
-  status?: "pendiente" | "aprobado" | "rechazado";
-  createdAt?: any;
-  creadoPor?: string;
-  firmas?: Record<string, any>;
-};
-
-type ApprovalRole = "pm" | "disenador" | "encargado";
-type Decision = "aprobado" | "rechazado";
-
-type UserPermissionData = {
-  email?: string;
-  nombre?: string;
-  apellido?: string;
-  displayName?: string;
-  pmProjects?: string[];
-  isDesigner?: boolean;
-  processOwnerOf?: string[];
-};
-
-type LinkedPedido = {
-  id: string;
-  titulo?: string;
-  servicio?: string;
-  subtotal?: number;
-  status?: string;
-};
-
-type TabKey =
-  | "resumen"
-  | "concepto"
-  | "prueba"
-  | "confirmacion"
-  | "specDraft"
-  | "beta"
-  | "specFinal";
+import ResumenSolicitud from "./detalleFixture/sections/ResumenSolicitud";
+import ConceptoDiseno from "./detalleFixture/sections/ConceptoDiseno";
+import PruebaDiseno from "./detalleFixture/sections/PruebaDiseno";
+import ConfirmacionConceptual from "./detalleFixture/sections/ConfirmacionConceptual";
+import SpecDraft from "./detalleFixture/sections/SpecDraft";
+import FaseBeta from "./detalleFixture/sections/FaseBeta";
+import SpecFinal from "./detalleFixture/sections/SpecFinal";
 
 export default function DetalleFixture({
   pedido,
@@ -92,8 +47,6 @@ export default function DetalleFixture({
   isAdmin,
   user,
 }: Props) {
-  const router = useRouter();
-
   const [activeTab, setActiveTab] = useState<TabKey>("resumen");
 
   const [conceptos, setConceptos] = useState<FixtureVersion[]>([]);
@@ -102,7 +55,6 @@ export default function DetalleFixture({
   const [linkedPedidos, setLinkedPedidos] = useState<LinkedPedido[]>([]);
 
   const [loading, setLoading] = useState(false);
-
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
   const [faseActual, setFaseActual] = useState(
@@ -133,20 +85,6 @@ export default function DetalleFixture({
   const betaInputRef = useRef<HTMLInputElement | null>(null);
 
   const solicitud = pedido?.fixtureSolicitud || {};
-  const necesidad = solicitud?.necesidad || {};
-  const alcance = solicitud?.alcance || {};
-  const inputs = solicitud?.inputs || {};
-  const firmaPM = solicitud?.firmaPM || {};
-
-  const normalizePermissionValue = (value: string) =>
-    String(value || "")
-      .normalize("NFD")
-      .replace(/[\u0300-\u036f]/g, "")
-      .trim()
-      .toLowerCase()
-      .replace(/&/g, "y")
-      .replace(/\s+/g, "_")
-      .replace(/[^a-z0-9_]/g, "");
 
   const userDisplayName =
     userData?.displayName ||
@@ -189,21 +127,6 @@ export default function DetalleFixture({
     return canApproveProcessOwner;
   };
 
-  const cardClass =
-    "rounded-3xl border border-white/10 bg-white/[0.04] p-5 md:p-6 shadow-[0_25px_80px_rgba(0,0,0,0.35)] backdrop-blur";
-
-  const inputClass =
-    "w-full rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-sm text-white placeholder:text-white/35 outline-none focus:ring-2 focus:ring-emerald-400/30";
-
-  const btnSoft =
-    "inline-flex items-center justify-center gap-2 rounded-xl border border-white/12 bg-white/5 px-4 py-2 text-sm text-white/85 hover:bg-white/10 transition";
-
-  const btnPrimary =
-    "inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-2 text-sm text-emerald-100 hover:bg-emerald-500/20 transition disabled:cursor-not-allowed disabled:opacity-50";
-
-  const btnDanger =
-    "inline-flex items-center justify-center gap-2 rounded-xl border border-red-400/25 bg-red-500/10 px-4 py-2 text-sm text-red-200 hover:bg-red-500/15 transition disabled:cursor-not-allowed disabled:opacity-50";
-
   const hasConceptApproved = conceptos.some((c) => c.status === "aprobado");
   const hasPruebaCreated = pruebas.length > 0;
   const hasConfirmacionApproved = pruebas.some((p) => p.status === "aprobado");
@@ -244,79 +167,18 @@ export default function DetalleFixture({
 
   const loadSubcollections = async () => {
     try {
-      const conceptoSnap = await getDocs(
-        query(
-          collection(db, "pedidos", pedidoId, "fixture_conceptos"),
-          orderBy("createdAt", "asc")
-        )
-      );
-
-      const pruebaSnap = await getDocs(
-        query(
-          collection(db, "pedidos", pedidoId, "fixture_pruebas"),
-          orderBy("createdAt", "asc")
-        )
-      );
-
-      const betaSnap = await getDocs(
-        query(
-          collection(db, "pedidos", pedidoId, "fixture_betas"),
-          orderBy("createdAt", "asc")
-        )
-      );
-
-      setConceptos(
-        conceptoSnap.docs.map((d) => ({
-          id: d.id,
-          ...(d.data() as any),
-        }))
-      );
-
-      setPruebas(
-        pruebaSnap.docs.map((d) => ({
-          id: d.id,
-          ...(d.data() as any),
-        }))
-      );
-
-      setBetas(
-        betaSnap.docs.map((d) => ({
-          id: d.id,
-          ...(d.data() as any),
-        }))
-      );
+      const data = await getFixtureSubcollections(pedidoId);
+      setConceptos(data.conceptos);
+      setPruebas(data.pruebas);
+      setBetas(data.betas);
     } catch (error) {
       console.error("Error cargando subcolecciones FXT:", error);
     }
   };
 
   const loadUserPermissions = async () => {
-    if (!user?.email) {
-      setUserData(null);
-      return;
-    }
-
     try {
-      const snap = await getDocs(collection(db, "users"));
-      let found: UserPermissionData | null = null;
-
-      snap.forEach((docSnap) => {
-        const data = docSnap.data() as any;
-        if (String(data?.email || "").toLowerCase() === String(user.email).toLowerCase()) {
-          found = {
-            email: data.email,
-            nombre: data.nombre,
-            apellido: data.apellido,
-            displayName: data.displayName,
-            pmProjects: Array.isArray(data.pmProjects) ? data.pmProjects : [],
-            isDesigner: data.isDesigner === true,
-            processOwnerOf: Array.isArray(data.processOwnerOf)
-              ? data.processOwnerOf
-              : [],
-          };
-        }
-      });
-
+      const found = await getUserPermissionsByEmail(user?.email);
       setUserData(found);
     } catch (error) {
       console.error("Error cargando permisos del usuario:", error);
@@ -324,57 +186,16 @@ export default function DetalleFixture({
     }
   };
 
-const getFreshUserPermissions = async (): Promise<UserPermissionData | null> => {
-  if (!user?.email) return null;
-
-  const snap = await getDocs(collection(db, "users"));
-  let found: UserPermissionData | null = null;
-
-  snap.forEach((docSnap) => {
-    const data = docSnap.data() as any;
-
-    if (
-      String(data?.email || "").toLowerCase() ===
-      String(user.email).toLowerCase()
-    ) {
-      found = {
-        email: data.email,
-        nombre: data.nombre,
-        apellido: data.apellido,
-        displayName: data.displayName,
-        pmProjects: Array.isArray(data.pmProjects) ? data.pmProjects : [],
-        isDesigner: data.isDesigner === true,
-        processOwnerOf: Array.isArray(data.processOwnerOf)
-          ? data.processOwnerOf
-          : [],
-      };
-    }
-  });
-
-  setUserData(found);
-  return found;
-};
-
+  const getFreshUserPermissions =
+    async (): Promise<UserPermissionData | null> => {
+      const found = await getUserPermissionsByEmail(user?.email);
+      setUserData(found);
+      return found;
+    };
 
   const loadLinkedPedidos = async () => {
     try {
-      const snap = await getDocs(collection(db, "pedidos"));
-      const rows: LinkedPedido[] = [];
-
-      snap.forEach((d) => {
-        const data = d.data() as any;
-
-        if (data.fixtureRelacionadoId === pedidoId) {
-          rows.push({
-            id: d.id,
-            titulo: data.titulo,
-            servicio: data.servicio,
-            subtotal: data.subtotalMXN || data.totalMXN || 0,
-            status: data.status,
-          });
-        }
-      });
-
+      const rows = await getLinkedPedidos(pedidoId);
       setLinkedPedidos(rows);
     } catch (error) {
       console.error("Error cargando pedidos asociados al fixture:", error);
@@ -389,29 +210,6 @@ const getFreshUserPermissions = async (): Promise<UserPermissionData | null> => 
   useEffect(() => {
     loadUserPermissions();
   }, [user?.email]);
-
-  const uploadFiles = async (
-    files: File[],
-    folder: string
-  ): Promise<UploadedFile[]> => {
-    const uploaded: UploadedFile[] = [];
-
-    for (const file of files) {
-      const safeName = file.name.replaceAll("/", "-");
-      const path = `pedidos/${pedidoId}/fixturing/${folder}/${Date.now()}-${safeName}`;
-      const ref = storageRef(storage, path);
-
-      await uploadBytes(ref, file);
-      const url = await getDownloadURL(ref);
-
-      uploaded.push({
-        name: file.name,
-        url,
-      });
-    }
-
-    return uploaded;
-  };
 
   const addFiles = (
     list: FileList | null,
@@ -462,12 +260,39 @@ const getFreshUserPermissions = async (): Promise<UserPermissionData | null> => 
   };
 
   const registrarHistorial = async (tipo: string, descripcion: string) => {
-    await addDoc(collection(db, "pedidos", pedidoId, "historialFixture"), {
+    await registrarHistorialFixture({
+      pedidoId,
       tipo,
       descripcion,
-      creadoPor: user?.email || "",
-      createdAt: serverTimestamp(),
+      userEmail: user?.email,
     });
+  };
+
+  const buildFirmaPayload = (decision: Decision, rejectReason?: string) =>
+    buildFixtureFirmaPayload({
+      decision,
+      rejectReason,
+      userEmail: user?.email,
+      userDisplayName,
+    });
+
+  const validateRoleDecision = (
+    item: FixtureVersion,
+    role: ApprovalRole,
+    decision: Decision,
+    rejectReason?: string
+  ) => {
+    if (!canApproveRole(role)) {
+      alert("Tu cuenta no tiene permisos para tomar esta decisión.");
+      return false;
+    }
+
+    if (decision === "rechazado" && !String(rejectReason || "").trim()) {
+      alert("Agrega una breve explicación del rechazo.");
+      return false;
+    }
+
+    return true;
   };
 
   const guardarConcepto = async (e: FormEvent) => {
@@ -479,10 +304,11 @@ const getFreshUserPermissions = async (): Promise<UserPermissionData | null> => 
     try {
       setLoading(true);
 
-      const archivos = await uploadFiles(
-        conceptoFiles,
-        `conceptos/${nextConceptLabel}`
-      );
+      const archivos = await uploadFixtureFiles({
+        pedidoId,
+        files: conceptoFiles,
+        folder: `conceptos/${nextConceptLabel}`,
+      });
 
       await addDoc(collection(db, "pedidos", pedidoId, "fixture_conceptos"), {
         versionLabel: nextConceptLabel,
@@ -493,7 +319,7 @@ const getFreshUserPermissions = async (): Promise<UserPermissionData | null> => 
         archivos,
         status: "pendiente",
         creadoPor: user?.email || "",
-        createdAt: serverTimestamp(),
+        createdAt: new Date(),
       });
 
       await updateDoc(doc(db, "pedidos", pedidoId), {
@@ -520,78 +346,28 @@ const getFreshUserPermissions = async (): Promise<UserPermissionData | null> => 
     }
   };
 
-  const getExistingFirma = (item: FixtureVersion, role: ApprovalRole) => {
-    const firma = item.firmas?.[role];
-    if (!firma) return null;
-
-    return {
-      ...firma,
-      correo: firma.correo || firma.approvedByEmail || "",
-      nombre: firma.nombre || firma.approvedByName || "",
-      fecha: firma.fecha || firma.approvedAt || "",
-      rejectReason: firma.rejectReason || "",
-    };
-  };
-
-  const canEditExistingDecision = (item: FixtureVersion, role: ApprovalRole) => {
-    return canApproveRole(role);
-  };
-
-  const validateRoleDecision = (
-    item: FixtureVersion,
-    role: ApprovalRole,
+  const decidirConcepto = async (
+    concepto: FixtureVersion,
     decision: Decision,
     rejectReason?: string
   ) => {
-    if (!canApproveRole(role)) {
-      alert("Tu cuenta no tiene permisos para tomar esta decisión.");
-      return false;
-    }
+    const freshUserData = await getFreshUserPermissions();
 
-    if (!canEditExistingDecision(item, role)) {
-      alert("Solo la cuenta que tomó esta decisión puede editarla.");
-      return false;
+    const freshCanApprovePM = !!freshUserData?.pmProjects?.some(
+      (project) => String(project || "").trim() === pedidoProyecto
+    );
+
+    if (!freshCanApprovePM) {
+      alert(
+        "Solo una cuenta PM asignada al proyecto puede aprobar o rechazar el concepto de diseño."
+      );
+      return;
     }
 
     if (decision === "rechazado" && !String(rejectReason || "").trim()) {
       alert("Agrega una breve explicación del rechazo.");
-      return false;
+      return;
     }
-
-    return true;
-  };
-
-  const buildFirmaPayload = (decision: Decision, rejectReason?: string) => ({
-    decision,
-    correo: user?.email || "",
-    nombre: userDisplayName,
-    fecha: new Date().toISOString(),
-    approvedByEmail: user?.email || "",
-    approvedByName: userDisplayName,
-    approvedAt: new Date().toISOString(),
-    rejectReason: decision === "rechazado" ? String(rejectReason || "").trim() : "",
-  });
-
-  const decidirConcepto = async (
-  concepto: FixtureVersion,
-  decision: Decision,
-  rejectReason?: string
-) => {
-  const freshUserData = await getFreshUserPermissions();
-
-  const freshCanApprovePM = !!freshUserData?.pmProjects?.some(
-    (project) => String(project || "").trim() === pedidoProyecto
-  );
-
-  if (!freshCanApprovePM) {
-    alert("Solo una cuenta PM asignada al proyecto puede aprobar o rechazar el concepto de diseño.");
-    return;
-  }
-
-  if (decision === "rechazado" && !String(rejectReason || "").trim()) {
-    alert("Agrega una breve explicación del rechazo.");
-    return;
-  }
 
     try {
       setLoading(true);
@@ -622,7 +398,9 @@ const getFreshUserPermissions = async (): Promise<UserPermissionData | null> => 
       await registrarHistorial(
         `concepto_${decision}`,
         `El concepto ${concepto.versionLabel} fue ${decision} por ${userDisplayName}${
-          decision === "rechazado" ? `. Motivo: ${String(rejectReason || "").trim()}` : "."
+          decision === "rechazado"
+            ? `. Motivo: ${String(rejectReason || "").trim()}`
+            : "."
         }`
       );
 
@@ -644,7 +422,11 @@ const getFreshUserPermissions = async (): Promise<UserPermissionData | null> => 
     try {
       setLoading(true);
 
-      const archivos = await uploadFiles(pruebaFiles, `pruebas/${nextPruebaLabel}`);
+      const archivos = await uploadFixtureFiles({
+        pedidoId,
+        files: pruebaFiles,
+        folder: `pruebas/${nextPruebaLabel}`,
+      });
 
       await addDoc(collection(db, "pedidos", pedidoId, "fixture_pruebas"), {
         versionLabel: nextPruebaLabel,
@@ -652,7 +434,7 @@ const getFreshUserPermissions = async (): Promise<UserPermissionData | null> => 
         archivos,
         status: "pendiente",
         creadoPor: user?.email || "",
-        createdAt: serverTimestamp(),
+        createdAt: new Date(),
       });
 
       await updateDoc(doc(db, "pedidos", pedidoId), {
@@ -757,7 +539,11 @@ const getFreshUserPermissions = async (): Promise<UserPermissionData | null> => 
     try {
       setLoading(true);
 
-      const archivos = await uploadFiles(betaFiles, `beta/${nextBetaLabel}`);
+      const archivos = await uploadFixtureFiles({
+        pedidoId,
+        files: betaFiles,
+        folder: `beta/${nextBetaLabel}`,
+      });
 
       await addDoc(collection(db, "pedidos", pedidoId, "fixture_betas"), {
         versionLabel: nextBetaLabel,
@@ -765,7 +551,7 @@ const getFreshUserPermissions = async (): Promise<UserPermissionData | null> => 
         archivos,
         status: "pendiente",
         creadoPor: user?.email || "",
-        createdAt: serverTimestamp(),
+        createdAt: new Date(),
       });
 
       await updateDoc(doc(db, "pedidos", pedidoId), {
@@ -864,7 +650,9 @@ const getFreshUserPermissions = async (): Promise<UserPermissionData | null> => 
 
     const pruebaAprobada = pruebas.some((p) => p.status === "aprobado");
     if (!pruebaAprobada) {
-      alert("No se puede registrar la Spec Draft hasta que PM, diseñador y encargado aprueben una prueba.");
+      alert(
+        "No se puede registrar la Spec Draft hasta que PM, diseñador y encargado aprueben una prueba."
+      );
       return;
     }
 
@@ -902,7 +690,9 @@ const getFreshUserPermissions = async (): Promise<UserPermissionData | null> => 
 
     const betaAprobada = betas.some((b) => b.status === "aprobado");
     if (!betaAprobada) {
-      alert("No se puede registrar la Spec Final hasta que PM y encargado aprueben una Beta.");
+      alert(
+        "No se puede registrar la Spec Final hasta que PM y encargado aprueben una Beta."
+      );
       return;
     }
 
@@ -935,671 +725,176 @@ const getFreshUserPermissions = async (): Promise<UserPermissionData | null> => 
     }
   };
 
-const descargarSolicitudFormalPDF = async () => {
-  try {
-    setGeneratingPdf(true);
+  const descargarSolicitudFormalPDF = async () => {
+    try {
+      setGeneratingPdf(true);
 
-    const response = await fetch(
-      `/api/fixtures/${pedidoId}/solicitud-formal-docx`,
-      {
-        method: "POST",
-      }
-    );
-
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => null);
-      throw new Error(
-        errorData?.detail ||
-          errorData?.error ||
-          "No se pudo generar el DOCX."
+      const response = await fetch(
+        `/api/fixtures/${pedidoId}/solicitud-formal-docx`,
+        {
+          method: "POST",
+        }
       );
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+        throw new Error(
+          errorData?.detail ||
+            errorData?.error ||
+            "No se pudo generar el DOCX."
+        );
+      }
+
+      const blob = await response.blob();
+      const url = window.URL.createObjectURL(blob);
+
+      const safeTitle = String(pedido?.titulo || pedido?.io || "solicitud-formal")
+        .replace(/[^\w\dáéíóúÁÉÍÓÚñÑ.-]+/g, "_")
+        .replace(/_+/g, "_");
+
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${safeTitle}.docx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+
+      window.URL.revokeObjectURL(url);
+    } catch (error) {
+      console.error("Error descargando DOCX:", error);
+      alert(
+        error instanceof Error
+          ? error.message
+          : "No se pudo descargar la solicitud formal."
+      );
+    } finally {
+      setGeneratingPdf(false);
     }
-
-    const blob = await response.blob();
-    const url = window.URL.createObjectURL(blob);
-
-    const safeTitle = String(
-      pedido?.titulo || pedido?.io || "solicitud-formal"
-    )
-      .replace(/[^\w\dáéíóúÁÉÍÓÚñÑ.-]+/g, "_")
-      .replace(/_+/g, "_");
-
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${safeTitle}.docx`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-
-    window.URL.revokeObjectURL(url);
-  } catch (error) {
-    console.error("Error descargando DOCX:", error);
-    alert(
-      error instanceof Error
-        ? error.message
-        : "No se pudo descargar la solicitud formal."
-    );
-  } finally {
-    setGeneratingPdf(false);
-  }
-};
+  };
 
   const renderTabContent = () => {
     if (activeTab === "resumen") {
       return (
-        <section className={cardClass}>
-          <div className="flex items-start justify-between gap-4">
-            <div>
-  <h2 className="text-xl font-semibold">
-    Resumen de solicitud formal
-  </h2>
-  <p className="mt-1 text-sm text-white/55">
-    Esta información se considera congelada como base del proceso.
-  </p>
+   <ResumenSolicitud
+  pedido={pedido}
+  pedidoId={pedidoId}
+  faseActual={faseActual}
+  userDisplayName={userDisplayName}
+  generatingPdf={generatingPdf}
+  onDownloadDocx={descargarSolicitudFormalPDF}
+/>
 
-  <button
-    type="button"
-    onClick={descargarSolicitudFormalPDF}
-    disabled={generatingPdf}
-    className={`${btnPrimary} mt-4`}
-  >
-    <FiFileText />
-    {generatingPdf ? "Generando DOCX..." : "Descargar DOCX"}
-  </button>
-</div>
-
-            <span className="rounded-full border border-emerald-300/30 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-100">
-              {pedido?.status || "En proceso"}
-            </span>
-          </div>
-
-          <div className="mt-5 grid gap-4 text-sm md:grid-cols-2">
-            <Info label="Título" value={pedido?.titulo} />
-            <Info label="ID / Referencia" value={pedido?.io} />
-            <Info label="Proyecto" value={pedido?.proyecto} />
-            <Info label="Solicitante" value={pedido?.correoUsuario} />
-            <Info label="Fase actual" value={faseActual} />
-          </div>
-
-          <div className="mt-6 grid gap-5">
-            <Block title="1. Necesidad">
-              <InfoText label="Problemática" value={necesidad?.problematica} />
-              <InfoText
-                label="Piezas / producto"
-                value={necesidad?.piezasProducto}
-              />
-            </Block>
-
-            <Block title="2. Alcance">
-              <InfoText
-                label="Para qué sí se usará"
-                value={alcance?.descripcion}
-              />
-              <InfoText
-                label="Proceso donde se usará"
-                value={(alcance?.procesos || []).join(", ")}
-              />
-            </Block>
-
-            <Block title="3. Inputs">
-              <div className="grid gap-3 md:grid-cols-2">
-                <BooleanInfo label="Cuarto limpio" value={inputs?.cuartoLimpio} />
-                <BooleanInfo label="Horno" value={inputs?.horno} />
-                <BooleanInfo
-                  label="Rigidez / dureza"
-                  value={inputs?.rigidezDureza}
-                />
-                <BooleanInfo
-                  label="Esterilizable"
-                  value={inputs?.esterilizable}
-                />
-                <BooleanInfo
-                  label="Dimensiones críticas"
-                  value={inputs?.dimensionesCriticas}
-                />
-                <BooleanInfo
-                  label="Reportar presupuestos al PM"
-                  value={inputs?.presupuestoPM}
-                />
-              </div>
-
-              {inputs?.equipos?.length > 0 && (
-                <div className="mt-4">
-                  <p className="text-sm font-semibold text-white/80">
-                    Equipos involucrados
-                  </p>
-                  <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-white/70">
-                    {inputs.equipos.map((eq: string, index: number) => (
-                      <li key={index}>{eq}</li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-
-              <div className="mt-4 grid gap-3 md:grid-cols-2">
-                <InfoText
-                  label="Temperatura máxima"
-                  value={inputs?.temperaturaMax}
-                />
-                <InfoText
-                  label="Detalle rigidez / dureza"
-                  value={inputs?.rigidezDetalle}
-                />
-                <InfoText label="Referencia DWG" value={inputs?.referenciaDWG} />
-                <InfoText label="Tiempo para trabajar" value={inputs?.tiempoTrabajo} />
-              </div>
-
-              <InfoText label="Información extra" value={inputs?.extra} />
-            </Block>
-
-            <Block title="4. Criterios de éxito">
-              <InfoText label="Criterios" value={solicitud?.criteriosExito} />
-            </Block>
-
-            <Block title="Firma solicitud formal">
-              <Info label="Firmado por" value={userDisplayName} />
-              <Info label="Fecha" value={firmaPM?.fecha} />
-            </Block>
-          </div>
-        </section>
       );
     }
 
     if (activeTab === "concepto") {
-      const toggleConcept = (id: string) => {
-        setExpandedConceptIds((prev) =>
-          prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-        );
-      };
-
-      const isNewConceptOpen = expandedConceptIds.includes("new");
-
       return (
-        <section className={cardClass}>
-          <div className="flex flex-wrap items-start justify-between gap-4">
-            <div>
-              <h2 className="text-xl font-semibold">Concepto de diseño</h2>
-              <p className="mt-1 text-sm text-white/55">
-                Las versiones se registran como VA, VB, VC… y se recorren hacia la derecha.
-                Cada versión puede desplegarse o comprimirse.
-              </p>
-            </div>
-
-            {isAdmin && (
-              <button
-                type="button"
-                onClick={() => {
-                  if (!expandedConceptIds.includes("new")) {
-                    setExpandedConceptIds((prev) => [...prev, "new"]);
-                  }
-                }}
-                className={btnPrimary}
-              >
-                <FiPlus /> Agregar {nextConceptLabel}
-              </button>
-            )}
-          </div>
-
-  <div className="mt-6">
-  <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-              {conceptos.map((item, index) => {
-                const isOpen = expandedConceptIds.includes(item.id);
-                const fecha =
-                  item.createdAt?.toDate?.() instanceof Date
-                    ? item.createdAt.toDate().toLocaleString()
-                    : "Fecha no disponible";
-
-                return (
-                  <div
-                    key={item.id}
-                    className={`w-full rounded-2xl border p-4 transition ${
-                      item.status === "aprobado"
-                        ? "border-emerald-300/30 bg-emerald-400/10"
-                        : item.status === "rechazado"
-                        ? "border-red-300/30 bg-red-400/10"
-                        : "border-white/10 bg-black/20"
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      onClick={() => toggleConcept(item.id)}
-                      className="flex w-full items-center justify-between gap-3 text-left"
-                    >
-                      <div className="min-w-0">
-                        <p className="text-xs uppercase tracking-[0.22em] text-white/40">
-                          Versión {index + 1}
-                        </p>
-                        <p className="mt-1 text-lg font-semibold text-white/90">
-                          {item.versionLabel}
-                        </p>
-                        <p className="mt-1 text-xs text-white/45">{fecha}</p>
-                      </div>
-
-                      <div className="flex items-center gap-2">
-                        <span
-                          className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${
-                            item.status === "aprobado"
-                              ? "border-emerald-300/30 bg-emerald-400/10 text-emerald-100"
-                              : item.status === "rechazado"
-                              ? "border-red-300/30 bg-red-400/10 text-red-100"
-                              : "border-yellow-300/30 bg-yellow-400/10 text-yellow-100"
-                          }`}
-                        >
-                          {item.status || "pendiente"}
-                        </span>
-                        {isOpen ? <FiChevronDown /> : <FiChevronRight />}
-                      </div>
-                    </button>
-
-                    {isOpen && (
-                      <div className="mt-4 border-t border-white/10 pt-4">
-                        {item.descripcion && (
-                          <p className="whitespace-pre-wrap text-sm leading-relaxed text-white/75">
-                            {item.descripcion}
-                          </p>
-                        )}
-
-                        {item.especificacionesExtra &&
-                          item.especificacionesExtra.length > 0 && (
-                            <div className="mt-4">
-                              <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/40">
-                                Especificaciones extra
-                              </p>
-                              <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-white/70">
-                                {item.especificacionesExtra.map((s, i) => (
-                                  <li key={i}>{s}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-
-                        {item.archivos && item.archivos.length > 0 && (
-                          <div className="mt-4 space-y-1">
-                            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/40">
-                              Archivos
-                            </p>
-                            {item.archivos.map((file) => (
-                              <a
-                                key={file.url}
-                                href={file.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="block truncate text-sm text-emerald-200 underline decoration-white/20 hover:text-emerald-100"
-                              >
-                                {file.name}
-                              </a>
-                            ))}
-                          </div>
-                        )}
-
-                        <div className="mt-4">
-                          <ApprovalRow
-                            label="Firma PM"
-                            approvalKey="pm"
-                            firma={item.firmas?.pm}
-                            currentUserEmail={user?.email}
-                            canApprove={canApprovePM}
-                            onDecision={(decision, reason) =>
-                              decidirConcepto(item, decision, reason)
-                            }
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
-
-             {isAdmin && (conceptos.length === 0 || isNewConceptOpen) && (
-  <div className="w-full rounded-2xl border border-emerald-300/20 bg-emerald-400/10 p-4">
-                  <button
-                    type="button"
-                    onClick={() => toggleConcept("new")}
-                    className="flex w-full items-center justify-between gap-3 text-left"
-                  >
-                    <div>
-                      <p className="text-xs uppercase tracking-[0.22em] text-emerald-100/60">
-                        Nueva versión
-                      </p>
-                      <p className="mt-1 text-lg font-semibold text-emerald-50">
-                        {nextConceptLabel}
-                      </p>
-                      <p className="mt-1 text-xs text-emerald-50/55">
-                        Carga descripción, archivos y especificaciones.
-                      </p>
-                    </div>
-                    {isNewConceptOpen ? <FiChevronDown /> : <FiChevronRight />}
-                  </button>
-{isNewConceptOpen && (
-  <form
-    onSubmit={guardarConcepto}
-    className="mt-4 space-y-4 border-t border-emerald-100/10 pt-4"
-  >
-    <div className="space-y-3">
-      <p className="text-sm font-semibold text-white/80">
-        Especificaciones extra encontradas sobre la solicitud formal
-      </p>
-
-      {conceptoSpecs.map((spec, index) => (
-        <div key={index} className="flex gap-3">
-          <input
-            className={inputClass}
-            value={spec}
-            onChange={(e) => updateSpec(index, e.target.value)}
-            placeholder="Ej. requiere mayor soporte lateral..."
-          />
-
-          {index === conceptoSpecs.length - 1 && (
-            <button
-              type="button"
-              onClick={addSpec}
-              className="shrink-0 rounded-xl border border-white/12 bg-white/5 px-4 py-2 text-sm text-white/85 transition hover:bg-white/10"
-              title="Agregar especificación"
-            >
-              <FiPlus />
-            </button>
-          )}
-
-          {conceptoSpecs.length > 1 && (
-            <button
-              type="button"
-              onClick={() => removeSpec(index)}
-              className={btnDanger}
-              title="Eliminar especificación"
-            >
-              <FiX />
-            </button>
-          )}
-        </div>
-      ))}
-    </div>
-
-    <div className="space-y-3">
-      <p className="text-sm font-semibold text-white/80">
-        Concepto de diseño
-      </p>
-
-      <textarea
-        className={`${inputClass} min-h-[110px]`}
-        value={conceptoDesc}
-        onChange={(e) => setConceptoDesc(e.target.value)}
-        placeholder="La idea de diseño consiste en..."
-      />
-    </div>
-
-    <FilePicker
-      label="Adjuntar archivos del concepto"
-      files={conceptoFiles}
-      inputRef={conceptoInputRef}
-      onChange={(list) =>
-        addFiles(list, setConceptoFiles, conceptoInputRef)
-      }
-      onRemove={(i) => removeFile(i, setConceptoFiles)}
-    />
-
-    <button disabled={loading} className={btnPrimary}>
-      <FiCheck /> Guardar concepto
-    </button>
-  </form>
-)}
-                </div>
-              )}
-            </div>
-          </div>
-
-          {!isAdmin && conceptos.length === 0 && (
-            <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">
-              Aún no hay conceptos registrados.
-            </div>
-          )}
-        </section>
+        <ConceptoDiseno
+          conceptos={conceptos}
+          isAdmin={isAdmin}
+          loading={loading}
+          nextConceptLabel={nextConceptLabel}
+          conceptoDesc={conceptoDesc}
+          setConceptoDesc={setConceptoDesc}
+          conceptoSpecs={conceptoSpecs}
+          conceptoFiles={conceptoFiles}
+          setConceptoFiles={setConceptoFiles}
+          conceptoInputRef={conceptoInputRef}
+          expandedConceptIds={expandedConceptIds}
+          setExpandedConceptIds={setExpandedConceptIds}
+          userEmail={user?.email}
+          canApprovePM={canApprovePM}
+          addFiles={addFiles}
+          removeFile={removeFile}
+          updateSpec={updateSpec}
+          addSpec={addSpec}
+          removeSpec={removeSpec}
+          onGuardarConcepto={guardarConcepto}
+          onDecidirConcepto={decidirConcepto}
+        />
       );
     }
 
     if (activeTab === "prueba") {
       return (
-        <section className={cardClass}>
-          <h2 className="text-xl font-semibold">Prueba de diseño</h2>
-          <p className="mt-1 text-sm text-white/55">
-            Las piezas fabricadas para esta fase deben ser pedidos normales
-            asociados a este fixture.
-          </p>
-
-          <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4">
-            <h3 className="font-semibold text-white/90">
-              Pedidos normales asociados
-            </h3>
-
-            {linkedPedidos.length === 0 ? (
-              <p className="mt-2 text-sm text-white/55">
-                Todavía no hay pedidos asociados a este fixture.
-              </p>
-            ) : (
-              <ul className="mt-3 space-y-2">
-                {linkedPedidos.map((p) => (
-                  <li key={p.id}>
-                    <button
-                      onClick={() => router.push(`/solicitudes/listado/${p.id}`)}
-                      className="inline-flex items-center gap-2 text-sm text-emerald-200 underline decoration-white/20 hover:text-emerald-100"
-                    >
-                      <FiLink /> {p.titulo || p.id}{" "}
-                      {p.subtotal ? `(MXN ${p.subtotal.toFixed(2)})` : ""}
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          {isAdmin && (
-            <form onSubmit={guardarPrueba} className="mt-5 space-y-4">
-              <div className="rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
-                Nueva prueba: <strong>{nextPruebaLabel}</strong>
-              </div>
-
-              <textarea
-                className={`${inputClass} min-h-[110px]`}
-                value={pruebaDesc}
-                onChange={(e) => setPruebaDesc(e.target.value)}
-                placeholder="Describe la prueba, ensamble, funcionalidad observada y decisiones críticas..."
-              />
-
-              <FilePicker
-                label="Adjuntar fotos o videos del ensamble / prueba"
-                files={pruebaFiles}
-                inputRef={pruebaInputRef}
-                onChange={(list) => addFiles(list, setPruebaFiles, pruebaInputRef)}
-                onRemove={(i) => removeFile(i, setPruebaFiles)}
-                accept="image/*,video/*"
-              />
-
-              <button disabled={loading} className={btnPrimary}>
-                <FiCheck /> Guardar prueba
-              </button>
-            </form>
-          )}
-
-          <VersionList title="Pruebas registradas" items={pruebas} />
-        </section>
+        <PruebaDiseno
+          pruebas={pruebas}
+          linkedPedidos={linkedPedidos}
+          isAdmin={isAdmin}
+          loading={loading}
+          nextPruebaLabel={nextPruebaLabel}
+          pruebaDesc={pruebaDesc}
+          setPruebaDesc={setPruebaDesc}
+          pruebaFiles={pruebaFiles}
+          setPruebaFiles={setPruebaFiles}
+          pruebaInputRef={pruebaInputRef}
+          addFiles={addFiles}
+          removeFile={removeFile}
+          onGuardarPrueba={guardarPrueba}
+        />
       );
     }
 
     if (activeTab === "confirmacion") {
       return (
-        <section className={cardClass}>
-          <h2 className="text-xl font-semibold">Confirmación conceptual</h2>
-          <p className="mt-1 text-sm text-white/55">
-            Se confirma la funcionalidad de la prueba por PM, diseñador y
-            encargado del proceso.
-          </p>
-
-          <VersionList
-            title="Pruebas pendientes / confirmadas"
-            items={pruebas}
-            renderActions={(item) => (
-              <div className="grid gap-3">
-                <ApprovalRow
-                  label="PM"
-                  approvalKey="pm"
-                  firma={item.firmas?.pm}
-                  currentUserEmail={user?.email}
-                  canApprove={canApprovePM}
-                  onDecision={(decision, reason) =>
-                    decidirPrueba(item, "pm", decision, reason)
-                  }
-                />
-                <ApprovalRow
-                  label="Diseñador"
-                  approvalKey="disenador"
-                  firma={item.firmas?.disenador}
-                  currentUserEmail={user?.email}
-                  canApprove={canApproveDesigner}
-                  onDecision={(decision, reason) =>
-                    decidirPrueba(item, "disenador", decision, reason)
-                  }
-                />
-                <ApprovalRow
-                  label="Encargado del proceso"
-                  approvalKey="encargado"
-                  firma={item.firmas?.encargado}
-                  currentUserEmail={user?.email}
-                  canApprove={canApproveProcessOwner}
-                  onDecision={(decision, reason) =>
-                    decidirPrueba(item, "encargado", decision, reason)
-                  }
-                />
-              </div>
-            )}
-          />
-        </section>
+        <ConfirmacionConceptual
+          pruebas={pruebas}
+          userEmail={user?.email}
+          canApprovePM={canApprovePM}
+          canApproveDesigner={canApproveDesigner}
+          canApproveProcessOwner={canApproveProcessOwner}
+          onDecidirPrueba={decidirPrueba}
+        />
       );
     }
 
     if (activeTab === "specDraft") {
       return (
-        <section className={cardClass}>
-          <h2 className="text-xl font-semibold">Spec Draft</h2>
-          <p className="mt-1 text-sm text-white/55">
-            Se genera cuando la confirmación conceptual queda aprobada. Será la
-            guía para la versión beta.
-          </p>
-
-          {specDraftGenerada && (
-            <div className="mt-5 rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
-              Spec Draft registrada para este pedido.
-            </div>
-          )}
-
-          <div className="mt-5 flex flex-wrap gap-3">
-            <button
-              onClick={generarSpecDraft}
-              disabled={loading || !isAdmin}
-              className={btnPrimary}
-            >
-              <FiFileText /> Registrar Spec Draft
-            </button>
-          </div>
-        </section>
+        <SpecDraft
+          specDraftGenerada={specDraftGenerada}
+          loading={loading}
+          isAdmin={isAdmin}
+          onGenerarSpecDraft={generarSpecDraft}
+        />
       );
     }
 
     if (activeTab === "beta") {
       return (
-        <section className={cardClass}>
-          <h2 className="text-xl font-semibold">Fase Beta</h2>
-          <p className="mt-1 text-sm text-white/55">
-            Los diseñadores proponen materiales, presupuesto, ajustes y versión
-            robusta para repetibilidad.
-          </p>
-
-          {isAdmin && (
-            <form onSubmit={guardarBeta} className="mt-5 space-y-4">
-              <div className="rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
-                Nueva propuesta: <strong>{nextBetaLabel}</strong>
-              </div>
-
-              <textarea
-                className={`${inputClass} min-h-[110px]`}
-                value={betaDesc}
-                onChange={(e) => setBetaDesc(e.target.value)}
-                placeholder="Materiales, presupuesto, ajustes, decisiones críticas, etc..."
-              />
-
-              <FilePicker
-                label="Adjuntar archivos de beta"
-                files={betaFiles}
-                inputRef={betaInputRef}
-                onChange={(list) => addFiles(list, setBetaFiles, betaInputRef)}
-                onRemove={(i) => removeFile(i, setBetaFiles)}
-              />
-
-              <button disabled={loading} className={btnPrimary}>
-                <FiCheck /> Guardar beta
-              </button>
-            </form>
-          )}
-
-          <VersionList
-            title="Betas registradas"
-            items={betas}
-            renderActions={(item) => (
-              <div className="grid gap-3">
-                <ApprovalRow
-                  label="PM"
-                  approvalKey="pm"
-                  firma={item.firmas?.pm}
-                  currentUserEmail={user?.email}
-                  canApprove={canApprovePM}
-                  onDecision={(decision, reason) =>
-                    decidirBeta(item, "pm", decision, reason)
-                  }
-                />
-                <ApprovalRow
-                  label="Encargado del proceso"
-                  approvalKey="encargado"
-                  firma={item.firmas?.encargado}
-                  currentUserEmail={user?.email}
-                  canApprove={canApproveProcessOwner}
-                  onDecision={(decision, reason) =>
-                    decidirBeta(item, "encargado", decision, reason)
-                  }
-                />
-              </div>
-            )}
-          />
-        </section>
+        <FaseBeta
+          betas={betas}
+          isAdmin={isAdmin}
+          loading={loading}
+          nextBetaLabel={nextBetaLabel}
+          betaDesc={betaDesc}
+          setBetaDesc={setBetaDesc}
+          betaFiles={betaFiles}
+          setBetaFiles={setBetaFiles}
+          betaInputRef={betaInputRef}
+          userEmail={user?.email}
+          canApprovePM={canApprovePM}
+          canApproveProcessOwner={canApproveProcessOwner}
+          addFiles={addFiles}
+          removeFile={removeFile}
+          onGuardarBeta={guardarBeta}
+          onDecidirBeta={decidirBeta}
+        />
       );
     }
 
     return (
-      <section className={cardClass}>
-        <h2 className="text-xl font-semibold">Spec Final y validación</h2>
-        <p className="mt-1 text-sm text-white/55">
-          La SPEC final se redacta en formato QMS y se valida por el encargado.
-        </p>
-
-        {specFinalGenerada && (
-          <div className="mt-5 rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
-            Spec Final registrada para este pedido.
-          </div>
-        )}
-
-        <div className="mt-5 flex flex-wrap gap-3">
-          <button
-            onClick={generarSpecFinal}
-            disabled={loading || !isAdmin}
-            className={btnPrimary}
-          >
-            <FiFileText /> Registrar Spec Final
-          </button>
-        </div>
-      </section>
+      <SpecFinal
+        specFinalGenerada={specFinalGenerada}
+        loading={loading}
+        isAdmin={isAdmin}
+        onGenerarSpecFinal={generarSpecFinal}
+      />
     );
   };
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 text-white sm:px-8">
-      <button onClick={() => router.back()} className={btnSoft}>
+      <button onClick={() => window.history.back()} className={btnSoft}>
         <FiArrowLeft /> Regresar
       </button>
 
@@ -1644,380 +939,6 @@ const descargarSolicitudFormalPDF = async () => {
       </div>
 
       <div className="mt-8">{renderTabContent()}</div>
-    </div>
-  );
-}
-
-function Info({ label, value }: { label: string; value?: any }) {
-  return (
-    <div>
-      <p className="text-xs uppercase tracking-[0.18em] text-white/40">
-        {label}
-      </p>
-      <p className="mt-1 break-words text-sm text-white/85">{value || "—"}</p>
-    </div>
-  );
-}
-
-function InfoText({ label, value }: { label: string; value?: any }) {
-  return (
-    <div className="mt-3">
-      <p className="text-sm font-semibold text-white/75">{label}</p>
-      <p className="mt-1 whitespace-pre-wrap rounded-2xl border border-white/10 bg-black/20 p-4 text-sm leading-relaxed text-white/75">
-        {value || "—"}
-      </p>
-    </div>
-  );
-}
-
-function BooleanInfo({ label, value }: { label: string; value?: boolean }) {
-  return (
-    <div className="flex items-center gap-2 text-sm text-white/75">
-      <span
-        className={`h-2.5 w-2.5 rounded-full ${
-          value ? "bg-emerald-300" : "bg-white/20"
-        }`}
-      />
-      {label}: {value ? "Sí" : "No"}
-    </div>
-  );
-}
-
-function Block({
-  title,
-  children,
-}: {
-  title: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
-      <h3 className="font-semibold text-white/90">{title}</h3>
-      <div className="mt-3">{children}</div>
-    </div>
-  );
-}
-
-function FilePicker({
-  label,
-  files,
-  inputRef,
-  onChange,
-  onRemove,
-  accept,
-}: {
-  label: string;
-  files: File[];
-  inputRef: RefObject<HTMLInputElement | null>;
-  onChange: (files: FileList | null) => void;
-  onRemove: (index: number) => void;
-  accept?: string;
-}) {
-  return (
-    <div>
-      <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-white/12 bg-white/5 px-4 py-2 text-sm text-white/85 transition hover:bg-white/10">
-        <FiUpload /> {label}
-        <input
-          ref={inputRef}
-          type="file"
-          multiple
-          accept={accept}
-          className="hidden"
-          onChange={(e) => onChange(e.target.files)}
-        />
-      </label>
-
-      {files.length > 0 && (
-        <div className="mt-3 rounded-2xl border border-white/10 bg-black/20 overflow-hidden">
-          <div className="border-b border-white/10 px-4 py-3 text-xs text-white/55">
-            Archivos seleccionados: {files.length}
-          </div>
-
-          <ul className="divide-y divide-white/10">
-            {files.map((file, index) => (
-              <li
-                key={`${file.name}-${file.size}-${file.lastModified}`}
-                className="flex items-center justify-between gap-3 px-4 py-3 text-sm text-white/75"
-              >
-                <div className="min-w-0">
-                  <p className="truncate font-medium text-white/85">
-                    {file.name}
-                  </p>
-                  <p className="text-xs text-white/45">
-                    {(file.size / 1024 / 1024).toFixed(2)} MB
-                  </p>
-                </div>
-
-                <button
-                  type="button"
-                  onClick={() => onRemove(index)}
-                  className="shrink-0 rounded-lg border border-red-300/20 bg-red-400/10 px-3 py-2 text-red-200 transition hover:bg-red-400/20"
-                >
-                  <FiTrash2 />
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function VersionList({
-  title,
-  items,
-  renderActions,
-}: {
-  title: string;
-  items: FixtureVersion[];
-  renderActions?: (item: FixtureVersion) => ReactNode;
-}) {
-  if (items.length === 0) {
-    return (
-      <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">
-        Aún no hay registros en esta sección.
-      </div>
-    );
-  }
-
-  return (
-    <div className="mt-6">
-      <h3 className="font-semibold text-white/90">{title}</h3>
-
-      <div className="mt-3 space-y-3">
-        {items.map((item) => {
-          const fecha =
-            item.createdAt?.toDate?.() instanceof Date
-              ? item.createdAt.toDate().toLocaleString()
-              : "Fecha no disponible";
-
-          return (
-            <div
-              key={item.id}
-              className="rounded-2xl border border-white/10 bg-black/20 p-4"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <p className="font-semibold text-white/90">
-                    {item.versionLabel}
-                  </p>
-                  <p className="text-xs text-white/45">{fecha}</p>
-                </div>
-
-                <span
-                  className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-                    item.status === "aprobado"
-                      ? "border-emerald-300/30 bg-emerald-400/10 text-emerald-100"
-                      : item.status === "rechazado"
-                      ? "border-red-300/30 bg-red-400/10 text-red-100"
-                      : "border-yellow-300/30 bg-yellow-400/10 text-yellow-100"
-                  }`}
-                >
-                  {item.status || "pendiente"}
-                </span>
-              </div>
-
-              {item.descripcion && (
-                <p className="mt-3 whitespace-pre-wrap text-sm leading-relaxed text-white/75">
-                  {item.descripcion}
-                </p>
-              )}
-
-              {item.especificacionesExtra &&
-                item.especificacionesExtra.length > 0 && (
-                  <ul className="mt-3 list-disc space-y-1 pl-5 text-sm text-white/70">
-                    {item.especificacionesExtra.map((s, i) => (
-                      <li key={i}>{s}</li>
-                    ))}
-                  </ul>
-                )}
-
-              {item.archivos && item.archivos.length > 0 && (
-                <div className="mt-3 space-y-1">
-                  {item.archivos.map((file) => (
-                    <a
-                      key={file.url}
-                      href={file.url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="block text-sm text-emerald-200 underline decoration-white/20 hover:text-emerald-100"
-                    >
-                      {file.name}
-                    </a>
-                  ))}
-                </div>
-              )}
-
-              {renderActions && (
-                <div className="mt-4 border-t border-white/10 pt-4">
-                  {renderActions(item)}
-                </div>
-              )}
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-function ApprovalRow({
-  label,
-  approvalKey,
-  firma,
-  currentUserEmail,
-  canApprove,
-  onDecision,
-}: {
-  label: string;
-  approvalKey: ApprovalRole;
-  firma?: any;
-  currentUserEmail?: string;
-  canApprove: boolean;
-  onDecision: (decision: Decision, reason?: string) => void;
-}) {
-  const normalizedFirma = {
-    ...firma,
-    decision: firma?.decision || "",
-    correo: firma?.correo || firma?.approvedByEmail || "",
-    nombre: firma?.nombre || firma?.approvedByName || "",
-    fecha: firma?.fecha || firma?.approvedAt || "",
-    rejectReason: firma?.rejectReason || "",
-  };
-
-  const alreadyAnswered =
-    normalizedFirma.decision === "aprobado" ||
-    normalizedFirma.decision === "rechazado";
-
-  const [signingOpen, setSigningOpen] = useState(false);
-  const [decision, setDecision] = useState<Decision | "">(
-    normalizedFirma.decision || ""
-  );
-  const [reason, setReason] = useState(normalizedFirma.rejectReason || "");
-
-  useEffect(() => {
-    setDecision(normalizedFirma.decision || "");
-    setReason(normalizedFirma.rejectReason || "");
-    setSigningOpen(false);
-  }, [normalizedFirma.decision, normalizedFirma.rejectReason]);
-
-  const statusClass =
-    normalizedFirma.decision === "aprobado"
-      ? "border-emerald-300/30 bg-emerald-400/10 text-emerald-100"
-      : normalizedFirma.decision === "rechazado"
-      ? "border-red-300/30 bg-red-400/10 text-red-100"
-      : "border-yellow-300/30 bg-yellow-400/10 text-yellow-100";
-
-  const submitDecision = () => {
-    if (!decision) {
-      alert("Selecciona aprobado o rechazado.");
-      return;
-    }
-
-    if (decision === "rechazado" && !reason.trim()) {
-      alert("Agrega una breve explicación del rechazo.");
-      return;
-    }
-
-    onDecision(decision, decision === "rechazado" ? reason : "");
-    setSigningOpen(false);
-  };
-
-  return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-semibold text-white/85">{label}</p>
-            <span className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${statusClass}`}>
-              {normalizedFirma.decision || "pendiente"}
-            </span>
-          </div>
-
-          {alreadyAnswered && normalizedFirma.nombre && (
-            <p className="mt-2 text-xs text-white/60">
-              {normalizedFirma.decision === "aprobado" ? "Aprobado por" : "Rechazado por"}{" "}
-              <span className="font-semibold text-white/85">
-                {normalizedFirma.nombre}
-              </span>
-            </p>
-          )}
-
-          {alreadyAnswered && normalizedFirma.fecha && (
-            <p className="mt-1 text-[11px] text-white/35">
-              {normalizedFirma.fecha}
-            </p>
-          )}
-
-          {normalizedFirma.decision === "rechazado" &&
-            normalizedFirma.rejectReason && (
-              <div className="mt-3 rounded-xl border border-red-300/20 bg-red-400/10 px-3 py-2 text-xs leading-relaxed text-red-100">
-                Motivo: {normalizedFirma.rejectReason}
-              </div>
-            )}
-
-          {!canApprove && !alreadyAnswered && (
-            <p className="mt-2 text-xs text-yellow-100/75">
-              Pendiente de firma. Tu cuenta no está asignada como {approvalKey === "pm" ? "PM del proyecto" : label}.
-            </p>
-          )}
-        </div>
-
-        {canApprove && (
-          <button
-            type="button"
-            onClick={() => setSigningOpen((prev) => !prev)}
-            className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/75 hover:bg-white/10"
-          >
-            {alreadyAnswered ? "Editar firma" : "Firmar"}
-          </button>
-        )}
-      </div>
-
-      {signingOpen && canApprove && (
-        <div className="mt-4 grid gap-3 border-t border-white/10 pt-4">
-          <label className="text-xs font-semibold uppercase tracking-[0.18em] text-white/40">
-            Decisión
-          </label>
-
-          <select
-            value={decision}
-            onChange={(e) => setDecision(e.target.value as Decision | "")}
-            className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-emerald-400/20"
-          >
-            <option value="">Seleccionar decisión</option>
-            <option value="aprobado">Aprobado</option>
-            <option value="rechazado">Rechazado</option>
-          </select>
-
-          {decision === "rechazado" && (
-            <textarea
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder="Razón del rechazo o cambio de decisión..."
-              className="min-h-[82px] w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-white placeholder:text-white/35 outline-none focus:ring-2 focus:ring-emerald-400/20"
-            />
-          )}
-
-          <div className="flex flex-wrap gap-2">
-            <button
-              type="button"
-              onClick={submitDecision}
-              className="rounded-lg border border-emerald-300/25 bg-emerald-400/10 px-3 py-1.5 text-xs text-emerald-100 hover:bg-emerald-400/20"
-            >
-              Guardar firma
-            </button>
-            <button
-              type="button"
-              onClick={() => setSigningOpen(false)}
-              className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/75 hover:bg-white/10"
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

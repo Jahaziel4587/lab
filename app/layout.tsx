@@ -1,7 +1,7 @@
 // app/layout.tsx
 import "./globals.css";
 import { AuthProvider } from "../src/Context/AuthContext";
-import { PedidoProvider } from "../src/Context/PedidoContext"; // 👈 Agregado
+import { PedidoProvider } from "../src/Context/PedidoContext"; 
 import ClientLayout from "./components/Clientlayout";
 
 export const metadata = {
