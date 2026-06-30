@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { Dispatch, FormEvent, RefObject, SetStateAction } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -9,11 +10,16 @@ import {
   FiLink,
   FiPlus,
 } from "react-icons/fi";
-import { useState } from "react";
-import type { FixtureVersion, LinkedPedido } from "../types";
+import type {
+  FixtureVersion,
+  LinkedPedido,
+  ApprovalRole,
+  Decision,
+} from "../types";
 import { cardClass, inputClass, btnPrimary } from "../styles";
 import { buildFixtureOrderUrl, formatFirebaseDate } from "../helpers";
 import FilePicker from "../components/FilePicker";
+import ApprovalRow from "../components/ApprovalRow";
 
 function PedidosAsociados({ pedidos }: { pedidos: LinkedPedido[] }) {
   const router = useRouter();
@@ -72,6 +78,9 @@ export default function PruebaDiseno({
   addFiles,
   removeFile,
   onGuardarPrueba,
+  userEmail,
+  canApprovePM,
+  onDecidirPrueba,
 }: {
   pruebas: FixtureVersion[];
   linkedPedidos: LinkedPedido[];
@@ -95,6 +104,14 @@ export default function PruebaDiseno({
     setter: Dispatch<SetStateAction<File[]>>
   ) => void;
   onGuardarPrueba: (e: FormEvent) => void;
+  userEmail?: string;
+  canApprovePM: boolean;
+  onDecidirPrueba: (
+    prueba: FixtureVersion,
+    rol: ApprovalRole,
+    decision: Decision,
+    reason?: string
+  ) => void;
 }) {
   const router = useRouter();
   const [expandedPruebaIds, setExpandedPruebaIds] = useState<string[]>([]);
@@ -235,6 +252,19 @@ export default function PruebaDiseno({
                     </div>
 
                     <PedidosAsociados pedidos={pedidosDeVersion} />
+
+                    <div className="mt-4">
+                      <ApprovalRow
+                        label="Firma PM"
+                        approvalKey="pm"
+                        firma={item.firmas?.pm}
+                        currentUserEmail={userEmail}
+                        canApprove={canApprovePM}
+                        onDecision={(decision, reason) =>
+                          onDecidirPrueba(item, "pm", decision, reason)
+                        }
+                      />
+                    </div>
                   </div>
                 )}
               </div>

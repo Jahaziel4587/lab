@@ -836,6 +836,10 @@ export default function DetalleFixture({
           onGuardarPrueba={guardarPrueba}
           pedidoId={pedidoId}
           pedidoProyecto={pedido?.proyecto || ""}
+          userEmail={user?.email}
+          canApprovePM={canApprovePM}
+          onDecidirPrueba={decidirPrueba}
+
         />
       );
     }
