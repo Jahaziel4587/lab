@@ -860,11 +860,12 @@ export default function DetalleFixture({
     if (activeTab === "specDraft") {
       return (
         <SpecDraft
-          specDraftGenerada={specDraftGenerada}
-          loading={loading}
-          isAdmin={isAdmin}
-          onGenerarSpecDraft={generarSpecDraft}
-        />
+  pedidoId={pedidoId}
+  specDraftGenerada={specDraftGenerada}
+  loading={loading}
+  isAdmin={isAdmin}
+  onGenerarSpecDraft={generarSpecDraft}
+/>
       );
     }
 
