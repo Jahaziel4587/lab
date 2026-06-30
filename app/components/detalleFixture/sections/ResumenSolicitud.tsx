@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { FiFileText, FiDownload, FiPaperclip } from "react-icons/fi";
+import { collection, getDocs } from "firebase/firestore";
+import { db } from "@/src/firebase/firebaseConfig";
 import { cardClass, btnPrimary } from "../styles";
 import { Info, InfoText, BooleanInfo, Block } from "../components/InfoBlocks";
 import { listFixtureFolderFiles } from "../services/fixtureStorage";
@@ -60,11 +62,11 @@ export default function ResumenSolicitud({
   const necesidad = solicitud?.necesidad || {};
   const alcance = solicitud?.alcance || {};
   const inputs = solicitud?.inputs || {};
-  const firmaPM = solicitud?.firmaPM || {};
 
   const [archivosVisuales, setArchivosVisuales] = useState<UploadedFile[]>([]);
   const [archivosTecnicos, setArchivosTecnicos] = useState<UploadedFile[]>([]);
   const [loadingArchivos, setLoadingArchivos] = useState(false);
+  const [solicitanteNombre, setSolicitanteNombre] = useState<string>("");
 
   useEffect(() => {
     if (!pedidoId) return;
@@ -95,6 +97,41 @@ export default function ResumenSolicitud({
 
     loadArchivos();
   }, [pedidoId]);
+
+  useEffect(() => {
+    const loadSolicitanteNombre = async () => {
+      const correo = String(pedido?.correoUsuario || "").toLowerCase();
+
+      if (!correo) {
+        setSolicitanteNombre("—");
+        return;
+      }
+
+      try {
+        const snap = await getDocs(collection(db, "users"));
+        let nombreEncontrado = "";
+
+        snap.forEach((docSnap) => {
+          const data = docSnap.data() as any;
+
+          if (String(data?.email || "").toLowerCase() === correo) {
+            nombreEncontrado =
+              [data?.nombre, data?.apellido].filter(Boolean).join(" ") ||
+              data?.displayName ||
+              data?.email ||
+              "";
+          }
+        });
+
+        setSolicitanteNombre(nombreEncontrado || pedido?.correoUsuario || "—");
+      } catch (error) {
+        console.error("Error cargando nombre del solicitante:", error);
+        setSolicitanteNombre(pedido?.correoUsuario || "—");
+      }
+    };
+
+    loadSolicitanteNombre();
+  }, [pedido?.correoUsuario]);
 
   const noHayArchivos =
     !loadingArchivos &&
@@ -132,7 +169,7 @@ export default function ResumenSolicitud({
         <Info label="Título" value={pedido?.titulo} />
         <Info label="ID / Referencia" value={pedido?.io} />
         <Info label="Proyecto" value={pedido?.proyecto} />
-        <Info label="Solicitante" value={pedido?.correoUsuario} />
+        <Info label="Solicitante" value={solicitanteNombre || "Cargando..."} />
         <Info label="Fase actual" value={faseActual} />
       </div>
 
@@ -234,11 +271,6 @@ export default function ResumenSolicitud({
 
         <Block title="5. Criterios de éxito">
           <InfoText label="Criterios" value={solicitud?.criteriosExito} />
-        </Block>
-
-        <Block title="Firma solicitud formal">
-          <Info label="Firmado por" value={userDisplayName} />
-          <Info label="Fecha" value={firmaPM?.fecha} />
         </Block>
       </div>
     </section>
