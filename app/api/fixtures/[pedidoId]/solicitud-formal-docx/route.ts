@@ -29,16 +29,6 @@ function clean(value: any) {
   return String(value);
 }
 
-function initials(name: string) {
-  if (!name || name === "NA") return "NA";
-  return name
-    .split(" ")
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((p) => p[0]?.toUpperCase())
-    .join("");
-}
-
 function getFileName(file: ArchivoAnexo) {
   return (
     file.nombre ||
@@ -56,12 +46,7 @@ function getFileUrl(file: ArchivoAnexo) {
 }
 
 function getFileTitle(file: ArchivoAnexo) {
-  return (
-    file.titulo ||
-    file.title ||
-    file.descripcion ||
-    getFileName(file)
-  );
+  return file.titulo || file.title || file.descripcion || getFileName(file);
 }
 
 function collectFilesFromObject(obj: any): ArchivoAnexo[] {
@@ -117,6 +102,29 @@ function buildDocumentosAnexos(files: ArchivoAnexo[]) {
     .join("\n\n");
 }
 
+async function getNombreUsuarioPorCorreo(correo?: string) {
+  if (!correo) return "NA";
+
+  const usersSnap = await adminDB.collection("users").get();
+  let nombre = "";
+
+  usersSnap.forEach((docSnap) => {
+    const data = docSnap.data() as any;
+
+    if (
+      String(data?.email || "").toLowerCase() ===
+      String(correo).toLowerCase()
+    ) {
+      nombre =
+        [data?.nombre, data?.apellido].filter(Boolean).join(" ") ||
+        data?.displayName ||
+        "";
+    }
+  });
+
+  return nombre || correo || "NA";
+}
+
 export async function POST(
   req: Request,
   context: { params: Promise<{ pedidoId: string }> }
@@ -162,14 +170,7 @@ export async function POST(
       }
     );
 
-    const solicitante =
-      pedido.solicitanteNombre ||
-      pedido.nombreSolicitante ||
-      pedido.nombre ||
-      pedido.usuarioNombre ||
-      pedido.solicitante ||
-      pedido.email ||
-      "NA";
+    const solicitante = await getNombreUsuarioPorCorreo(pedido.correoUsuario);
 
     const templatePath = path.join(
       process.cwd(),
@@ -188,9 +189,10 @@ export async function POST(
 
     docx.render({
       titulo: clean(pedido.titulo || pedido.title),
-      idReferencia: clean(
-        pedido.idReferencia || pedido.ioId || pedido.referencia || pedido.id
-      ),
+
+      // ID proporcionado por el PM en la solicitud formal
+      idReferencia: clean(pedido.io),
+
       proyecto: clean(pedido.proyecto),
       solicitante: clean(solicitante),
 
@@ -237,21 +239,24 @@ export async function POST(
       masEspecificaciones: clean(inputs.extra),
 
       criteriosExito: clean(fixture.criteriosExito),
-      firmaPM: clean(initials(solicitante)),
+
+      // Si ya borraste {firmaPM} del DOCX, esto no se usa.
+      firmaPM: "",
 
       documentosAnexos: buildDocumentosAnexos(archivos),
     });
-
-    const finalDocx = docx.getZip().generate({
-      type: "nodebuffer",
-      compression: "DEFLATE",
-    });
-
-    const fileName = `${pedido.titulo || "solicitud-formal"}.docx`
+const fileName = `${pedido.titulo || "solicitud-formal"}.docx`
       .replace(/[^\w\dáéíóúÁÉÍÓÚñÑ.-]+/g, "_")
       .replace(/_+/g, "_");
 
-    return new NextResponse(finalDocx, {
+ const finalDocx = docx.getZip().generate({
+  type: "nodebuffer",
+  compression: "DEFLATE",
+});
+
+const body = new Uint8Array(finalDocx);
+
+return new NextResponse(body, {
       status: 200,
       headers: {
         "Content-Type":
