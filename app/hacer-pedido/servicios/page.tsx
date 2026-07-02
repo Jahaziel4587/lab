@@ -91,6 +91,10 @@ export default function ServiciosPage() {
     router.push("/hacer-pedido/maquinas");
   };
 
+  const serviciosDisponibles = vieneDeFixture
+  ? servicios.filter((s) => s.key !== "Fixture")
+  : servicios;
+
   return (
     <div className="relative">
       <button
@@ -120,7 +124,7 @@ export default function ServiciosPage() {
       </p>
 
       <div className="grid grid-cols-1 gap-6 sm:grid-cols-2">
-        {servicios.map((s) => (
+        {serviciosDisponibles.map((s) => (
           <button
             key={s.key}
             onClick={() => seleccionarServicio(s)}
