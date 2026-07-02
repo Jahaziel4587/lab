@@ -55,3 +55,8 @@ export type TabKey =
   | "specDraft"
   | "beta"
   | "specFinal";
+
+  export type FixtureConfirmacion = FixtureVersion & {
+  pruebaBaseId?: string;
+  pruebaBaseVersion?: string;
+};

@@ -19,6 +19,7 @@ import type {
   UserPermissionData,
   LinkedPedido,
   TabKey,
+  FixtureConfirmacion,
 } from "./detalleFixture/types";
 
 import { btnSoft } from "./detalleFixture/styles";
@@ -171,6 +172,7 @@ export default function DetalleFixture({
       setConceptos(data.conceptos);
       setPruebas(data.pruebas);
       setBetas(data.betas);
+      setConfirmaciones(data.confirmaciones);
     } catch (error) {
       console.error("Error cargando subcolecciones FXT:", error);
     }
@@ -201,6 +203,139 @@ export default function DetalleFixture({
       console.error("Error cargando pedidos asociados al fixture:", error);
     }
   };
+
+const guardarConfirmacionConceptual = async (e: FormEvent) => {
+  e.preventDefault();
+
+  if (!isAdmin) {
+    alert("Solo administradores pueden registrar la confirmación conceptual.");
+    return;
+  }
+
+  const pruebaBase = [...pruebas]
+    .reverse()
+    .find((p) => p.status === "aprobado");
+
+  if (!pruebaBase) {
+    alert("Primero debe existir una prueba de diseño aprobada.");
+    return;
+  }
+
+  if (!confirmacionDesc.trim()) {
+    alert("Agrega las consideraciones de diseño.");
+    return;
+  }
+
+  try {
+    setLoading(true);
+
+    const archivos = await uploadFixtureFiles({
+      pedidoId,
+      files: confirmacionFiles,
+      folder: `confirmacion-conceptual/${pruebaBase.versionLabel}`,
+    });
+
+    await addDoc(
+      collection(db, "pedidos", pedidoId, "fixture_confirmaciones"),
+      {
+        versionLabel: `CONF ${pruebaBase.versionLabel}`,
+        pruebaBaseId: pruebaBase.id,
+        pruebaBaseVersion: pruebaBase.versionLabel,
+        descripcion: confirmacionDesc.trim(),
+        archivos,
+        firmas: {},
+        status: "pendiente",
+        creadoPor: user?.email || "",
+        createdAt: new Date(),
+      }
+    );
+
+    await registrarHistorial(
+      "confirmacion_conceptual_creada",
+      `Se registró la confirmación conceptual basada en ${pruebaBase.versionLabel}.`
+    );
+
+    setConfirmacionDesc("");
+    setConfirmacionFiles([]);
+
+    await loadSubcollections();
+  } catch (error) {
+    console.error(error);
+    alert("No se pudo guardar la confirmación conceptual.");
+  } finally {
+    setLoading(false);
+  }
+};
+
+const decidirConfirmacionConceptual = async (
+  confirmacion: FixtureConfirmacion,
+  rol: ApprovalRole,
+  decision: Decision,
+  rejectReason?: string
+) => {
+  if (!validateRoleDecision(confirmacion, rol, decision, rejectReason)) return;
+
+  try {
+    setLoading(true);
+
+    const prevFirmas = confirmacion.firmas || {};
+
+    const nuevasFirmas = {
+      ...prevFirmas,
+      [rol]: buildFirmaPayload(decision, rejectReason),
+    };
+
+    const allRoles: ApprovalRole[] = ["pm", "disenador", "encargado"];
+
+    const completa = allRoles.every(
+      (r) => nuevasFirmas[r]?.decision === "aprobado"
+    );
+
+    const rechazada = allRoles.some(
+      (r) => nuevasFirmas[r]?.decision === "rechazado"
+    );
+
+    await updateDoc(
+      doc(db, "pedidos", pedidoId, "fixture_confirmaciones", confirmacion.id),
+      {
+        firmas: nuevasFirmas,
+        status: completa ? "aprobado" : rechazada ? "rechazado" : "pendiente",
+      }
+    );
+
+    if (completa && !rechazada) {
+      await updateDoc(doc(db, "pedidos", pedidoId), {
+        faseFixture: "spec_draft",
+      });
+
+      setFaseActual("spec_draft");
+
+      await registrarHistorial(
+        "confirmacion_conceptual_aprobada",
+        `La confirmación conceptual ${confirmacion.versionLabel} fue aprobada.`
+      );
+    }
+
+    if (rechazada) {
+      await registrarHistorial(
+        "confirmacion_conceptual_rechazada",
+        `La confirmación conceptual ${confirmacion.versionLabel} fue rechazada por ${userDisplayName}.`
+      );
+    }
+
+    await loadSubcollections();
+  } catch (error) {
+    console.error(error);
+    alert("No se pudo registrar la firma.");
+  } finally {
+    setLoading(false);
+  }
+};
+
+const [confirmaciones, setConfirmaciones] = useState<FixtureConfirmacion[]>([]);
+const [confirmacionDesc, setConfirmacionDesc] = useState("");
+const [confirmacionFiles, setConfirmacionFiles] = useState<File[]>([]);
+const confirmacionInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     loadSubcollections();
@@ -847,13 +982,24 @@ export default function DetalleFixture({
     if (activeTab === "confirmacion") {
       return (
         <ConfirmacionConceptual
-          pruebas={pruebas}
-          userEmail={user?.email}
-          canApprovePM={canApprovePM}
-          canApproveDesigner={canApproveDesigner}
-          canApproveProcessOwner={canApproveProcessOwner}
-          onDecidirPrueba={decidirPrueba}
-        />
+  pruebas={pruebas}
+  confirmaciones={confirmaciones}
+  isAdmin={isAdmin}
+  loading={loading}
+  confirmacionDesc={confirmacionDesc}
+  setConfirmacionDesc={setConfirmacionDesc}
+  confirmacionFiles={confirmacionFiles}
+  setConfirmacionFiles={setConfirmacionFiles}
+  confirmacionInputRef={confirmacionInputRef}
+  addFiles={addFiles}
+  removeFile={removeFile}
+  userEmail={user?.email}
+  canApprovePM={canApprovePM}
+  canApproveDesigner={canApproveDesigner}
+  canApproveProcessOwner={canApproveProcessOwner}
+  onGuardarConfirmacion={guardarConfirmacionConceptual}
+  onDecidirConfirmacion={decidirConfirmacionConceptual}
+/>
       );
     }
 

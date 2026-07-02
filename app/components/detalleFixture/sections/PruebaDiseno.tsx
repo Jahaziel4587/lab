@@ -123,6 +123,14 @@ export default function PruebaDiseno({
   };
 
   const isNewPruebaOpen = expandedPruebaIds.includes("new");
+  const pedidosDePrueba = linkedPedidos.filter(
+  (p) => p.fixtureRelacionadoFase === "prueba"
+);
+
+const totalPruebaDiseno = pedidosDePrueba.reduce(
+  (sum, p) => sum + Number(p.subtotal || 0),
+  0
+);
 
   return (
     <section className={cardClass}>
@@ -149,7 +157,14 @@ export default function PruebaDiseno({
           </button>
         )}
       </div>
-
+      <div className="mt-5 rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-3">
+  <p className="text-xs uppercase tracking-[0.18em] text-emerald-100/60">
+    Costo acumulado de prueba de diseño
+  </p>
+  <p className="mt-1 text-lg font-semibold text-emerald-50">
+    MXN {totalPruebaDiseno.toFixed(2)}
+  </p>
+</div>
       <div className="mt-6">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           {pruebas.map((item, index) => {
@@ -349,7 +364,9 @@ export default function PruebaDiseno({
           )}
         </div>
       </div>
+      
 
+      
       {!isAdmin && pruebas.length === 0 && (
         <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">
           Aún no hay pruebas registradas.

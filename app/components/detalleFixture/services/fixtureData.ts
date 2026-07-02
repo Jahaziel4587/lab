@@ -2,6 +2,7 @@ import { collection, getDocs, getDoc , orderBy, query } from "firebase/firestore
 import { db } from "@/src/firebase/firebaseConfig";
 import type {
   FixtureVersion,
+  FixtureConfirmacion,
   LinkedPedido,
   UserPermissionData,
 } from "../types";
@@ -12,6 +13,7 @@ export const getFixtureSubcollections = async (
   conceptos: FixtureVersion[];
   pruebas: FixtureVersion[];
   betas: FixtureVersion[];
+  confirmaciones: FixtureConfirmacion[];
 }> => {
   const conceptoSnap = await getDocs(
     query(
@@ -27,6 +29,13 @@ export const getFixtureSubcollections = async (
     )
   );
 
+const confirmacionSnap = await getDocs(
+  query(
+    collection(db, "pedidos", pedidoId, "fixture_confirmaciones"),
+    orderBy("createdAt", "asc")
+  )
+);  
+
   const betaSnap = await getDocs(
     query(
       collection(db, "pedidos", pedidoId, "fixture_betas"),
@@ -34,6 +43,7 @@ export const getFixtureSubcollections = async (
     )
   );
 
+  
   return {
     conceptos: conceptoSnap.docs.map((d) => ({
       id: d.id,
@@ -47,6 +57,10 @@ export const getFixtureSubcollections = async (
       id: d.id,
       ...(d.data() as any),
     })),
+    confirmaciones: confirmacionSnap.docs.map((d) => ({
+  id: d.id,
+  ...(d.data() as any),
+})),
   };
 };
 
