@@ -362,7 +362,7 @@ export default function ProyectoCalendarioClient({ proyecto }: { proyecto: strin
         {fmtMXN(totalProyectoMXN)}
       </div>
 
-      {/* Toolbar (buscador) */}
+     
       <div className="mt-6 rounded-3xl border border-white/10 bg-white/[0.05] backdrop-blur-2xl ring-1 ring-white/5 shadow-[0_20px_90px_-70px_rgba(0,0,0,0.95)] p-4 sm:p-5">
         <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
           <div className="relative w-full md:max-w-lg">
@@ -394,7 +394,7 @@ export default function ProyectoCalendarioClient({ proyecto }: { proyecto: strin
         </div>
       </div>
 
-      {/* Content */}
+      
       <div className="mt-6">
         {pedidos.length === 0 ? (
           <p className="text-white/70">No hay pedidos con fecha real en este proyecto.</p>
@@ -402,22 +402,22 @@ export default function ProyectoCalendarioClient({ proyecto }: { proyecto: strin
           <p className="text-white/70">No hay resultados para esa búsqueda.</p>
         ) : (
           <>
-            {/* Card tabla con “elevation” + top glow */}
+          
             <div className="relative rounded-3xl border border-white/10 bg-white/[0.035] backdrop-blur-2xl ring-1 ring-white/5 shadow-[0_30px_120px_-80px_rgba(0,0,0,0.95)] overflow-hidden">
               <div className="pointer-events-none absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-emerald-500/10 to-transparent" />
 
               <div className="w-full overflow-hidden">
                 <table className="w-full table-fixed">
-                  {/* ✅ Medidas tipo Listado, adaptadas a TUS 8 columnas */}
+                  
                   <colgroup>
-                    <col className="w-[280px]" /> {/* Título */}
-                    <col className="w-[120px]" /> {/* Solicitante */}
-                    <col className="w-[130px]" /> {/* Fecha propuesta */}
-                    <col className="w-[140px]" /> {/* Fecha real */}
-                    <col className="w-[140px]" /> {/* Costos */}
-                    <col className="w-[140px]" /> {/* Cotización */}
-                    <col className="w-[120px]" /> {/* Status */}
-                    <col className="w-[130px]" /> {/* Detalles */}
+                    <col className="w-[280px]" /> 
+                    <col className="w-[120px]" /> 
+                    <col className="w-[130px]" /> 
+                    <col className="w-[140px]" /> 
+                    <col className="w-[140px]" /> 
+                    <col className="w-[140px]" /> 
+                    <col className="w-[120px]" /> 
+                    <col className="w-[130px]" /> 
                   </colgroup>
 
                   <thead className="bg-white/[0.02]">

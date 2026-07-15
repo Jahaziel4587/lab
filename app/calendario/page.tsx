@@ -24,10 +24,14 @@ import { useAuth } from "@/src/Context/AuthContext";
 
 type Pedido = {
   id: string;
+  pedidoId: string;
+  ejecucionId?: string;
+  esEjecucion?: boolean;
+
   titulo: string;
   proyecto?: string;
-  fechaEntregaReal?: string; // yyyy-MM-dd
-  fechaLimite?: string; // yyyy-MM-dd
+  fechaEntregaReal?: string;
+  fechaLimite?: string;
   costo?: string;
   status?: string;
   nombreCosto?: string;
@@ -66,24 +70,65 @@ export default function CalendarioPage() {
       const snap = await getDocs(qPed);
 
       const pedidosData: Pedido[] = [];
-      snap.forEach((docSnap) => {
-        const data = docSnap.data() as any;
-        const correo = data.correoUsuario || "";
-        pedidosData.push({
-          id: docSnap.id,
-          titulo: data.titulo || "Sin título",
-          proyecto: data.proyecto || "Sin proyecto",
-          fechaEntregaReal: data.fechaEntregaReal || "",
-          fechaLimite: data.fechaLimite || "",
-          costo: data.costo || "",
-          nombreCosto: data.nombreCosto || "",
-          status: data.status || "enviado",
-          correoUsuario: correo,
-          nombreUsuario: _nameByEmail[correo] || correo || "",
-        });
-      });
 
-      setPedidos(pedidosData);
+for (const docSnap of snap.docs) {
+  const data = docSnap.data() as any;
+  const correo = data.correoUsuario || data.usuario || "";
+
+  const pedidoBase: Pedido = {
+    id: docSnap.id,
+    pedidoId: docSnap.id,
+    titulo: data.titulo || "Sin título",
+    proyecto: data.proyecto || "Sin proyecto",
+    fechaEntregaReal: data.fechaEntregaReal || "",
+    fechaLimite: data.fechaLimite || "",
+    costo: data.costo || "",
+    nombreCosto: data.nombreCosto || "",
+    status: data.status || "enviado",
+    correoUsuario: correo,
+    nombreUsuario: data.nombreUsuario || _nameByEmail[correo] || correo || "",
+  };
+
+  pedidosData.push(pedidoBase);
+
+  const ejecucionesSnap = await getDocs(
+    query(
+      collection(db, "pedidos", docSnap.id, "ejecuciones"),
+      orderBy("numero", "asc")
+    )
+  );
+
+  ejecucionesSnap.forEach((ejecSnap) => {
+    const e = ejecSnap.data() as any;
+    const correoEjecucion = e.solicitadoPorEmail || "";
+
+    pedidosData.push({
+      id: `${docSnap.id}__${ejecSnap.id}`,
+      pedidoId: docSnap.id,
+      ejecucionId: ejecSnap.id,
+      esEjecucion: true,
+
+      titulo: e.titulo || `${data.titulo || "Sin título"} (${e.numero || ""})`,
+      proyecto: data.proyecto || "Sin proyecto",
+
+      fechaLimite: e.fechaLimite || "",
+      fechaEntregaReal: e.fechaEntregaReal || "",
+
+      costo: e.costo || "",
+      nombreCosto: e.nombreCosto || "",
+      status: e.status || "en proceso",
+
+      correoUsuario: correoEjecucion,
+      nombreUsuario:
+        e.solicitadoPorNombre ||
+        _nameByEmail[correoEjecucion] ||
+        correoEjecucion ||
+        "",
+    });
+  });
+}
+
+setPedidos(pedidosData);
     };
 
     obtenerPedidos();
@@ -141,17 +186,23 @@ function SegmentedProgress({
   const goPrevMonth = () => setCurrentMonth((d) => addMonths(d, -1));
   const goNextMonth = () => setCurrentMonth((d) => addMonths(d, +1));
 
-  const actualizarCampo = async (id: string, campo: string, valor: string) => {
-    try {
-      const refDoc = doc(db, "pedidos", id);
-      await updateDoc(refDoc, { [campo]: valor });
-      setPedidos((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, [campo]: valor } : p))
-      );
-    } catch (error) {
-      console.error("Error al actualizar campo:", error);
-    }
-  };
+ const actualizarCampo = async (p: Pedido, campo: string, valor: string) => {
+  try {
+    const refDoc = p.ejecucionId
+      ? doc(db, "pedidos", p.pedidoId, "ejecuciones", p.ejecucionId)
+      : doc(db, "pedidos", p.pedidoId);
+
+    await updateDoc(refDoc, { [campo]: valor });
+
+    setPedidos((prev) =>
+      prev.map((item) =>
+        item.id === p.id ? { ...item, [campo]: valor } : item
+      )
+    );
+  } catch (error) {
+    console.error("Error al actualizar campo:", error);
+  }
+};
 
   // pedidos sin fecha real
   const pedidosSinFecha = useMemo(
@@ -465,7 +516,7 @@ const calendarPedidoClass = (status?: string) => {
                     type="date"
                     value={p.fechaEntregaReal ?? ""}
                     onChange={(e) =>
-                      actualizarCampo(p.id, "fechaEntregaReal", e.target.value)
+                      actualizarCampo(p, "fechaEntregaReal", e.target.value)
                     }
                     className="w-[140px] rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/25"
                   />
@@ -475,7 +526,7 @@ const calendarPedidoClass = (status?: string) => {
                   <select
                     value={p.status || "enviado"}
                     onChange={(e) =>
-                      actualizarCampo(p.id, "status", e.target.value)
+                    actualizarCampo(p, "status", e.target.value)
                     }
                   className={`${statusPillClass(p.status || "enviado")} [&>option]:text-black [&>option]:bg-white [&>option]:font-bold`}
                   >
@@ -489,7 +540,7 @@ const calendarPedidoClass = (status?: string) => {
 
                 <td className="py-2.5 px-4">
                   <Link
-                    href={`/solicitudes/listado/${p.id}`}
+                    href={`/solicitudes/listado/${p.pedidoId}${p.ejecucionId ? `?ejecucion=${p.ejecucionId}` : ""}`}
                     className="inline-flex items-center justify-center rounded-2xl border border-white/10 bg-white/[0.05] px-4 py-2 text-white/85 hover:bg-white/[0.08] transition"
                   >
                     Ver detalles
