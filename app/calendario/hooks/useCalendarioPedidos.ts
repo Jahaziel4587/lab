@@ -16,7 +16,8 @@ export function useCalendarioPedidos() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState("");
-
+const [cargandoEjecuciones, setCargandoEjecuciones] =
+  useState(false);
   const cargarPedidos = useCallback(async () => {
     try {
       setCargando(true);
@@ -165,11 +166,12 @@ export function useCalendarioPedidos() {
     []
   );
 
-  return {
-    pedidos,
-    cargando,
-    error,
-    actualizarCampo,
-    recargar: cargarPedidos,
-  };
+ return {
+  pedidos,
+  cargando,
+  cargandoEjecuciones,
+  error,
+  actualizarCampo,
+  recargar: cargarPedidos,
+};
 }
