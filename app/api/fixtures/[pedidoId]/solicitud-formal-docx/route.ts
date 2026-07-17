@@ -29,6 +29,32 @@ function clean(value: any) {
   return String(value);
 }
 
+function formatFecha(value: any) {
+  if (!value) return "NA";
+
+  try {
+    const date =
+      typeof value?.toDate === "function"
+        ? value.toDate()
+        : value?._seconds
+        ? new Date(value._seconds * 1000)
+        : value instanceof Date
+        ? value
+        : new Date(value);
+
+    if (Number.isNaN(date.getTime())) return "NA";
+
+    return date.toLocaleDateString("es-MX", {
+      day: "2-digit",
+      month: "2-digit",
+      year: "numeric",
+      timeZone: "America/Monterrey",
+    });
+  } catch {
+    return "NA";
+  }
+}
+
 function getFileName(file: ArchivoAnexo) {
   return (
     file.nombre ||
@@ -235,6 +261,7 @@ export async function POST(
       ),
 
       tiempoTrabajo: clean(inputs.tiempoTrabajo),
+      fechaLimiteEntrega: formatFecha(inputs.fechaLimiteEntrega),
       reportarPresupuesto: clean(inputs.presupuestoPM),
       masEspecificaciones: clean(inputs.extra),
 

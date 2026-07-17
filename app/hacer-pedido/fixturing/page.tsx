@@ -10,7 +10,7 @@ import {
   FiPlus,
   FiTrash2,
 } from "react-icons/fi";
-import { addDoc, collection, serverTimestamp } from "firebase/firestore";
+import { addDoc, collection, serverTimestamp, Timestamp} from "firebase/firestore";
 import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { db, storage } from "@/src/firebase/firebaseConfig";
 import { useAuth } from "@/src/Context/AuthContext";
@@ -54,6 +54,7 @@ export default function FixturingPage() {
   const [presupuestoPM, setPresupuestoPM] = useState(false);
 
   const [tiempoTrabajo, setTiempoTrabajo] = useState("");
+  const [fechaLimiteEntrega, setFechaLimiteEntrega] = useState("");
   const [extra, setExtra] = useState("");
   const [criteriosExito, setCriteriosExito] = useState("");
 
@@ -198,6 +199,11 @@ export default function FixturingPage() {
       return;
     }
 
+    if (!fechaLimiteEntrega) {
+  alert("Selecciona la fecha límite de entrega.");
+  return;
+}
+
     if (!criteriosExito.trim()) {
       alert("Agrega los criterios de éxito.");
       return;
@@ -255,6 +261,9 @@ export default function FixturingPage() {
             noTieneDimensiones,
             presupuestoPM,
             tiempoTrabajo,
+             fechaLimiteEntrega: Timestamp.fromDate(
+    new Date(`${fechaLimiteEntrega}T12:00:00`)
+  ),
             extra,
           },
           criteriosExito,
@@ -620,7 +629,21 @@ export default function FixturingPage() {
                     ))}
                   </div>
                 </div>
+                    <div>
+  <label className={labelClass}>Fecha límite de entrega</label>
 
+  <input
+    type="date"
+    className={`${inputClass} mt-3`}
+    value={fechaLimiteEntrega}
+    onChange={(e) => setFechaLimiteEntrega(e.target.value)}
+    min={new Date().toISOString().split("T")[0]}
+  />
+
+  <p className="mt-2 text-xs text-white/50">
+    Selecciona la fecha en la que el fixture debe estar terminado.
+  </p>
+</div>
                 <textarea
                   className={`${inputClass} min-h-[100px]`}
                   value={extra}
