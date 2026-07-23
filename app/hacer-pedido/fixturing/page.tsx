@@ -704,23 +704,6 @@ export default function FixturingPage() {
               />
             </section>
 
-            <section className={sectionClass}>
-              <h2 className="mb-4 text-xl font-semibold text-white">
-                Firma del PM
-              </h2>
-
-              <Checkbox
-                checked={firmaPM}
-                onChange={setFirmaPM}
-                label="Confirmo que esta solicitud fue revisada y aprobada para iniciar concepto de diseño."
-              />
-
-              {firmaPM && (
-                <div className="mt-4 rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
-                  Firma asociada a la cuenta: {user?.email}
-                </div>
-              )}
-            </section>
 
             <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
               <button

@@ -166,9 +166,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             <Link data-tutorial="nav-about" href="/about" className="hover:text-white transition">
               Information
             </Link>
-            <Link data-tutorial="nav-collection" href="/collection" className="hover:text-white transition">
-              Collection
-            </Link>
+            
             <Link data-tutorial="nav-projects" href="/solicitudes" className="hover:text-white transition">
               My Projects
             </Link>
@@ -311,9 +309,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             <Link href="/about" className="hover:text-white transition">
               Information
             </Link>
-            <Link href="/collection" className="hover:text-white transition">
-              Colection
-            </Link>
+           
             <Link href="/solicitudes" className="hover:text-white transition">
               My Projects
             </Link>

@@ -434,16 +434,32 @@ export default function ListadoPedidosPage() {
                           <td className="py-2.5 px-4">
                             {isAdmin ? (
                               <select
-                                value={p.status || "enviado"}
-                                onChange={(e) => actualizarCampo(p.id, "status", e.target.value)}
-                                className={statusPillClass(p.status || "enviado")}
-                              >
-                                <option value="enviado">Enviado</option>
-                                <option value="visto">Visto</option>
-                                <option value="en proceso">En proceso</option>
-                                <option value="listo">Listo</option>
-                                <option value="cancelado">Cancelado</option>
-                              </select>
+  value={p.status || "enviado"}
+  onChange={(e) =>
+    actualizarCampo(p.id, "status", e.target.value)
+  }
+  className={statusPillClass(p.status || "enviado")}
+>
+  <option className="bg-white text-black" value="enviado">
+    Enviado
+  </option>
+
+  <option className="bg-white text-black" value="visto">
+    Visto
+  </option>
+
+  <option className="bg-white text-black" value="en proceso">
+    En proceso
+  </option>
+
+  <option className="bg-white text-black" value="listo">
+    Listo
+  </option>
+
+  <option className="bg-white text-black" value="cancelado">
+    Cancelado
+  </option>
+</select>
                             ) : (
                               <span className={statusPillClass(p.status || "enviado")}>
                                 {statusLabel(p.status || "enviado")}
