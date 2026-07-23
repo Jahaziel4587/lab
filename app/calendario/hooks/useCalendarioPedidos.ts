@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   collection,
+  collectionGroup,
   doc,
   getDocs,
   orderBy,
@@ -12,24 +13,67 @@ import {
 import { db } from "@/src/firebase/firebaseConfig";
 import type { Pedido } from "../types";
 
+type FirestoreData = Record<string, unknown>;
+
 export function useCalendarioPedidos() {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [cargando, setCargando] = useState(true);
+  const [cargandoEjecuciones, setCargandoEjecuciones] =
+    useState(false);
   const [error, setError] = useState("");
-const [cargandoEjecuciones, setCargandoEjecuciones] =
-  useState(false);
+
   const cargarPedidos = useCallback(async () => {
+    const inicioTotal = performance.now();
+
     try {
       setCargando(true);
+      setCargandoEjecuciones(false);
       setError("");
+      setPedidos([]);
 
-      const usuariosSnap = await getDocs(collection(db, "users"));
+      /*
+       * Las consultas de usuarios y pedidos son independientes,
+       * así que se ejecutan simultáneamente.
+       */
+      const inicioConsultas = performance.now();
 
+      const usuariosPromise = getDocs(collection(db, "users"));
+
+      const pedidosPromise = getDocs(
+        query(
+          collection(db, "pedidos"),
+          orderBy("timestamp", "desc")
+        )
+      );
+
+      const [usuariosSnap, pedidosSnap] = await Promise.all([
+        usuariosPromise,
+        pedidosPromise,
+      ]);
+
+      console.log(
+        `[Calendario] Usuarios + pedidos: ${Math.round(
+          performance.now() - inicioConsultas
+        )} ms`
+      );
+
+      console.log(
+        `[Calendario] Usuarios encontrados: ${usuariosSnap.size}`
+      );
+
+      console.log(
+        `[Calendario] Pedidos encontrados: ${pedidosSnap.size}`
+      );
+
+      /*
+       * Mapa de correo a nombre.
+       */
       const nameByEmail: Record<string, string> = {};
 
       usuariosSnap.forEach((usuarioDoc) => {
-        const data = usuarioDoc.data() as Record<string, unknown>;
-        const email = String(data.email || "");
+        const data = usuarioDoc.data() as FirestoreData;
+
+        const email = String(data.email || "").trim();
 
         if (!email) return;
 
@@ -37,93 +81,216 @@ const [cargandoEjecuciones, setCargandoEjecuciones] =
           [data.nombre, data.apellido]
             .filter(Boolean)
             .map(String)
-            .join(" ") || email;
+            .join(" ")
+            .trim() || email;
 
         nameByEmail[email] = nombreCompleto;
       });
 
-      const pedidosQuery = query(
-        collection(db, "pedidos"),
-        orderBy("timestamp", "desc")
+      /*
+       * Mapa de datos de pedidos para relacionar las ejecuciones
+       * obtenidas mediante collectionGroup.
+       */
+      const pedidoDataById = new Map<string, FirestoreData>();
+
+      const pedidosBase: Pedido[] = pedidosSnap.docs.map(
+        (pedidoDoc) => {
+          const data = pedidoDoc.data() as FirestoreData;
+
+          pedidoDataById.set(pedidoDoc.id, data);
+
+          const correo = String(
+            data.correoUsuario ||
+              data.usuario ||
+              data.emailUsuario ||
+              ""
+          ).trim();
+
+          return {
+            id: pedidoDoc.id,
+            pedidoId: pedidoDoc.id,
+
+            titulo: String(data.titulo || "Sin título"),
+            proyecto: String(data.proyecto || "Sin proyecto"),
+
+            fechaEntregaReal: String(
+              data.fechaEntregaReal || ""
+            ),
+
+            fechaLimite: String(data.fechaLimite || ""),
+
+            costo: String(data.costo || ""),
+            nombreCosto: String(data.nombreCosto || ""),
+
+            status: String(data.status || "enviado"),
+
+            correoUsuario: correo,
+
+            nombreUsuario: String(
+              data.nombreUsuario ||
+                data.solicitadoPorNombre ||
+                nameByEmail[correo] ||
+                correo ||
+                "Sin información"
+            ),
+          };
+        }
       );
 
-      const pedidosSnap = await getDocs(pedidosQuery);
-      const pedidosData: Pedido[] = [];
+      /*
+       * Mostramos los pedidos principales inmediatamente.
+       * El calendario ya no espera las ejecuciones.
+       */
+      setPedidos(pedidosBase);
+      setCargando(false);
+      setCargandoEjecuciones(true);
 
-      for (const pedidoDoc of pedidosSnap.docs) {
-        const data = pedidoDoc.data() as Record<string, any>;
-        const correo = data.correoUsuario || data.usuario || "";
+      /*
+       * Una sola consulta para todas las subcolecciones llamadas
+       * "ejecuciones".
+       */
+      const inicioEjecuciones = performance.now();
 
-        const pedidoBase: Pedido = {
-          id: pedidoDoc.id,
-          pedidoId: pedidoDoc.id,
-          titulo: data.titulo || "Sin título",
-          proyecto: data.proyecto || "Sin proyecto",
-          fechaEntregaReal: data.fechaEntregaReal || "",
-          fechaLimite: data.fechaLimite || "",
-          costo: data.costo || "",
-          nombreCosto: data.nombreCosto || "",
-          status: data.status || "enviado",
-          correoUsuario: correo,
-          nombreUsuario:
-            data.nombreUsuario ||
-            nameByEmail[correo] ||
-            correo ||
-            "Sin información",
-        };
+      const ejecucionesSnap = await getDocs(
+        collectionGroup(db, "ejecuciones")
+      );
 
-        pedidosData.push(pedidoBase);
+      console.log(
+        `[Calendario] CollectionGroup ejecuciones: ${Math.round(
+          performance.now() - inicioEjecuciones
+        )} ms`
+      );
 
-        try {
-          const ejecucionesQuery = query(
-            collection(db, "pedidos", pedidoDoc.id, "ejecuciones"),
-            orderBy("numero", "asc")
-          );
+      console.log(
+        `[Calendario] Ejecuciones encontradas: ${ejecucionesSnap.size}`
+      );
 
-          const ejecucionesSnap = await getDocs(ejecucionesQuery);
+      const ejecuciones: Pedido[] = [];
 
-          ejecucionesSnap.forEach((ejecucionDoc) => {
-            const ejecucion = ejecucionDoc.data() as Record<string, any>;
-            const correoEjecucion = ejecucion.solicitadoPorEmail || "";
+      ejecucionesSnap.forEach((ejecucionDoc) => {
+        /*
+         * Ruta esperada:
+         * pedidos/{pedidoId}/ejecuciones/{ejecucionId}
+         */
+        const pedidoPadreRef =
+          ejecucionDoc.ref.parent.parent;
 
-            pedidosData.push({
-              id: `${pedidoDoc.id}__${ejecucionDoc.id}`,
-              pedidoId: pedidoDoc.id,
-              ejecucionId: ejecucionDoc.id,
-              esEjecucion: true,
+        const pedidoId = pedidoPadreRef?.id;
 
-              titulo:
-                ejecucion.titulo ||
-                `${data.titulo || "Sin título"} (${ejecucion.numero || ""})`,
+        if (!pedidoId) return;
 
-              proyecto: data.proyecto || "Sin proyecto",
-              fechaLimite: ejecucion.fechaLimite || "",
-              fechaEntregaReal: ejecucion.fechaEntregaReal || "",
-              costo: ejecucion.costo || "",
-              nombreCosto: ejecucion.nombreCosto || "",
-              status: ejecucion.status || "en proceso",
-              correoUsuario: correoEjecucion,
-              nombreUsuario:
-                ejecucion.solicitadoPorNombre ||
-                nameByEmail[correoEjecucion] ||
-                correoEjecucion ||
-                "Sin información",
-            });
-          });
-        } catch (executionError) {
-          console.error(
-            `No se pudieron cargar las ejecuciones de ${pedidoDoc.id}:`,
-            executionError
-          );
-        }
-      }
+        const pedidoData = pedidoDataById.get(pedidoId);
 
-      setPedidos(pedidosData);
+        /*
+         * Evita incluir documentos de otra estructura que también
+         * tengan una subcolección llamada ejecuciones.
+         */
+        if (!pedidoData) return;
+
+        const ejecucion =
+          ejecucionDoc.data() as FirestoreData;
+
+        const correoEjecucion = String(
+          ejecucion.solicitadoPorEmail ||
+            ejecucion.correoUsuario ||
+            ejecucion.usuario ||
+            ""
+        ).trim();
+
+        const numero = String(
+          ejecucion.numero || ""
+        ).trim();
+
+        const tituloBase = String(
+          pedidoData.titulo || "Sin título"
+        );
+
+        ejecuciones.push({
+          id: `${pedidoId}__${ejecucionDoc.id}`,
+          pedidoId,
+          ejecucionId: ejecucionDoc.id,
+          esEjecucion: true,
+
+          titulo: String(
+            ejecucion.titulo ||
+              (numero
+                ? `${tituloBase} (${numero})`
+                : `${tituloBase} · Repetición`)
+          ),
+
+          proyecto: String(
+            ejecucion.proyecto ||
+              pedidoData.proyecto ||
+              "Sin proyecto"
+          ),
+
+          fechaLimite: String(
+            ejecucion.fechaLimite || ""
+          ),
+
+          fechaEntregaReal: String(
+            ejecucion.fechaEntregaReal || ""
+          ),
+
+          costo: String(ejecucion.costo || ""),
+
+          nombreCosto: String(
+            ejecucion.nombreCosto || ""
+          ),
+
+          status: String(
+            ejecucion.status || "en proceso"
+          ),
+
+          correoUsuario: correoEjecucion,
+
+          nombreUsuario: String(
+            ejecucion.solicitadoPorNombre ||
+              ejecucion.nombreUsuario ||
+              nameByEmail[correoEjecucion] ||
+              correoEjecucion ||
+              "Sin información"
+          ),
+        });
+      });
+
+      /*
+       * Orden local de ejecuciones. Evita depender de un índice
+       * de Firestore para orderBy("numero").
+       */
+      ejecuciones.sort((a, b) => {
+        const fechaA =
+          a.fechaEntregaReal || a.fechaLimite || "";
+
+        const fechaB =
+          b.fechaEntregaReal || b.fechaLimite || "";
+
+        return fechaB.localeCompare(fechaA);
+      });
+
+      setPedidos([
+        ...pedidosBase,
+        ...ejecuciones,
+      ]);
+
+      console.log(
+        `[Calendario] Tiempo total: ${Math.round(
+          performance.now() - inicioTotal
+        )} ms`
+      );
     } catch (loadError) {
-      console.error("Error al cargar el calendario:", loadError);
-      setError("No fue posible cargar los pedidos del calendario.");
+      console.error(
+        "Error al cargar el calendario:",
+        loadError
+      );
+
+      setPedidos([]);
+      setError(
+        "No fue posible cargar los pedidos del calendario."
+      );
     } finally {
       setCargando(false);
+      setCargandoEjecuciones(false);
     }
   }, []);
 
@@ -132,7 +299,28 @@ const [cargandoEjecuciones, setCargandoEjecuciones] =
   }, [cargarPedidos]);
 
   const actualizarCampo = useCallback(
-    async (pedido: Pedido, campo: string, valor: string) => {
+    async (
+      pedido: Pedido,
+      campo: string,
+      valor: string
+    ) => {
+      const valorAnterior =
+        pedido[campo as keyof Pedido];
+
+      /*
+       * Actualización optimista.
+       */
+      setPedidos((current) =>
+        current.map((item) =>
+          item.id === pedido.id
+            ? {
+                ...item,
+                [campo]: valor,
+              }
+            : item
+        )
+      );
+
       try {
         const documentRef = pedido.ejecucionId
           ? doc(
@@ -142,36 +330,47 @@ const [cargandoEjecuciones, setCargandoEjecuciones] =
               "ejecuciones",
               pedido.ejecucionId
             )
-          : doc(db, "pedidos", pedido.pedidoId);
+          : doc(
+              db,
+              "pedidos",
+              pedido.pedidoId
+            );
 
         await updateDoc(documentRef, {
           [campo]: valor,
         });
-
+      } catch (updateError) {
+        /*
+         * Si falla Firestore, regresamos al valor anterior.
+         */
         setPedidos((current) =>
           current.map((item) =>
             item.id === pedido.id
               ? {
                   ...item,
-                  [campo]: valor,
+                  [campo]: valorAnterior ?? "",
                 }
               : item
           )
         );
-      } catch (updateError) {
-        console.error("Error al actualizar el pedido:", updateError);
+
+        console.error(
+          "Error al actualizar el pedido:",
+          updateError
+        );
+
         throw updateError;
       }
     },
     []
   );
 
- return {
-  pedidos,
-  cargando,
-  cargandoEjecuciones,
-  error,
-  actualizarCampo,
-  recargar: cargarPedidos,
-};
+  return {
+    pedidos,
+    cargando,
+    cargandoEjecuciones,
+    error,
+    actualizarCampo,
+    recargar: cargarPedidos,
+  };
 }
