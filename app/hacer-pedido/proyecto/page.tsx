@@ -251,7 +251,7 @@ const baseButton =
 
       {/* Popup de filtro tipo Excel */}
       {isFilterOpen && (
-        <div className="fixed inset-0 z-20 flex items-center justify-center bg-black/40">
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/60">
           <div className="bg-white text-black rounded-xl shadow-xl w-full max-w-md max-h-[80vh] flex flex-col">
             <div className="px-4 py-3 border-b flex justify-between items-center">
               <span className="font-semibold text-sm">Filtrar proyectos visibles</span>

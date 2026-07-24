@@ -331,11 +331,11 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
         </div>
       </header>
 
-      <main className="relative z-10 px-0">{children}</main>
+    <main className="relative z-10 px-0">{children}</main>
 
-      <footer className="relative z-10 text-center text-xs text-white/45 py-6">
-        © 2025 BIOANA. Todos los derechos reservados.
-      </footer>
+<footer className="relative z-0 text-center text-xs text-white/45 py-6 pointer-events-none">
+  © 2025 BIOANA. Todos los derechos reservados.
+</footer>
     </div>
   );
 }
