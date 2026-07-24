@@ -1,7 +1,16 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+
 import {
   collection,
   doc,
+  DocumentReference,
+  CollectionReference,
   getDoc,
   getDocs,
   orderBy,
@@ -10,7 +19,9 @@ import {
   setDoc,
   updateDoc,
 } from "firebase/firestore";
+
 import { db } from "@/src/firebase/firebaseConfig";
+
 import {
   QuoteDraft,
   QuoteLine,
@@ -19,303 +30,872 @@ import {
   PdfTemplateConf,
   OrgBranding,
 } from "../types";
-import { prettyKey, formatNumber } from "../utils";
 
-export function useCotizacionViva(id?: string) {
-  const [quoteMeta, setQuoteMeta] = useState<QuoteMeta | null>(null);
+import {
+  prettyKey,
+  formatNumber,
+} from "../utils";
+
+type QuoteVersion = {
+  id: string;
+  url: string;
+  total: number;
+  createdAt?: any;
+
+  pedidoId?: string;
+  ejecucionId?: string | null;
+  numeroEjecucion?: number;
+  tipoEjecucion?: "original" | "repeticion";
+  etiquetaEjecucion?: string;
+  tituloPedido?: string;
+};
+
+type QuoteRefs = {
+  liveRef: DocumentReference;
+  linesRef: CollectionReference;
+  draftRef: DocumentReference;
+  versionsRef: CollectionReference;
+};
+
+export function useCotizacionViva(
+  pedidoId?: string,
+  ejecucionId?: string | null
+) {
+  const [quoteMeta, setQuoteMeta] =
+    useState<QuoteMeta | null>(null);
+
   const [quoteLines, setQuoteLines] = useState<
-    Array<{ id: string; data: QuoteLine }>
-  >([]);
-  const [loadingQuote, setLoadingQuote] = useState(true);
-
-  const [serviceLabelsMap, setServiceLabelsMap] = useState<
-    Record<string, Record<string, string>>
-  >({});
-
-  const [draft, setDraft] = useState<QuoteDraft>({
-    gananciaPct: 0,
-    envio: 0,
-  });
-
-  const [branding, setBranding] = useState<OrgBranding>({});
-  const [pdfTpl, setPdfTpl] = useState<PdfTemplateConf | null>(null);
-  const [versions, setVersions] = useState<
-    Array<{ id: string; url: string; total: number; createdAt?: any }>
+    Array<{
+      id: string;
+      data: QuoteLine;
+    }>
   >([]);
 
-  const [isGen, setIsGen] = useState(false);
+  const [loadingQuote, setLoadingQuote] =
+    useState(true);
 
-  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [serviceLabelsMap, setServiceLabelsMap] =
+    useState<
+      Record<
+        string,
+        Record<string, string>
+      >
+    >({});
 
-  const cargarCotizacionViva = async () => {
-    if (!id) return;
+  const [draft, setDraft] =
+    useState<QuoteDraft>({
+      gananciaPct: 0,
+      envio: 0,
+      notas: "",
+    });
 
-    setLoadingQuote(true);
+  const [branding, setBranding] =
+    useState<OrgBranding>({});
 
-    try {
-      const metaRef = doc(db, "pedidos", id, "quote_live", "live");
-      const metaSnap = await getDoc(metaRef);
+  const [pdfTpl, setPdfTpl] =
+    useState<PdfTemplateConf | null>(null);
 
-      setQuoteMeta(metaSnap.exists() ? (metaSnap.data() as QuoteMeta) : null);
+  const [versions, setVersions] =
+    useState<QuoteVersion[]>([]);
 
-      const linesRef = collection(
-        db,
-        "pedidos",
-        id,
-        "quote_live",
-        "live",
-        "lines"
-      );
+  const [isGen, setIsGen] =
+    useState(false);
 
-      const qLines = query(linesRef, orderBy("createdAt", "asc"));
-      const linesSnap = await getDocs(qLines);
+  const saveTimer =
+    useRef<ReturnType<
+      typeof setTimeout
+    > | null>(null);
 
-      const rows: Array<{ id: string; data: QuoteLine }> = [];
+  /**
+   * Genera todas las referencias según el contexto.
+   *
+   * Original:
+   * pedidos/{pedidoId}/quote_live/live
+   *
+   * Ejecución:
+   * pedidos/{pedidoId}/ejecuciones/{ejecucionId}/quote_live/live
+   */
+  const getQuoteRefs =
+    useCallback((): QuoteRefs | null => {
+      if (!pedidoId) return null;
 
-      linesSnap.forEach((d) =>
-        rows.push({ id: d.id, data: d.data() as QuoteLine })
-      );
+      if (ejecucionId) {
+        return {
+          liveRef: doc(
+            db,
+            "pedidos",
+            pedidoId,
+            "ejecuciones",
+            ejecucionId,
+            "quote_live",
+            "live"
+          ),
 
-      setQuoteLines(rows);
-    } catch (err) {
-      console.error("No se pudo cargar cotización:", err);
+          linesRef: collection(
+            db,
+            "pedidos",
+            pedidoId,
+            "ejecuciones",
+            ejecucionId,
+            "quote_live",
+            "live",
+            "lines"
+          ),
+
+          draftRef: doc(
+            db,
+            "pedidos",
+            pedidoId,
+            "ejecuciones",
+            ejecucionId,
+            "quote_draft",
+            "current"
+          ),
+
+          versionsRef: collection(
+            db,
+            "pedidos",
+            pedidoId,
+            "ejecuciones",
+            ejecucionId,
+            "quote_versions"
+          ),
+        };
+      }
+
+      return {
+        liveRef: doc(
+          db,
+          "pedidos",
+          pedidoId,
+          "quote_live",
+          "live"
+        ),
+
+        linesRef: collection(
+          db,
+          "pedidos",
+          pedidoId,
+          "quote_live",
+          "live",
+          "lines"
+        ),
+
+        draftRef: doc(
+          db,
+          "pedidos",
+          pedidoId,
+          "quote_draft",
+          "current"
+        ),
+
+        versionsRef: collection(
+          db,
+          "pedidos",
+          pedidoId,
+          "quote_versions"
+        ),
+      };
+    }, [
+      pedidoId,
+      ejecucionId,
+    ]);
+
+  /**
+   * Carga la cotización viva correspondiente a la
+   * original o a la ejecución seleccionada.
+   */
+  const cargarCotizacionViva =
+    useCallback(async () => {
+      const refs = getQuoteRefs();
+
+      if (!refs) {
+        setQuoteMeta(null);
+        setQuoteLines([]);
+        setLoadingQuote(false);
+        return;
+      }
+
+      setLoadingQuote(true);
+
+      /*
+       * Limpiamos inmediatamente el contexto anterior.
+       * Esto evita mostrar por un instante la cotización
+       * de otra ejecución.
+       */
       setQuoteMeta(null);
       setQuoteLines([]);
-    } finally {
-      setLoadingQuote(false);
-    }
-  };
+
+      try {
+        const metaPromise =
+          getDoc(refs.liveRef);
+
+        const linesPromise =
+          getDocs(
+            query(
+              refs.linesRef,
+              orderBy(
+                "createdAt",
+                "asc"
+              )
+            )
+          );
+
+        const [
+          metaSnap,
+          linesSnap,
+        ] = await Promise.all([
+          metaPromise,
+          linesPromise,
+        ]);
+
+        setQuoteMeta(
+          metaSnap.exists()
+            ? (metaSnap.data() as QuoteMeta)
+            : null
+        );
+
+        const rows: Array<{
+          id: string;
+          data: QuoteLine;
+        }> = [];
+
+        linesSnap.forEach(
+          (lineDoc) => {
+            rows.push({
+              id: lineDoc.id,
+              data:
+                lineDoc.data() as QuoteLine,
+            });
+          }
+        );
+
+        setQuoteLines(rows);
+      } catch (error) {
+        console.error(
+          "No se pudo cargar la cotización:",
+          {
+            pedidoId,
+            ejecucionId:
+              ejecucionId || null,
+            error,
+          }
+        );
+
+        setQuoteMeta(null);
+        setQuoteLines([]);
+      } finally {
+        setLoadingQuote(false);
+      }
+    }, [
+      getQuoteRefs,
+      pedidoId,
+      ejecucionId,
+    ]);
 
   useEffect(() => {
-    cargarCotizacionViva();
-  }, [id]);
+    void cargarCotizacionViva();
+  }, [cargarCotizacionViva]);
 
+  /**
+   * Carga el catálogo de servicios para convertir
+   * claves internas en etiquetas legibles.
+   */
   useEffect(() => {
     const loadServices = async () => {
       try {
-        const snap = await getDocs(collection(db, "services"));
-        const map: Record<string, Record<string, string>> = {};
+        const snap = await getDocs(
+          collection(db, "services")
+        );
 
-        snap.forEach((d) => {
-          const data = d.data() as ServiceDoc;
-          const inner: Record<string, string> = {};
+        const map: Record<
+          string,
+          Record<string, string>
+        > = {};
 
-          (data.fields || []).forEach((f) => {
-            if (f?.key) inner[f.key] = f.label || f.key;
-          });
+        snap.forEach((serviceDoc) => {
+          const data =
+            serviceDoc.data() as ServiceDoc;
 
-          map[d.id] = inner;
+          const inner: Record<
+            string,
+            string
+          > = {};
+
+          (data.fields || []).forEach(
+            (field) => {
+              if (field?.key) {
+                inner[field.key] =
+                  field.label ||
+                  field.key;
+              }
+            }
+          );
+
+          map[serviceDoc.id] = inner;
         });
 
         setServiceLabelsMap(map);
-      } catch (err) {
-        console.error("No se pudieron cargar servicios:", err);
+      } catch (error) {
+        console.error(
+          "No se pudieron cargar servicios:",
+          error
+        );
       }
     };
 
-    loadServices();
+    void loadServices();
   }, []);
 
-  useEffect(() => {
-    const loadDraft = async () => {
-      if (!id) return;
+  /**
+   * Carga el borrador correspondiente al contexto.
+   */
+  const loadDraft =
+    useCallback(async () => {
+      const refs = getQuoteRefs();
 
-      const ref = doc(db, "pedidos", id, "quote_draft", "current");
-      const snap = await getDoc(ref);
+      if (!refs) return;
 
-      if (!snap.exists()) {
-        const base: QuoteDraft = {
-          gananciaPct: 0,
-          envio: 0,
-          notas: "",
-        };
+      /*
+       * Restablecemos valores mientras cambia el contexto.
+       */
+      setDraft({
+        gananciaPct: 0,
+        envio: 0,
+        notas: "",
+      });
 
-        await setDoc(ref, base);
-        setDraft(base);
-      } else {
-        const data = snap.data() as QuoteDraft;
+      try {
+        const snap = await getDoc(
+          refs.draftRef
+        );
+
+        if (!snap.exists()) {
+          const base: QuoteDraft = {
+            gananciaPct: 0,
+            envio: 0,
+            notas: "",
+            cliente: "",
+            atencionA: "",
+          };
+
+          await setDoc(
+            refs.draftRef,
+            base
+          );
+
+          setDraft(base);
+          return;
+        }
+
+        const data =
+          snap.data() as QuoteDraft;
 
         setDraft({
           gananciaPct:
-            typeof data.gananciaPct === "number" ? data.gananciaPct : 0,
-          cliente: data.cliente || "",
-          atencionA: data.atencionA || "",
-          envio: typeof data.envio === "number" ? data.envio : 0,
-          notas: data.notas || "",
+            typeof data.gananciaPct ===
+            "number"
+              ? data.gananciaPct
+              : 0,
+
+          cliente:
+            data.cliente || "",
+
+          atencionA:
+            data.atencionA || "",
+
+          envio:
+            typeof data.envio ===
+            "number"
+              ? data.envio
+              : 0,
+
+          notas:
+            data.notas || "",
+        });
+      } catch (error) {
+        console.error(
+          "No se pudo cargar el borrador de cotización:",
+          {
+            pedidoId,
+            ejecucionId:
+              ejecucionId || null,
+            error,
+          }
+        );
+
+        setDraft({
+          gananciaPct: 0,
+          envio: 0,
+          notas: "",
+          cliente: "",
+          atencionA: "",
         });
       }
-    };
-
-    loadDraft();
-  }, [id]);
-
-  const scheduleSave = (next: QuoteDraft) => {
-    setDraft(next);
-
-    if (saveTimer.current) clearTimeout(saveTimer.current);
-
-    saveTimer.current = setTimeout(async () => {
-      if (!id) return;
-
-      const ref = doc(db, "pedidos", id, "quote_draft", "current");
-
-      const payload = {
-        gananciaPct: Number(next.gananciaPct) || 0,
-        cliente: next.cliente || "",
-        atencionA: next.atencionA || "",
-        envio: Number(next.envio) || 0,
-        notas: next.notas || "",
-      };
-
-      try {
-        await updateDoc(ref, payload);
-      } catch {
-        await setDoc(ref, payload);
-      }
-    }, 500);
-  };
+    }, [
+      getQuoteRefs,
+      pedidoId,
+      ejecucionId,
+    ]);
 
   useEffect(() => {
-    const loadBranding = async () => {
-      try {
-        const snap = await getDoc(doc(db, "org_settings", "branding"));
-        if (snap.exists()) setBranding(snap.data() as OrgBranding);
-      } catch {}
-    };
+    void loadDraft();
+  }, [loadDraft]);
 
-    loadBranding();
+  /**
+   * Guarda el borrador con debounce.
+   */
+  const scheduleSave =
+    useCallback(
+      (next: QuoteDraft) => {
+        setDraft(next);
+
+        if (saveTimer.current) {
+          clearTimeout(
+            saveTimer.current
+          );
+        }
+
+        saveTimer.current =
+          setTimeout(async () => {
+            const refs =
+              getQuoteRefs();
+
+            if (!refs) return;
+
+            const payload = {
+              gananciaPct:
+                Number(
+                  next.gananciaPct
+                ) || 0,
+
+              cliente:
+                next.cliente || "",
+
+              atencionA:
+                next.atencionA || "",
+
+              envio:
+                Number(next.envio) ||
+                0,
+
+              notas:
+                next.notas || "",
+            };
+
+            try {
+              await setDoc(
+                refs.draftRef,
+                payload,
+                {
+                  merge: true,
+                }
+              );
+            } catch (error) {
+              console.error(
+                "No se pudo guardar el borrador:",
+                {
+                  pedidoId,
+                  ejecucionId:
+                    ejecucionId ||
+                    null,
+                  error,
+                }
+              );
+            }
+          }, 500);
+      },
+      [
+        getQuoteRefs,
+        pedidoId,
+        ejecucionId,
+      ]
+    );
+
+  /**
+   * Cancela un guardado pendiente al desmontar
+   * o cambiar de ejecución.
+   */
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) {
+        clearTimeout(
+          saveTimer.current
+        );
+      }
+    };
+  }, [
+    pedidoId,
+    ejecucionId,
+  ]);
+
+  useEffect(() => {
+    const loadBranding =
+      async () => {
+        try {
+          const snap = await getDoc(
+            doc(
+              db,
+              "org_settings",
+              "branding"
+            )
+          );
+
+          if (snap.exists()) {
+            setBranding(
+              snap.data() as OrgBranding
+            );
+          }
+        } catch (error) {
+          console.error(
+            "No se pudo cargar branding:",
+            error
+          );
+        }
+      };
+
+    void loadBranding();
   }, []);
 
   useEffect(() => {
     const loadTpl = async () => {
       try {
-        const snap = await getDoc(doc(db, "org_settings", "pdf_template"));
-        if (snap.exists()) setPdfTpl(snap.data() as PdfTemplateConf);
-      } catch {}
+        const snap = await getDoc(
+          doc(
+            db,
+            "org_settings",
+            "pdf_template"
+          )
+        );
+
+        if (snap.exists()) {
+          setPdfTpl(
+            snap.data() as PdfTemplateConf
+          );
+        }
+      } catch (error) {
+        console.error(
+          "No se pudo cargar la plantilla PDF:",
+          error
+        );
+      }
     };
 
-    loadTpl();
+    void loadTpl();
   }, []);
 
-  const loadVersions = async () => {
-    if (!id) return;
+  /**
+   * Carga las versiones PDF del contexto seleccionado.
+   */
+  const loadVersions =
+    useCallback(async () => {
+      const refs = getQuoteRefs();
 
-    try {
-      const snap = await getDocs(
-        query(
-          collection(db, "pedidos", id, "quote_versions"),
-          orderBy("createdAt", "desc")
-        )
-      );
+      if (!refs) {
+        setVersions([]);
+        return;
+      }
 
-      const arr: Array<{
-        id: string;
-        url: string;
-        total: number;
-        createdAt?: any;
-      }> = [];
+      setVersions([]);
 
-      snap.forEach((d) => {
-        const data = d.data() as any;
-        arr.push({
-          id: d.id,
-          url: data.url,
-          total: data.total,
-          createdAt: data.createdAt,
-        });
-      });
+      try {
+        const snap = await getDocs(
+          query(
+            refs.versionsRef,
+            orderBy(
+              "createdAt",
+              "desc"
+            )
+          )
+        );
 
-      setVersions(arr);
-    } catch (err) {
-      console.error("No se pudieron cargar versiones:", err);
-    }
-  };
+        const arr: QuoteVersion[] =
+          [];
+
+        snap.forEach(
+          (versionDoc) => {
+            const data =
+              versionDoc.data() as any;
+
+            arr.push({
+              id: versionDoc.id,
+              url: data.url || "",
+              total:
+                Number(data.total) ||
+                0,
+
+              createdAt:
+                data.createdAt,
+
+              pedidoId:
+                data.pedidoId ||
+                pedidoId,
+
+              ejecucionId:
+                data.ejecucionId ??
+                ejecucionId ??
+                null,
+
+              numeroEjecucion:
+                Number(
+                  data.numeroEjecucion
+                ) ||
+                (ejecucionId
+                  ? undefined
+                  : 1),
+
+              tipoEjecucion:
+                data.tipoEjecucion ||
+                (ejecucionId
+                  ? "repeticion"
+                  : "original"),
+
+              etiquetaEjecucion:
+                data.etiquetaEjecucion ||
+                (ejecucionId
+                  ? "Repetición"
+                  : "Ejecución 1 · Original"),
+
+              tituloPedido:
+                data.tituloPedido ||
+                "",
+            });
+          }
+        );
+
+        setVersions(arr);
+      } catch (error) {
+        console.error(
+          "No se pudieron cargar las versiones:",
+          {
+            pedidoId,
+            ejecucionId:
+              ejecucionId || null,
+            error,
+          }
+        );
+
+        setVersions([]);
+      }
+    }, [
+      getQuoteRefs,
+      pedidoId,
+      ejecucionId,
+    ]);
 
   useEffect(() => {
-    loadVersions();
-  }, [id]);
+    void loadVersions();
+  }, [loadVersions]);
 
-  const subtotalBaseMXN = useMemo(
-    () => quoteLines.reduce((acc, r) => acc + (r.data.subtotalMXN || 0), 0),
-    [quoteLines]
-  );
+  const subtotalBaseMXN =
+    useMemo(() => {
+      return quoteLines.reduce(
+        (accumulator, row) =>
+          accumulator +
+          Number(
+            row.data.subtotalMXN ||
+              0
+          ),
+        0
+      );
+    }, [quoteLines]);
 
-  const gananciaMonto = useMemo(
-    () => subtotalBaseMXN * ((Number(draft.gananciaPct) || 0) / 100),
-    [subtotalBaseMXN, draft.gananciaPct]
-  );
+  const gananciaMonto =
+    useMemo(() => {
+      return (
+        subtotalBaseMXN *
+        ((Number(
+          draft.gananciaPct
+        ) ||
+          0) /
+          100)
+      );
+    }, [
+      subtotalBaseMXN,
+      draft.gananciaPct,
+    ]);
 
-  const subtotalConGananciaMXN = useMemo(
-    () => subtotalBaseMXN + gananciaMonto,
-    [subtotalBaseMXN, gananciaMonto]
-  );
+  const subtotalConGananciaMXN =
+    useMemo(() => {
+      return (
+        subtotalBaseMXN +
+        gananciaMonto
+      );
+    }, [
+      subtotalBaseMXN,
+      gananciaMonto,
+    ]);
 
-  const ivaMonto = useMemo(
-    () => subtotalConGananciaMXN * 0.16,
-    [subtotalConGananciaMXN]
-  );
+  const ivaMonto =
+    useMemo(() => {
+      return (
+        subtotalConGananciaMXN *
+        0.16
+      );
+    }, [
+      subtotalConGananciaMXN,
+    ]);
 
-  const totalFinal = useMemo(
-    () => subtotalConGananciaMXN + ivaMonto + (Number(draft.envio) || 0),
-    [subtotalConGananciaMXN, ivaMonto, draft.envio]
-  );
+  const totalFinal =
+    useMemo(() => {
+      return (
+        subtotalConGananciaMXN +
+        ivaMonto +
+        (Number(draft.envio) ||
+          0)
+      );
+    }, [
+      subtotalConGananciaMXN,
+      ivaMonto,
+      draft.envio,
+    ]);
 
-  const nextFolio = async (): Promise<string> => {
-    const counterRef = doc(db, "counters", "quotes");
+  /**
+   * El folio sigue siendo global para evitar duplicados
+   * entre originales y ejecuciones.
+   */
+  const nextFolio =
+    async (): Promise<string> => {
+      const counterRef = doc(
+        db,
+        "counters",
+        "quotes"
+      );
 
-    const folio = await runTransaction(db, async (tx) => {
-      const snap = await tx.get(counterRef);
-      const last = snap.exists() ? (snap.data() as any).lastFolio || 0 : 0;
-      const next = last + 1;
+      const folio =
+        await runTransaction(
+          db,
+          async (transaction) => {
+            const snap =
+              await transaction.get(
+                counterRef
+              );
 
-      tx.set(counterRef, { lastFolio: next }, { merge: true });
+            const last =
+              snap.exists()
+                ? Number(
+                    (
+                      snap.data() as any
+                    ).lastFolio ||
+                      0
+                  )
+                : 0;
 
-      return next as number;
-    });
+            const next =
+              last + 1;
 
-    return `Q-${String(folio).padStart(6, "0")}`;
-  };
+            transaction.set(
+              counterRef,
+              {
+                lastFolio:
+                  next,
+              },
+              {
+                merge: true,
+              }
+            );
 
-  const buildDetailsForLine = (d: QuoteLine) => {
-    const labels = serviceLabelsMap[d.serviceId || ""] || {};
+            return next;
+          }
+        );
 
-    const selectItems = Object.entries(d.selects || {})
-      .filter(([_, v]) => !!v)
-      .map(([k, v]) => `${labels[k] || prettyKey(k)}: ${v}`);
+      return `Q-${String(
+        folio
+      ).padStart(6, "0")}`;
+    };
 
-    const answerItems = Object.entries(d.answers || {})
-      .filter(
-        ([k, v]) =>
-          typeof v === "number" &&
-          Number.isFinite(v) &&
-          v !== 0 &&
-          !k.startsWith("is_")
-      )
-      .map(([k, v]) => `${labels[k] || prettyKey(k)}: ${formatNumber(v)}`);
+  const buildDetailsForLine =
+    useCallback(
+      (line: QuoteLine) => {
+        const labels =
+          serviceLabelsMap[
+            line.serviceId || ""
+          ] || {};
 
-    return [...selectItems, ...answerItems];
-  };
+        const selectItems =
+          Object.entries(
+            line.selects || {}
+          )
+            .filter(
+              ([, value]) =>
+                Boolean(value)
+            )
+            .map(
+              ([key, value]) =>
+                `${
+                  labels[key] ||
+                  prettyKey(key)
+                }: ${value}`
+            );
+
+        const answerItems =
+          Object.entries(
+            line.answers || {}
+          )
+            .filter(
+              ([key, value]) =>
+                typeof value ===
+                  "number" &&
+                Number.isFinite(
+                  value
+                ) &&
+                value !== 0 &&
+                !key.startsWith(
+                  "is_"
+                )
+            )
+            .map(
+              ([key, value]) =>
+                `${
+                  labels[key] ||
+                  prettyKey(key)
+                }: ${formatNumber(
+                  value as number
+                )}`
+            );
+
+        return [
+          ...selectItems,
+          ...answerItems,
+        ];
+      },
+      [serviceLabelsMap]
+    );
 
   return {
     quoteMeta,
     quoteLines,
     loadingQuote,
+
     draft,
     scheduleSave,
+
     branding,
     pdfTpl,
+
     versions,
     setVersions,
+
     isGen,
     setIsGen,
+
     cargarCotizacionViva,
     loadVersions,
+
     subtotalBaseMXN,
     gananciaMonto,
     subtotalConGananciaMXN,
     ivaMonto,
     totalFinal,
+
     nextFolio,
     buildDetailsForLine,
+
+    pedidoId,
+    ejecucionId:
+      ejecucionId || null,
+
+    esCotizacionOriginal:
+      !ejecucionId,
   };
 }

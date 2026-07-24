@@ -125,29 +125,112 @@ function findConflicts(
   return null;
 }
 
-async function ensureQuoteLiveDoc(pedidoId: string, settings: SettingsDoc | null) {
-  const liveDocRef = doc(db, "pedidos", pedidoId, "quote_live", "live");
-  const snap = await getDoc(liveDocRef);
+type QuoteTarget = {
+  liveDocRef: ReturnType<typeof doc>;
+  linesRef: ReturnType<typeof collection>;
+};
 
-  if (!snap.exists()) {
-    await setDoc(liveDocRef, {
-      currency: settings?.currency ?? "MXN",
-      exchangeRate: settings?.exchangeRate ?? 17,
-      ivaDefault: settings?.iva ?? 0.16,
-      status: "open",
-      createdAt: serverTimestamp(),
-      updatedAt: serverTimestamp(),
-    });
-  } else {
-    await updateDoc(liveDocRef, {
-      currency: settings?.currency ?? "MXN",
-      exchangeRate: settings?.exchangeRate ?? 17,
-      ivaDefault: settings?.iva ?? 0.16,
-      updatedAt: serverTimestamp(),
-    });
+function getQuoteTarget(
+  pedidoId: string,
+  ejecucionId?: string | null
+): QuoteTarget {
+  if (ejecucionId) {
+    return {
+      liveDocRef: doc(
+        db,
+        "pedidos",
+        pedidoId,
+        "ejecuciones",
+        ejecucionId,
+        "quote_live",
+        "live"
+      ),
+
+      linesRef: collection(
+        db,
+        "pedidos",
+        pedidoId,
+        "ejecuciones",
+        ejecucionId,
+        "quote_live",
+        "live",
+        "lines"
+      ),
+    };
   }
 
-  return liveDocRef;
+  return {
+    liveDocRef: doc(
+      db,
+      "pedidos",
+      pedidoId,
+      "quote_live",
+      "live"
+    ),
+
+    linesRef: collection(
+      db,
+      "pedidos",
+      pedidoId,
+      "quote_live",
+      "live",
+      "lines"
+    ),
+  };
+}
+
+async function ensureQuoteLiveDoc(
+  pedidoId: string,
+  ejecucionId: string | null,
+  settings: SettingsDoc | null,
+  contexto?: {
+    numeroEjecucion?: number;
+    tituloEjecucion?: string;
+  }
+) {
+  const { liveDocRef } = getQuoteTarget(
+    pedidoId,
+    ejecucionId
+  );
+
+  const snapshot = await getDoc(liveDocRef);
+
+  const commonData = {
+    currency: settings?.currency ?? "MXN",
+    exchangeRate: settings?.exchangeRate ?? 17,
+    ivaDefault: settings?.iva ?? 0.16,
+
+    pedidoId,
+    ejecucionId: ejecucionId || null,
+
+    numeroEjecucion:
+      contexto?.numeroEjecucion ??
+      (ejecucionId ? null : 1),
+
+    tipoEjecucion: ejecucionId
+      ? "repeticion"
+      : "original",
+
+    tituloEjecucion:
+      contexto?.tituloEjecucion || "",
+
+    updatedAt: serverTimestamp(),
+  };
+
+  if (!snapshot.exists()) {
+    await setDoc(liveDocRef, {
+      ...commonData,
+      status: "open",
+      createdAt: serverTimestamp(),
+    });
+  } else {
+    await updateDoc(liveDocRef, commonData);
+  }
+
+  return getQuoteTarget(
+    pedidoId,
+    ejecucionId
+  );
 }
 
 function useColl<T = DocumentData>(path: string, constraints: QueryConstraint[] = []) {
@@ -316,8 +399,29 @@ function CotizacionPanel() {
   const { user } = useAuth?.() ?? { user: null };
 
   const search = useSearchParams();
-  const proyectoParam = search.get("proyecto") || "";
-  const tituloParam = search.get("titulo") || "";
+
+const proyectoParam =
+  search.get("proyecto") || "";
+
+const tituloParam =
+  search.get("titulo") || "";
+
+const pedidoIdParam =
+  search.get("pedidoId") || "";
+
+const ejecucionIdParam =
+  search.get("ejecucionId") || "";
+
+const numeroEjecucionParam = Number(
+  search.get("numeroEjecucion") || 1
+);
+
+const esReactivacion =
+  Boolean(ejecucionIdParam);
+
+const etiquetaEjecucion = esReactivacion
+  ? `Ejecución ${numeroEjecucionParam} · Repetición`
+  : "Ejecución 1 · Original";
 
   useEffect(() => {
     const ref = doc(db, COL_SETTINGS, "default");
@@ -360,7 +464,48 @@ function CotizacionPanel() {
     if (!project && proyectoParam) setProject(proyectoParam);
   }, [project, proyectoParam]);
 
-  const [pedidoId, setPedidoId] = useState<string>("");
+ const [pedidoId, setPedidoId] = useState<string>(
+  pedidoIdParam
+);
+
+useEffect(() => {
+  if (
+    pedidoIdParam ||
+    pedidoId ||
+    !tituloParam ||
+    pedidos.length === 0
+  ) {
+    return;
+  }
+
+  const found =
+    pedidos.find((pedido) => {
+      const proyectoPedido =
+        pedido.data.proyecto ||
+        pedido.data.titulo ||
+        "Sin nombre";
+
+      return (
+        pedido.data.titulo === tituloParam &&
+        (!proyectoParam ||
+          proyectoPedido === proyectoParam)
+      );
+    }) ||
+    pedidos.find(
+      (pedido) =>
+        pedido.data.titulo === tituloParam
+    );
+
+  if (found) {
+    setPedidoId(found.id);
+  }
+}, [
+  pedidoIdParam,
+  pedidoId,
+  tituloParam,
+  proyectoParam,
+  pedidos,
+]);
 
   useEffect(() => {
     if (!pedidoId && tituloParam && pedidos.length) {
@@ -473,7 +618,38 @@ function CotizacionPanel() {
         title="Cotización"
         description="Selecciona un pedido, configura el servicio y adjúntalo a la cotización viva."
       />
+{pedidoIdParam && (
+  <div
+    className={[
+      "rounded-3xl border p-5",
+      esReactivacion
+        ? "border-emerald-400/25 bg-emerald-500/[0.08]"
+        : "border-white/10 bg-white/[0.04]",
+    ].join(" ")}
+  >
+    <div className="text-xs uppercase tracking-wide text-white/45">
+      Cotización vinculada
+    </div>
 
+    <div className="mt-1 text-lg font-semibold text-white">
+      {etiquetaEjecucion}
+    </div>
+
+    <div className="mt-1 text-sm text-white/65">
+      {tituloParam || "Sin título"}
+    </div>
+
+    <div className="mt-2 text-xs text-white/40">
+      Pedido base: {pedidoIdParam}
+    </div>
+
+    {ejecucionIdParam && (
+      <div className="mt-1 text-xs text-emerald-300/70">
+        ID de ejecución: {ejecucionIdParam}
+      </div>
+    )}
+  </div>
+)}
       <div className="rounded-3xl border border-white/10 bg-black/30 p-5">
         <h4 className="text-base font-semibold text-white">Configuración general</h4>
 
@@ -533,14 +709,15 @@ function CotizacionPanel() {
         <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-4">
           <div>
             <label className={labelClass}>1) Proyecto a cotizar</label>
-            <select
-              className={selectClass}
-              value={project}
-              onChange={(e) => {
-                setProject(e.target.value);
-                setPedidoId("");
-              }}
-            >
+           <select
+  className={`${selectClass} disabled:opacity-55 disabled:cursor-not-allowed`}
+  value={project}
+  disabled={Boolean(pedidoIdParam)}
+  onChange={(e) => {
+    setProject(e.target.value);
+    setPedidoId("");
+  }}
+>
               <option value="">— Selecciona —</option>
               {proyectos.map((p) => (
                 <option key={p} value={p}>
@@ -553,10 +730,13 @@ function CotizacionPanel() {
           <div>
             <label className={labelClass}>2) Pedido del proyecto</label>
             <select
-              className={selectClass}
-              value={pedidoId}
-              onChange={(e) => setPedidoId(e.target.value)}
-            >
+  className={`${selectClass} disabled:opacity-55 disabled:cursor-not-allowed`}
+  value={pedidoId}
+  disabled={Boolean(pedidoIdParam)}
+  onChange={(e) =>
+    setPedidoId(e.target.value)
+  }
+>
               <option value="">— Selecciona —</option>
               {pedidosDelProyecto.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -668,41 +848,96 @@ function CotizacionPanel() {
             try {
               setIsAttaching(true);
 
-              await ensureQuoteLiveDoc(pedidoId, settings);
+          const quoteTarget =
+  await ensureQuoteLiveDoc(
+    pedidoId,
+    ejecucionIdParam || null,
+    settings,
+    {
+      numeroEjecucion:
+        numeroEjecucionParam,
 
-              const serviceName = selService.name;
-              const calcGroupName =
-                calcGroups.find((g) => g.id === activeCalcGroup)?.data?.name || "";
-              const costGroupName =
-                costTablesGroups.find((g) => g.id === selectedCostGroup)?.data?.name || "";
+      tituloEjecucion:
+        tituloParam,
+    }
+  );
 
-              await addDoc(
-                collection(db, "pedidos", pedidoId, "quote_live", "live", "lines"),
-                {
-                  serviceId,
-                  serviceName,
-                  calcGroupId: activeCalcGroup || null,
-                  calcGroupName,
-                  costGroupId: selectedCostGroup || null,
-                  costGroupName,
-                  answers,
-                  selects,
-                  resolvedCalc,
-                  subtotalMXN: total,
-                  displayCurrency: settings?.currency ?? "MXN",
-                  displayTotal,
-                  createdBy: user?.uid || null,
-                  createdAt: serverTimestamp(),
-                }
-              );
+const serviceName =
+  selService.name;
 
+const calcGroupName =
+  calcGroups.find(
+    (grupo) =>
+      grupo.id === activeCalcGroup
+  )?.data?.name || "";
+
+const costGroupName =
+  costTablesGroups.find(
+    (grupo) =>
+      grupo.id === selectedCostGroup
+  )?.data?.name || "";
+
+await addDoc(
+  quoteTarget.linesRef,
+  {
+    pedidoId,
+
+    ejecucionId:
+      ejecucionIdParam || null,
+
+    numeroEjecucion:
+      numeroEjecucionParam,
+
+    tipoEjecucion:
+      ejecucionIdParam
+        ? "repeticion"
+        : "original",
+
+    tituloPedido:
+      tituloParam || "",
+
+    serviceId,
+    serviceName,
+
+    calcGroupId:
+      activeCalcGroup || null,
+
+    calcGroupName,
+
+    costGroupId:
+      selectedCostGroup || null,
+
+    costGroupName,
+
+    answers,
+    selects,
+    resolvedCalc,
+
+    subtotalMXN: total,
+
+    displayCurrency:
+      settings?.currency ?? "MXN",
+
+    displayTotal,
+
+    createdBy:
+      user?.uid || null,
+
+    createdAt:
+      serverTimestamp(),
+  }
+);
               setServiceId("");
               setAnswers({});
               setSelects({});
               setSelectedCostGroup("");
               setActiveCalcGroup("");
 
-              alert("Servicio agregado a la Cotización Viva del pedido.");
+             alert(
+  ejecucionIdParam
+    ? `Servicio agregado a la cotización de la Ejecución ${numeroEjecucionParam}.`
+    : "Servicio agregado a la cotización del pedido original."
+);
             } finally {
               setIsAttaching(false);
             }

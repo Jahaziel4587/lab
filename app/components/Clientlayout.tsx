@@ -129,8 +129,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   };
 
   return (
-    <div className="min-h-screen text-white relative overflow-hidden bg-neutral-950">
-      <div className="pointer-events-none absolute inset-0">
+<div className="min-h-screen text-white relative bg-neutral-950">
+      <div className="pointer-events-none absolute inset-0 overflow-hidden">
         <div className="absolute -top-56 -left-56 h-[720px] w-[720px] rounded-full bg-emerald-400/14 blur-3xl" />
         <div className="absolute -top-40 -right-64 h-[760px] w-[760px] rounded-full bg-teal-400/12 blur-3xl" />
         <div className="absolute -bottom-64 left-1/3 h-[760px] w-[760px] rounded-full bg-emerald-500/10 blur-3xl" />
