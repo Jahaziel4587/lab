@@ -385,7 +385,80 @@ export function useCalendarioPedidos() {
 
         return;
       }
+      /*
+       * Si es un pedido principal y se marca como listo,
+       * el endpoint actualiza Firebase y Monday.
+       *
+       * Las ejecuciones continúan actualizándose solamente
+       * en su documento de Firebase.
+       */
+      if (
+        campo === "status" &&
+        valor.trim().toLowerCase() === "listo" &&
+        !pedido.ejecucionId
+      ) {
+        const currentUser = auth.currentUser;
 
+        if (!currentUser) {
+          throw new Error(
+            "No hay una sesión activa."
+          );
+        }
+
+        const idToken =
+          await currentUser.getIdToken();
+
+        const response = await fetch(
+          "/api/monday/pedidos/status",
+          {
+            method: "PATCH",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${idToken}`,
+            },
+            body: JSON.stringify({
+              pedidoId: pedido.pedidoId,
+              status: valor,
+            }),
+          }
+        );
+
+        const result = await response
+          .json()
+          .catch(() => null);
+
+        if (!response.ok) {
+          /*
+           * El endpoint puede haber actualizado Firebase
+           * aunque Monday haya fallado.
+           */
+          if (result?.savedInFirebase) {
+            console.error(
+              "El status se guardó en Firebase, pero Monday no se sincronizó:",
+              result?.details
+            );
+
+            alert(
+              [
+                result?.error ||
+                  "El status se guardó, pero Monday no pudo sincronizarse.",
+                result?.details
+                  ? `\n\nDetalle técnico:\n${result.details}`
+                  : "",
+              ].join("")
+            );
+
+            return;
+          }
+
+          throw new Error(
+            result?.error ||
+              "No se pudo actualizar el status."
+          );
+        }
+
+        return;
+      }
       /*
        * Las ejecuciones todavía se guardan directamente
        * en su documento de Firebase.
