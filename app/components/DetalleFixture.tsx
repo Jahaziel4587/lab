@@ -157,10 +157,35 @@ export default function DetalleFixture({
   }, [conceptos.length]);
 
   const nextPruebaLabel = useMemo(() => {
-    const base =
-      conceptos.find((c) => c.status === "aprobado")?.versionLabel || "VA";
-    return `${base}.${pruebas.length + 1}`;
-  }, [conceptos, pruebas.length]);
+  // Obtiene el concepto aprobado más reciente.
+  const conceptoAprobado = [...conceptos]
+    .reverse()
+    .find((concepto) => concepto.status === "aprobado");
+
+  const base = conceptoAprobado?.versionLabel || "VA";
+
+  // Evita que caracteres especiales afecten la expresión regular.
+  const baseEscapada = base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const patronVersion = new RegExp(`^${baseEscapada}\\.(\\d+)$`);
+
+  // Solo considera las pruebas pertenecientes al concepto aprobado actual.
+  const numerosDePrueba = pruebas
+    .map((prueba) => {
+      const coincidencia = String(prueba.versionLabel || "").match(
+        patronVersion
+      );
+
+      return coincidencia ? Number(coincidencia[1]) : null;
+    })
+    .filter((numero): numero is number => numero !== null);
+
+  const siguienteNumero =
+    numerosDePrueba.length > 0
+      ? Math.max(...numerosDePrueba) + 1
+      : 1;
+
+  return `${base}.${siguienteNumero}`;
+}, [conceptos, pruebas]);
 
   const nextBetaLabel = useMemo(() => {
     return `Beta V${betas.length + 1}`;
