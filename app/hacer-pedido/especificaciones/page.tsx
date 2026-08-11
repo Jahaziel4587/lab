@@ -292,7 +292,76 @@ const fixtureRelacionadoProyecto =
   fixtureRelacionadoProyecto: fixtureRelacionadoProyecto || null,
 });
 
-      alert("✅ Pedido enviado con éxito");
+let mondaySincronizado = true;
+
+try {
+  const currentUser = auth.currentUser;
+
+  if (!currentUser) {
+    throw new Error("No hay una sesión activa");
+  }
+
+  const idToken = await currentUser.getIdToken();
+
+  const mondayResponse = await fetch(
+    "/api/monday/pedidos",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({
+        pedidoId: nuevoDocRef.id,
+      }),
+    },
+  );
+
+  const responseText = await mondayResponse.text();
+
+  let mondayResult: {
+    error?: string;
+    mondayUserFound?: boolean;
+  } = {};
+
+  try {
+    mondayResult = responseText
+      ? JSON.parse(responseText)
+      : {};
+  } catch {
+    throw new Error(
+      `La ruta de Monday respondió con ${mondayResponse.status} y no devolvió JSON`,
+    );
+  }
+
+  if (!mondayResponse.ok) {
+    throw new Error(
+      mondayResult.error ||
+        `Error ${mondayResponse.status} al sincronizar con Monday`,
+    );
+  }
+
+  if (mondayResult.mondayUserFound === false) {
+    console.warn(
+      "El pedido se creó en Monday, pero no se encontró una cuenta con el correo del solicitante.",
+    );
+  }
+} catch (mondayError) {
+  mondaySincronizado = false;
+
+  console.error(
+    "El pedido se guardó, pero Monday no pudo sincronizarse:",
+    mondayError,
+  );
+}
+
+      if (mondaySincronizado) {
+  alert("✅ Pedido enviado con éxito");
+} else {
+  alert(
+    "⚠️ El pedido se guardó correctamente, pero no pudo enviarse a Monday.",
+  );
+}
       localStorage.removeItem("fixtureRelacionadoId");
 localStorage.removeItem("fixtureRelacionadoFase");
 localStorage.removeItem("fixtureRelacionadoVersion");
