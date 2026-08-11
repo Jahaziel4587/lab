@@ -221,8 +221,7 @@ const actualizarCampo = async (
     pedidoAnterior?.[campo] ?? "";
 
   /*
-   * Actualización optimista:
-   * el cambio aparece inmediatamente en la tabla.
+   * Actualización optimista.
    */
   setPedidos((prev) =>
     prev.map((pedido) =>
@@ -237,10 +236,17 @@ const actualizarCampo = async (
 
   try {
     /*
-     * La fecha de entrega real utiliza el endpoint
-     * que actualiza Firebase y Monday.
+     * La fecha real y el status "listo"
+     * utilizan los endpoints que sincronizan
+     * Firebase y Monday.
      */
-    if (campo === "fechaEntregaReal") {
+    if (
+      campo === "fechaEntregaReal" ||
+      (
+        campo === "status" &&
+        valor.trim().toLowerCase() === "listo"
+      )
+    ) {
       if (!user) {
         throw new Error(
           "No hay una sesión activa."
@@ -250,20 +256,31 @@ const actualizarCampo = async (
       const idToken =
         await user.getIdToken();
 
-      const response = await fetch(
-        "/api/monday/pedidos/fecha-entrega-real",
-        {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${idToken}`,
-          },
-          body: JSON.stringify({
+      const esFecha =
+        campo === "fechaEntregaReal";
+
+      const endpoint = esFecha
+        ? "/api/monday/pedidos/fecha-entrega-real"
+        : "/api/monday/pedidos/status";
+
+      const body = esFecha
+        ? {
             pedidoId: id,
             fechaEntregaReal: valor,
-          }),
-        }
-      );
+          }
+        : {
+            pedidoId: id,
+            status: valor,
+          };
+
+      const response = await fetch(endpoint, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify(body),
+      });
 
       const result = await response
         .json()
@@ -271,13 +288,18 @@ const actualizarCampo = async (
 
       if (!response.ok) {
         /*
-         * El endpoint puede haber guardado la fecha
-         * en Firebase aunque Monday haya fallado.
+         * Firebase sí cambió, pero Monday falló.
+         * Conservamos el valor nuevo en pantalla.
          */
         if (result?.savedInFirebase) {
+          console.error(
+            "Monday no se sincronizó completamente:",
+            result?.details
+          );
+
           alert(
-            result.error ||
-              "La fecha se guardó en Protolab, pero no pudo sincronizarse con Monday."
+            result?.error ||
+              "El cambio se guardó en Protolab, pero Monday no pudo sincronizarse completamente."
           );
 
           return;
@@ -285,7 +307,7 @@ const actualizarCampo = async (
 
         throw new Error(
           result?.error ||
-            "No se pudo actualizar la fecha de entrega real."
+            "No se pudo actualizar el pedido."
         );
       }
 
@@ -293,8 +315,8 @@ const actualizarCampo = async (
     }
 
     /*
-     * Los demás campos, como status,
-     * siguen actualizándose directamente en Firestore.
+     * Los estados distintos de "listo"
+     * continúan actualizándose solo en Firebase.
      */
     const refPedido = doc(
       db,
@@ -307,7 +329,8 @@ const actualizarCampo = async (
     });
   } catch (error) {
     /*
-     * Si falló completamente, regresamos al valor anterior.
+     * Si la operación falló completamente,
+     * restauramos el valor anterior.
      */
     setPedidos((prev) =>
       prev.map((pedido) =>
