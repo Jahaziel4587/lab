@@ -208,17 +208,130 @@ export default function ListadoPedidosPage() {
     cargarPedidos();
   }, [user, proyectoSeleccionado, isAdmin, esCompartidoConmigo]);
 
-  const actualizarCampo = async (id: string, campo: string, valor: any) => {
-    try {
-      const refPedido = doc(db, "pedidos", id);
-      await updateDoc(refPedido, { [campo]: valor });
-      setPedidos((prev) =>
-        prev.map((p) => (p.id === id ? { ...p, [campo]: valor } : p))
+const actualizarCampo = async (
+  id: string,
+  campo: string,
+  valor: string
+) => {
+  const pedidoAnterior = pedidos.find(
+    (pedido) => pedido.id === id
+  );
+
+  const valorAnterior =
+    pedidoAnterior?.[campo] ?? "";
+
+  /*
+   * Actualización optimista:
+   * el cambio aparece inmediatamente en la tabla.
+   */
+  setPedidos((prev) =>
+    prev.map((pedido) =>
+      pedido.id === id
+        ? {
+            ...pedido,
+            [campo]: valor,
+          }
+        : pedido
+    )
+  );
+
+  try {
+    /*
+     * La fecha de entrega real utiliza el endpoint
+     * que actualiza Firebase y Monday.
+     */
+    if (campo === "fechaEntregaReal") {
+      if (!user) {
+        throw new Error(
+          "No hay una sesión activa."
+        );
+      }
+
+      const idToken =
+        await user.getIdToken();
+
+      const response = await fetch(
+        "/api/monday/pedidos/fecha-entrega-real",
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({
+            pedidoId: id,
+            fechaEntregaReal: valor,
+          }),
+        }
       );
-    } catch (err) {
-      console.error("Error actualizando", campo, err);
+
+      const result = await response
+        .json()
+        .catch(() => null);
+
+      if (!response.ok) {
+        /*
+         * El endpoint puede haber guardado la fecha
+         * en Firebase aunque Monday haya fallado.
+         */
+        if (result?.savedInFirebase) {
+          alert(
+            result.error ||
+              "La fecha se guardó en Protolab, pero no pudo sincronizarse con Monday."
+          );
+
+          return;
+        }
+
+        throw new Error(
+          result?.error ||
+            "No se pudo actualizar la fecha de entrega real."
+        );
+      }
+
+      return;
     }
-  };
+
+    /*
+     * Los demás campos, como status,
+     * siguen actualizándose directamente en Firestore.
+     */
+    const refPedido = doc(
+      db,
+      "pedidos",
+      id
+    );
+
+    await updateDoc(refPedido, {
+      [campo]: valor,
+    });
+  } catch (error) {
+    /*
+     * Si falló completamente, regresamos al valor anterior.
+     */
+    setPedidos((prev) =>
+      prev.map((pedido) =>
+        pedido.id === id
+          ? {
+              ...pedido,
+              [campo]: valorAnterior,
+            }
+          : pedido
+      )
+    );
+
+    console.error(
+      `Error actualizando ${campo}:`,
+      error
+    );
+
+    alert(
+      error instanceof Error
+        ? error.message
+        : "No se pudo actualizar el pedido."
+    );
+  }
+};
 
   const solicitanteDe = (p: any) => {
     const email = p?.correoUsuario || p?.usuario || "";
