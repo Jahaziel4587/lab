@@ -18,12 +18,12 @@ export async function PATCH(request: NextRequest) {
     if (!authorization?.startsWith("Bearer ")) {
       return NextResponse.json(
         { error: "No autorizado" },
-        { status: 401 },
+        { status: 401 }
       );
     }
 
     const idToken = authorization.slice(
-      "Bearer ".length,
+      "Bearer ".length
     );
 
     const decodedToken =
@@ -32,9 +32,6 @@ export async function PATCH(request: NextRequest) {
     /*
      * Solo los administradores pueden asignar
      * la fecha de entrega real.
-     *
-     * Esto supone que tu custom claim se llama "admin",
-     * igual que en tu sistema de registro actual.
      */
     if (decodedToken.admin !== true) {
       return NextResponse.json(
@@ -42,24 +39,24 @@ export async function PATCH(request: NextRequest) {
           error:
             "Solo un administrador puede modificar la fecha de entrega real",
         },
-        { status: 403 },
+        { status: 403 }
       );
     }
 
     const body = await request.json();
 
     const pedidoId = String(
-      body.pedidoId || "",
+      body.pedidoId || ""
     ).trim();
 
     const fechaEntregaReal = String(
-      body.fechaEntregaReal || "",
+      body.fechaEntregaReal || ""
     ).trim();
 
     if (!pedidoId) {
       return NextResponse.json(
         { error: "Falta pedidoId" },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
@@ -76,7 +73,7 @@ export async function PATCH(request: NextRequest) {
           error:
             "fechaEntregaReal debe tener el formato YYYY-MM-DD",
         },
-        { status: 400 },
+        { status: 400 }
       );
     }
 
@@ -89,29 +86,43 @@ export async function PATCH(request: NextRequest) {
     if (!pedidoSnapshot.exists) {
       return NextResponse.json(
         { error: "El pedido no existe" },
-        { status: 404 },
+        { status: 404 }
       );
     }
 
     const pedido = pedidoSnapshot.data();
 
     const mondayItemId = String(
-      pedido?.monday?.itemId || "",
+      pedido?.monday?.itemId || ""
     ).trim();
 
+    /*
+     * PEDIDOS ANTIGUOS SIN MONDAY
+     *
+     * La fecha se guarda normalmente en Firebase.
+     * No se intenta realizar ninguna sincronización.
+     */
     if (!mondayItemId) {
-      return NextResponse.json(
-        {
-          error:
-            "Este pedido todavía no tiene una actividad vinculada en Monday",
-        },
-        { status: 409 },
-      );
+      await pedidoRef.update({
+        fechaEntregaReal,
+      });
+
+      return NextResponse.json({
+        ok: true,
+        pedidoId,
+        fechaEntregaReal,
+        mondayConnected: false,
+        mondaySynced: false,
+        message:
+          "Fecha guardada correctamente. El pedido no está vinculado con Monday.",
+      });
     }
 
     /*
-     * Firebase se actualiza aquí mismo para que
-     * ambas plataformas conserven el mismo valor.
+     * PEDIDOS CON MONDAY
+     *
+     * Primero guardamos la fecha en Firebase y
+     * registramos la sincronización como pendiente.
      */
     await pedidoRef.update({
       fechaEntregaReal,
@@ -124,7 +135,7 @@ export async function PATCH(request: NextRequest) {
     try {
       await updatePedidoRealDeliveryDate(
         mondayItemId,
-        fechaEntregaReal,
+        fechaEntregaReal
       );
 
       await pedidoRef.update({
@@ -150,7 +161,7 @@ export async function PATCH(request: NextRequest) {
 
       /*
        * La fecha permanece guardada en Firebase,
-       * pero informamos que Monday no se actualizó.
+       * aunque Monday haya fallado.
        */
       return NextResponse.json(
         {
@@ -159,7 +170,7 @@ export async function PATCH(request: NextRequest) {
           details: message,
           savedInFirebase: true,
         },
-        { status: 502 },
+        { status: 502 }
       );
     }
 
@@ -168,11 +179,13 @@ export async function PATCH(request: NextRequest) {
       pedidoId,
       mondayItemId,
       fechaEntregaReal,
+      mondayConnected: true,
+      mondaySynced: true,
     });
   } catch (error) {
     console.error(
-      "Error actualizando la fecha real en Monday:",
-      error,
+      "Error actualizando la fecha real:",
+      error
     );
 
     return NextResponse.json(
@@ -182,7 +195,7 @@ export async function PATCH(request: NextRequest) {
             ? error.message
             : "No se pudo actualizar la fecha",
       },
-      { status: 500 },
+      { status: 500 }
     );
   }
 }
