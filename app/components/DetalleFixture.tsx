@@ -691,7 +691,7 @@ export default function DetalleFixture({
         "Se generó la Spec Draft como guía para la versión beta."
       );
 
-      alert("Spec Draft registrada. Después conectamos aquí la generación DOCX.");
+      alert("Spec Draft registrada.");
     } catch (error) {
       console.error(error);
       alert("No se pudo registrar la Spec Draft.");
