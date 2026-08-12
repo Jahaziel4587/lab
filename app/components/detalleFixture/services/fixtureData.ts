@@ -2,7 +2,7 @@ import { collection, getDocs, getDoc , orderBy, query } from "firebase/firestore
 import { db } from "@/src/firebase/firebaseConfig";
 import type {
   FixtureVersion,
-  FixtureConfirmacion,
+ 
   LinkedPedido,
   UserPermissionData,
 } from "../types";
@@ -13,7 +13,7 @@ export const getFixtureSubcollections = async (
   conceptos: FixtureVersion[];
   pruebas: FixtureVersion[];
   betas: FixtureVersion[];
-  confirmaciones: FixtureConfirmacion[];
+ 
 }> => {
   const conceptoSnap = await getDocs(
     query(
@@ -57,10 +57,7 @@ const confirmacionSnap = await getDocs(
       id: d.id,
       ...(d.data() as any),
     })),
-    confirmaciones: confirmacionSnap.docs.map((d) => ({
-  id: d.id,
-  ...(d.data() as any),
-})),
+    
   };
 };
 
