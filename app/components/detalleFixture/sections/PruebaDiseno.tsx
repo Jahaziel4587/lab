@@ -63,7 +63,7 @@ function PedidosAsociados({ pedidos }: { pedidos: LinkedPedido[] }) {
 }
 
 export default function PruebaDiseno({
-  pruebas,
+   pruebas,
   linkedPedidos,
   pedidoId,
   pedidoProyecto,
@@ -80,6 +80,8 @@ export default function PruebaDiseno({
   onGuardarPrueba,
   userEmail,
   canApprovePM,
+  canApproveDesigner,
+  canApproveProcessOwner,
   onDecidirPrueba,
 }: {
   pruebas: FixtureVersion[];
@@ -105,7 +107,8 @@ export default function PruebaDiseno({
   ) => void;
   onGuardarPrueba: (e: FormEvent) => void;
   userEmail?: string;
-  canApprovePM: boolean;
+  canApprovePM: boolean;canApproveDesigner: boolean;
+canApproveProcessOwner: boolean;
   onDecidirPrueba: (
     prueba: FixtureVersion,
     rol: ApprovalRole,
@@ -268,18 +271,44 @@ const totalPruebaDiseno = pedidosDePrueba.reduce(
 
                     <PedidosAsociados pedidos={pedidosDeVersion} />
 
-                    <div className="mt-4">
-                      <ApprovalRow
-                        label="Firma PM"
-                        approvalKey="pm"
-                        firma={item.firmas?.pm}
-                        currentUserEmail={userEmail}
-                        canApprove={canApprovePM}
-                        onDecision={(decision, reason) =>
-                          onDecidirPrueba(item, "pm", decision, reason)
-                        }
-                      />
-                    </div>
+                   <div className="mt-5 space-y-3">
+  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/40">
+    Aprobaciones de la prueba de diseño
+  </p>
+
+  <ApprovalRow
+    label="Firma Project Manager"
+    approvalKey="pm"
+    firma={item.firmas?.pm}
+    currentUserEmail={userEmail}
+    canApprove={canApprovePM}
+    onDecision={(decision, reason) =>
+      onDecidirPrueba(item, "pm", decision, reason)
+    }
+  />
+
+  <ApprovalRow
+    label="Firma Diseñador"
+    approvalKey="disenador"
+    firma={item.firmas?.disenador}
+    currentUserEmail={userEmail}
+    canApprove={canApproveDesigner}
+    onDecision={(decision, reason) =>
+      onDecidirPrueba(item, "disenador", decision, reason)
+    }
+  />
+
+  <ApprovalRow
+    label="Firma Encargado del proceso"
+    approvalKey="encargado"
+    firma={item.firmas?.encargado}
+    currentUserEmail={userEmail}
+    canApprove={canApproveProcessOwner}
+    onDecision={(decision, reason) =>
+      onDecidirPrueba(item, "encargado", decision, reason)
+    }
+  />
+</div>
                   </div>
                 )}
               </div>

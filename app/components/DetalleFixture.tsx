@@ -19,7 +19,6 @@ import type {
   UserPermissionData,
   LinkedPedido,
   TabKey,
-  FixtureConfirmacion,
 } from "./detalleFixture/types";
 
 import { btnSoft } from "./detalleFixture/styles";
@@ -37,7 +36,6 @@ import { buildFixtureFirmaPayload } from "./detalleFixture/services/fixtureDecis
 import ResumenSolicitud from "./detalleFixture/sections/ResumenSolicitud";
 import ConceptoDiseno from "./detalleFixture/sections/ConceptoDiseno";
 import PruebaDiseno from "./detalleFixture/sections/PruebaDiseno";
-import ConfirmacionConceptual from "./detalleFixture/sections/ConfirmacionConceptual";
 import SpecDraft from "./detalleFixture/sections/SpecDraft";
 import FaseBeta from "./detalleFixture/sections/FaseBeta";
 import SpecFinal from "./detalleFixture/sections/SpecFinal";
@@ -129,8 +127,7 @@ export default function DetalleFixture({
   };
 
   const hasConceptApproved = conceptos.some((c) => c.status === "aprobado");
-  const hasPruebaCreated = pruebas.length > 0;
-  const hasConfirmacionApproved = pruebas.some((p) => p.status === "aprobado");
+  const hasPruebaApproved = pruebas.some((p) => p.status === "aprobado");
   const hasBetaApproved = betas.some((b) => b.status === "aprobado");
 
   const tabs: Array<{
@@ -140,12 +137,7 @@ export default function DetalleFixture({
   }> = [
     { key: "resumen", label: "Solicitud formal", done: true },
     { key: "concepto", label: "Concepto de diseño", done: hasConceptApproved },
-    { key: "prueba", label: "Prueba de diseño", done: hasPruebaCreated },
-    {
-      key: "confirmacion",
-      label: "Confirmación conceptual",
-      done: hasConfirmacionApproved,
-    },
+    { key: "prueba", label: "Prueba de diseño", done: hasPruebaApproved },
     { key: "specDraft", label: "Spec Draft", done: specDraftGenerada },
     { key: "beta", label: "Beta", done: hasBetaApproved },
     { key: "specFinal", label: "Spec Final", done: specFinalGenerada },
@@ -157,35 +149,32 @@ export default function DetalleFixture({
   }, [conceptos.length]);
 
   const nextPruebaLabel = useMemo(() => {
-  // Obtiene el concepto aprobado más reciente.
-  const conceptoAprobado = [...conceptos]
-    .reverse()
-    .find((concepto) => concepto.status === "aprobado");
+    // Obtiene el concepto aprobado más reciente.
+    const conceptoAprobado = [...conceptos]
+      .reverse()
+      .find((concepto) => concepto.status === "aprobado");
 
-  const base = conceptoAprobado?.versionLabel || "VA";
+    const base = conceptoAprobado?.versionLabel || "VA";
 
-  // Evita que caracteres especiales afecten la expresión regular.
-  const baseEscapada = base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const patronVersion = new RegExp(`^${baseEscapada}\\.(\\d+)$`);
+    // Solo considera las pruebas pertenecientes al concepto aprobado actual.
+    const baseEscapada = base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const patronVersion = new RegExp(`^${baseEscapada}\\.(\\d+)$`);
 
-  // Solo considera las pruebas pertenecientes al concepto aprobado actual.
-  const numerosDePrueba = pruebas
-    .map((prueba) => {
-      const coincidencia = String(prueba.versionLabel || "").match(
-        patronVersion
-      );
+    const numerosDePrueba = pruebas
+      .map((prueba) => {
+        const coincidencia = String(prueba.versionLabel || "").match(
+          patronVersion
+        );
 
-      return coincidencia ? Number(coincidencia[1]) : null;
-    })
-    .filter((numero): numero is number => numero !== null);
+        return coincidencia ? Number(coincidencia[1]) : null;
+      })
+      .filter((numero): numero is number => numero !== null);
 
-  const siguienteNumero =
-    numerosDePrueba.length > 0
-      ? Math.max(...numerosDePrueba) + 1
-      : 1;
+    const siguienteNumero =
+      numerosDePrueba.length > 0 ? Math.max(...numerosDePrueba) + 1 : 1;
 
-  return `${base}.${siguienteNumero}`;
-}, [conceptos, pruebas]);
+    return `${base}.${siguienteNumero}`;
+  }, [conceptos, pruebas]);
 
   const nextBetaLabel = useMemo(() => {
     return `Beta V${betas.length + 1}`;
@@ -197,7 +186,6 @@ export default function DetalleFixture({
       setConceptos(data.conceptos);
       setPruebas(data.pruebas);
       setBetas(data.betas);
-      setConfirmaciones(data.confirmaciones);
     } catch (error) {
       console.error("Error cargando subcolecciones FXT:", error);
     }
@@ -228,139 +216,6 @@ export default function DetalleFixture({
       console.error("Error cargando pedidos asociados al fixture:", error);
     }
   };
-
-const guardarConfirmacionConceptual = async (e: FormEvent) => {
-  e.preventDefault();
-
-  if (!isAdmin) {
-    alert("Solo administradores pueden registrar la confirmación conceptual.");
-    return;
-  }
-
-  const pruebaBase = [...pruebas]
-    .reverse()
-    .find((p) => p.status === "aprobado");
-
-  if (!pruebaBase) {
-    alert("Primero debe existir una prueba de diseño aprobada.");
-    return;
-  }
-
-  if (!confirmacionDesc.trim()) {
-    alert("Agrega las consideraciones de diseño.");
-    return;
-  }
-
-  try {
-    setLoading(true);
-
-    const archivos = await uploadFixtureFiles({
-      pedidoId,
-      files: confirmacionFiles,
-      folder: `confirmacion-conceptual/${pruebaBase.versionLabel}`,
-    });
-
-    await addDoc(
-      collection(db, "pedidos", pedidoId, "fixture_confirmaciones"),
-      {
-        versionLabel: `CONF ${pruebaBase.versionLabel}`,
-        pruebaBaseId: pruebaBase.id,
-        pruebaBaseVersion: pruebaBase.versionLabel,
-        descripcion: confirmacionDesc.trim(),
-        archivos,
-        firmas: {},
-        status: "pendiente",
-        creadoPor: user?.email || "",
-        createdAt: new Date(),
-      }
-    );
-
-    await registrarHistorial(
-      "confirmacion_conceptual_creada",
-      `Se registró la confirmación conceptual basada en ${pruebaBase.versionLabel}.`
-    );
-
-    setConfirmacionDesc("");
-    setConfirmacionFiles([]);
-
-    await loadSubcollections();
-  } catch (error) {
-    console.error(error);
-    alert("No se pudo guardar la confirmación conceptual.");
-  } finally {
-    setLoading(false);
-  }
-};
-
-const decidirConfirmacionConceptual = async (
-  confirmacion: FixtureConfirmacion,
-  rol: ApprovalRole,
-  decision: Decision,
-  rejectReason?: string
-) => {
-  if (!validateRoleDecision(confirmacion, rol, decision, rejectReason)) return;
-
-  try {
-    setLoading(true);
-
-    const prevFirmas = confirmacion.firmas || {};
-
-    const nuevasFirmas = {
-      ...prevFirmas,
-      [rol]: buildFirmaPayload(decision, rejectReason),
-    };
-
-    const allRoles: ApprovalRole[] = ["pm", "disenador", "encargado"];
-
-    const completa = allRoles.every(
-      (r) => nuevasFirmas[r]?.decision === "aprobado"
-    );
-
-    const rechazada = allRoles.some(
-      (r) => nuevasFirmas[r]?.decision === "rechazado"
-    );
-
-    await updateDoc(
-      doc(db, "pedidos", pedidoId, "fixture_confirmaciones", confirmacion.id),
-      {
-        firmas: nuevasFirmas,
-        status: completa ? "aprobado" : rechazada ? "rechazado" : "pendiente",
-      }
-    );
-
-    if (completa && !rechazada) {
-      await updateDoc(doc(db, "pedidos", pedidoId), {
-        faseFixture: "spec_draft",
-      });
-
-      setFaseActual("spec_draft");
-
-      await registrarHistorial(
-        "confirmacion_conceptual_aprobada",
-        `La confirmación conceptual ${confirmacion.versionLabel} fue aprobada.`
-      );
-    }
-
-    if (rechazada) {
-      await registrarHistorial(
-        "confirmacion_conceptual_rechazada",
-        `La confirmación conceptual ${confirmacion.versionLabel} fue rechazada por ${userDisplayName}.`
-      );
-    }
-
-    await loadSubcollections();
-  } catch (error) {
-    console.error(error);
-    alert("No se pudo registrar la firma.");
-  } finally {
-    setLoading(false);
-  }
-};
-
-const [confirmaciones, setConfirmaciones] = useState<FixtureConfirmacion[]>([]);
-const [confirmacionDesc, setConfirmacionDesc] = useState("");
-const [confirmacionFiles, setConfirmacionFiles] = useState<File[]>([]);
-const confirmacionInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     loadSubcollections();
@@ -598,10 +453,10 @@ const confirmacionInputRef = useRef<HTMLInputElement | null>(null);
       });
 
       await updateDoc(doc(db, "pedidos", pedidoId), {
-        faseFixture: "confirmacion_conceptual",
+        faseFixture: "prueba_diseno",
       });
 
-      setFaseActual("confirmacion_conceptual");
+      setFaseActual("prueba_diseno");
 
       await registrarHistorial(
         "prueba_creada",
@@ -661,7 +516,7 @@ const confirmacionInputRef = useRef<HTMLInputElement | null>(null);
         setFaseActual("spec_draft");
 
         await registrarHistorial(
-          "confirmacion_conceptual_aprobada",
+          "prueba_diseno_aprobada",
           `La prueba ${prueba.versionLabel} fue aprobada por PM, diseñador y encargado.`
         );
       }
@@ -674,7 +529,7 @@ const confirmacionInputRef = useRef<HTMLInputElement | null>(null);
         setFaseActual("prueba_diseno");
 
         await registrarHistorial(
-          "confirmacion_conceptual_rechazada",
+          "prueba_diseno_rechazada",
           `La prueba ${prueba.versionLabel} fue rechazada por ${userDisplayName}. Motivo: ${String(
             rejectReason || ""
           ).trim()}`
@@ -935,15 +790,14 @@ const confirmacionInputRef = useRef<HTMLInputElement | null>(null);
   const renderTabContent = () => {
     if (activeTab === "resumen") {
       return (
-   <ResumenSolicitud
-  pedido={pedido}
-  pedidoId={pedidoId}
-  faseActual={faseActual}
-  userDisplayName={userDisplayName}
-  generatingPdf={generatingPdf}
-  onDownloadDocx={descargarSolicitudFormalPDF}
-/>
-
+        <ResumenSolicitud
+          pedido={pedido}
+          pedidoId={pedidoId}
+          faseActual={faseActual}
+          userDisplayName={userDisplayName}
+          generatingPdf={generatingPdf}
+          onDownloadDocx={descargarSolicitudFormalPDF}
+        />
       );
     }
 
@@ -998,45 +852,22 @@ const confirmacionInputRef = useRef<HTMLInputElement | null>(null);
           pedidoProyecto={pedido?.proyecto || ""}
           userEmail={user?.email}
           canApprovePM={canApprovePM}
+          canApproveDesigner={canApproveDesigner}
+          canApproveProcessOwner={canApproveProcessOwner}
           onDecidirPrueba={decidirPrueba}
-
         />
-      );
-    }
-
-    if (activeTab === "confirmacion") {
-      return (
-        <ConfirmacionConceptual
-  pruebas={pruebas}
-  confirmaciones={confirmaciones}
-  isAdmin={isAdmin}
-  loading={loading}
-  confirmacionDesc={confirmacionDesc}
-  setConfirmacionDesc={setConfirmacionDesc}
-  confirmacionFiles={confirmacionFiles}
-  setConfirmacionFiles={setConfirmacionFiles}
-  confirmacionInputRef={confirmacionInputRef}
-  addFiles={addFiles}
-  removeFile={removeFile}
-  userEmail={user?.email}
-  canApprovePM={canApprovePM}
-  canApproveDesigner={canApproveDesigner}
-  canApproveProcessOwner={canApproveProcessOwner}
-  onGuardarConfirmacion={guardarConfirmacionConceptual}
-  onDecidirConfirmacion={decidirConfirmacionConceptual}
-/>
       );
     }
 
     if (activeTab === "specDraft") {
       return (
         <SpecDraft
-  pedidoId={pedidoId}
-  specDraftGenerada={specDraftGenerada}
-  loading={loading}
-  isAdmin={isAdmin}
-  onGenerarSpecDraft={generarSpecDraft}
-/>
+          pedidoId={pedidoId}
+          specDraftGenerada={specDraftGenerada}
+          loading={loading}
+          isAdmin={isAdmin}
+          onGenerarSpecDraft={generarSpecDraft}
+        />
       );
     }
 
@@ -1093,12 +924,12 @@ const confirmacionInputRef = useRef<HTMLInputElement | null>(null);
 
         <p className="mt-3 max-w-3xl text-sm text-white/60">
           Expediente formal del fixture: Solicitud, Concepto de diseño, Prueba,
-          Confirmación conceptual, SPEC Draft, Beta y SPEC Final.
+          SPEC Draft, Beta y SPEC Final.
         </p>
       </div>
 
       <div className="mt-8 rounded-3xl border border-white/10 bg-white/[0.035] p-5 md:p-6">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-7">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
           {tabs.map((tab, index) => {
             const selected = activeTab === tab.key;
 

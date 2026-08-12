@@ -42,7 +42,7 @@ export type LinkedPedido = {
   servicio?: string;
   subtotal?: number;
   status?: string;
-   fixtureRelacionadoId?: string;
+  fixtureRelacionadoId?: string;
   fixtureRelacionadoFase?: "concepto" | "prueba" | "beta";
   fixtureRelacionadoVersion?: string;
 };
@@ -51,12 +51,6 @@ export type TabKey =
   | "resumen"
   | "concepto"
   | "prueba"
-  | "confirmacion"
   | "specDraft"
   | "beta"
   | "specFinal";
-
-  export type FixtureConfirmacion = FixtureVersion & {
-  pruebaBaseId?: string;
-  pruebaBaseVersion?: string;
-};

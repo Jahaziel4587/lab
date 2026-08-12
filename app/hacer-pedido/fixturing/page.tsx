@@ -61,7 +61,7 @@ export default function FixturingPage() {
   const [archivosVisuales, setArchivosVisuales] = useState<File[]>([]);
   const [archivosTecnicos, setArchivosTecnicos] = useState<File[]>([]);
 
-  const [firmaPM, setFirmaPM] = useState(false);
+  
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -209,10 +209,6 @@ export default function FixturingPage() {
       return;
     }
 
-    if (!firmaPM) {
-      alert("Debes confirmar la firma del PM para enviar la solicitud.");
-      return;
-    }
 
     try {
       setLoading(true);
