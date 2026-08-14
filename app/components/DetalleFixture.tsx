@@ -283,6 +283,57 @@ export default function DetalleFixture({
     });
   };
 
+const sincronizarConceptoMonday = async ({
+  versionId,
+  action,
+}: {
+  versionId: string;
+  action:
+    | "version_created"
+    | "decision_recorded";
+}) => {
+  if (!user) {
+    throw new Error(
+      "No hay una sesión activa."
+    );
+  }
+
+  const idToken =
+    await user.getIdToken();
+
+  const response = await fetch(
+    "/api/monday/fixturing/concepto",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type":
+          "application/json",
+        Authorization:
+          `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({
+        pedidoId,
+        versionId,
+        action,
+      }),
+    }
+  );
+
+  const result = await response
+    .json()
+    .catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(
+      result?.error ||
+        "No se pudo sincronizar el concepto con Monday."
+    );
+  }
+
+  return result;
+};
+
+
   const buildFirmaPayload = (decision: Decision, rejectReason?: string) =>
     buildFixtureFirmaPayload({
       decision,
@@ -325,17 +376,32 @@ export default function DetalleFixture({
         folder: `conceptos/${nextConceptLabel}`,
       });
 
-      await addDoc(collection(db, "pedidos", pedidoId, "fixture_conceptos"), {
-        versionLabel: nextConceptLabel,
-        descripcion: conceptoDesc.trim(),
-        especificacionesExtra: conceptoSpecs
-          .map((s) => s.trim())
-          .filter(Boolean),
-        archivos,
-        status: "pendiente",
-        creadoPor: user?.email || "",
-        createdAt: new Date(),
-      });
+      const conceptoRef = await addDoc(
+  collection(
+    db,
+    "pedidos",
+    pedidoId,
+    "fixture_conceptos"
+  ),
+  {
+    versionLabel: nextConceptLabel,
+    descripcion:
+      conceptoDesc.trim(),
+    especificacionesExtra:
+      conceptoSpecs
+        .map((s) => s.trim())
+        .filter(Boolean),
+    archivos,
+    status: "pendiente",
+    creadoPor:
+      user?.email || "",
+    createdAt: new Date(),
+
+    monday: {
+      syncStatus: "pending",
+    },
+  }
+);
 
       await updateDoc(doc(db, "pedidos", pedidoId), {
         faseFixture: "concepto_diseno",
@@ -347,7 +413,32 @@ export default function DetalleFixture({
         "concepto_creado",
         `Se registró el concepto de diseño ${nextConceptLabel}.`
       );
+          /*
+ * Crear la subactividad de firma para el PM.
+ *
+ * Si Monday falla, la versión ya guardada en
+ * Firebase se conserva.
+ */
+try {
+  await sincronizarConceptoMonday({
+    versionId: conceptoRef.id,
+    action: "version_created",
+  });
+} catch (mondayError) {
+  console.error(
+    "El concepto se guardó, pero Monday no se sincronizó:",
+    mondayError
+  );
 
+  alert(
+    [
+      `El concepto ${nextConceptLabel} se guardó correctamente, pero no se pudo crear su subactividad de firma en Monday.`,
+      mondayError instanceof Error
+        ? `\n\nDetalle:\n${mondayError.message}`
+        : "",
+    ].join("")
+  );
+}
       setConceptoDesc("");
       setConceptoSpecs([""]);
       setConceptoFiles([]);
@@ -418,7 +509,31 @@ export default function DetalleFixture({
             : "."
         }`
       );
+        /*
+ * La decisión ya está guardada en Firebase.
+ * Ahora completamos la firma y actualizamos
+ * la actividad principal en Monday.
+ */
+try {
+  await sincronizarConceptoMonday({
+    versionId: concepto.id,
+    action: "decision_recorded",
+  });
+} catch (mondayError) {
+  console.error(
+    "La decisión se guardó, pero Monday no se sincronizó:",
+    mondayError
+  );
 
+  alert(
+    [
+      `La decisión sobre ${concepto.versionLabel} se guardó correctamente, pero Monday no pudo actualizarse.`,
+      mondayError instanceof Error
+        ? `\n\nDetalle:\n${mondayError.message}`
+        : "",
+    ].join("")
+  );
+}
       await loadSubcollections();
     } catch (error) {
       console.error(error);

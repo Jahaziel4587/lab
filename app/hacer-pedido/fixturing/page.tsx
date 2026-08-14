@@ -297,6 +297,72 @@ export default function FixturingPage() {
         createdAt: serverTimestamp(),
       });
 
+/*
+ * Crear en Monday el grupo completo
+ * del fixture, sus fases y subactividades.
+ *
+ * El pedido ya está guardado en Firebase,
+ * por lo que un fallo de Monday no elimina
+ * ni invalida la solicitud.
+ */
+try {
+  const idToken =
+    await user.getIdToken();
+
+  const mondayResponse = await fetch(
+    "/api/monday/fixturing/create",
+    {
+      method: "POST",
+      headers: {
+        "Content-Type":
+          "application/json",
+        Authorization:
+          `Bearer ${idToken}`,
+      },
+      body: JSON.stringify({
+        pedidoId: pedidoRef.id,
+      }),
+    }
+  );
+
+  const mondayResult =
+    await mondayResponse
+      .json()
+      .catch(() => null);
+
+  if (!mondayResponse.ok) {
+    console.error(
+      "El fixture se guardó, pero Monday no se sincronizó:",
+      mondayResult
+    );
+
+    alert(
+      [
+        "La solicitud de fixture se guardó correctamente, pero no se pudo crear su estructura en Monday.",
+        mondayResult?.error
+          ? `\n\nDetalle:\n${mondayResult.error}`
+          : "",
+      ].join("")
+    );
+  } else if (
+    !mondayResult?.mondayUserFound
+  ) {
+    alert(
+      "La estructura del fixture se creó en Monday, pero no se encontró una cuenta de Monday con el correo del solicitante. Las actividades se crearon sin Stakeholder."
+    );
+  }
+} catch (mondayError) {
+  console.error(
+    "Error llamando al endpoint de Monday:",
+    mondayError
+  );
+
+  alert(
+    "La solicitud de fixture se guardó correctamente, pero ocurrió un error al comunicarse con Monday."
+  );
+}
+
+
       localStorage.removeItem("servicio");
       localStorage.removeItem("maquina");
       localStorage.removeItem("material");
