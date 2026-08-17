@@ -246,19 +246,23 @@ export async function POST(
       );
     }
 
-    if (
-      correoPedido !== correoToken
-    ) {
-      return NextResponse.json(
-        {
-          error:
-            "No tienes permiso para sincronizar este fixture",
-        },
-        {
-          status: 403,
-        }
-      );
+   const isAdmin =
+  decodedToken.admin === true;
+
+if (
+  correoPedido !== correoToken &&
+  !isAdmin
+) {
+  return NextResponse.json(
+    {
+      error:
+        "No tienes permiso para sincronizar este fixture",
+    },
+    {
+      status: 403,
     }
+  );
+}
 
     /*
      * 6. Marcar la sincronización como iniciada.

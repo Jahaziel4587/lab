@@ -8,7 +8,10 @@ import {
   doc,
   updateDoc,
 } from "firebase/firestore";
-import { FiArrowLeft } from "react-icons/fi";
+import {
+  FiArrowLeft,
+  FiRefreshCw,
+} from "react-icons/fi";
 import { db } from "@/src/firebase/firebaseConfig";
 
 import type {
@@ -55,7 +58,19 @@ export default function DetalleFixture({
 
   const [loading, setLoading] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
+const [
+  syncingMonday,
+  setSyncingMonday,
+] = useState(false);
 
+const [
+  mondayFixturingSynced,
+  setMondayFixturingSynced,
+] = useState(
+  Boolean(
+    pedido?.mondayFixturing?.groupId
+  )
+);
   const [faseActual, setFaseActual] = useState(
     pedido?.faseFixture || "proof_of_concept_solicitud"
   );
@@ -901,7 +916,85 @@ try {
       setGeneratingPdf(false);
     }
   };
+const sincronizarFixtureExistente =
+  async () => {
+    if (!user) {
+      alert(
+        "No hay una sesión activa."
+      );
+      return;
+    }
 
+    if (mondayFixturingSynced) {
+      alert(
+        "Este fixture ya está conectado con Monday."
+      );
+      return;
+    }
+
+    const confirmed = window.confirm(
+      "Se creará en Monday el grupo y la estructura de este fixture. ¿Deseas continuar?"
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      setSyncingMonday(true);
+
+      const idToken =
+        await user.getIdToken();
+
+      const response = await fetch(
+        "/api/monday/fixturing/create",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type":
+              "application/json",
+            Authorization:
+              `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({
+            pedidoId,
+          }),
+        }
+      );
+
+      const result = await response
+        .json()
+        .catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(
+          result?.error ||
+            "No se pudo sincronizar el fixture."
+        );
+      }
+
+      setMondayFixturingSynced(true);
+
+      alert(
+        result?.alreadySynced
+          ? "Este fixture ya estaba conectado con Monday."
+          : "El fixture se sincronizó correctamente con Monday."
+      );
+    } catch (error) {
+      console.error(
+        "Error migrando fixture a Monday:",
+        error
+      );
+
+      alert(
+        error instanceof Error
+          ? error.message
+          : "No se pudo sincronizar el fixture con Monday."
+      );
+    } finally {
+      setSyncingMonday(false);
+    }
+  };
   const renderTabContent = () => {
     if (activeTab === "resumen") {
       return (
@@ -1024,9 +1117,49 @@ try {
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 text-white sm:px-8">
-      <button onClick={() => window.history.back()} className={btnSoft}>
-        <FiArrowLeft /> Regresar
+     <div className="flex flex-wrap items-center gap-3">
+  <button
+    type="button"
+    onClick={() =>
+      window.history.back()
+    }
+    className={btnSoft}
+  >
+    <FiArrowLeft />
+    Regresar
+  </button>
+
+  {isAdmin &&
+    pedido?.tipoPedido === "fixture" &&
+    !mondayFixturingSynced && (
+      <button
+        type="button"
+        onClick={
+          sincronizarFixtureExistente
+        }
+        disabled={syncingMonday}
+        className={`${btnSoft} disabled:cursor-not-allowed disabled:opacity-50`}
+      >
+        <FiRefreshCw
+          className={
+            syncingMonday
+              ? "animate-spin"
+              : ""
+          }
+        />
+
+        {syncingMonday
+          ? "Sincronizando..."
+          : "Sincronizar con Monday"}
       </button>
+    )}
+
+  {mondayFixturingSynced && (
+    <span className="rounded-full border border-emerald-300/25 bg-emerald-400/10 px-4 py-2 text-sm text-emerald-100">
+      Conectado con Monday
+    </span>
+  )}
+</div>
 
       <div className="mt-6">
         <p className="text-sm uppercase tracking-[0.35em] text-emerald-300/80">
