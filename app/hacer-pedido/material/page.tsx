@@ -7,12 +7,13 @@ import { FiArrowLeft, FiArrowRight } from "react-icons/fi";
 // Diccionario de materiales por máquina
 const MATERIALES_POR_MAQUINA: Record<string, string[]> = {
   Filamento: [
-    "PLA 2.85mm (Ultimaker 2+)",
+    //"PLA 2.85mm (Ultimaker 2+)",
     "PLA 1.75mm (Bambu Lab)",
     "Nylon 1.75 (Bambu Lab)",
     "PLA retardante de fuego 1.75mm (Bambu Lab)",
     "Nylon retardante de fuego 1.75 (Bambu Lab)",
-    "Otro",
+    "Otro (Especifica en la descripción)",
+    
   ],
   "Resina Formlabs 3B": [
     "Rigid 10K",
@@ -23,7 +24,7 @@ const MATERIALES_POR_MAQUINA: Record<string, string[]> = {
     "White",
     "Clear",
     "Flexible 80A",
-    "Otro",
+    "Otro (Especifica en la descripción)",
   ],
   "Resina Formlabs 2B": [
     "Rigid 10K",
@@ -34,7 +35,7 @@ const MATERIALES_POR_MAQUINA: Record<string, string[]> = {
     "White",
     "Clear",
     "Flexible 80A",
-    "Otro",
+    "Otro (Especifica en la descripción)",
   ],
   "Láser CO2": [
     "Acrílico 2mm",
@@ -45,7 +46,7 @@ const MATERIALES_POR_MAQUINA: Record<string, string[]> = {
     "Cartón",
     "Tela",
     "Papel",
-    "Otro",
+    "Otro (Especifica en la descripción)",
   ],
   "Fresadora CNC": [
     "Triplay 12.7mm",
@@ -53,7 +54,7 @@ const MATERIALES_POR_MAQUINA: Record<string, string[]> = {
     "HDPE 12.7mm",
     "MDF 18 mm",
     "Polipropileno",
-    "Otro",
+    "Otro (Especifica en la descripción)",
   ],
   Libre: ["Libre"],
 };
