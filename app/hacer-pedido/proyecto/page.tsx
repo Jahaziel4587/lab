@@ -38,7 +38,7 @@ const proyectos: Proyecto[] = [
   { nombre: "E012.Falcon View", imagen: "/Bioana.jpeg" },
   // { nombre: "E021.Avarie Menstrual Pads", imagen: "/Bioana.jpeg" },
   { nombre: "E018.Sleep Fascia", imagen: "/Bioana.jpeg" },
-  { nombre: "E019.Othotek", imagen: "/Bioana.jpeg" },
+  { nombre: "E019.Orthotek", imagen: "/Bioana.jpeg" },
   
   { nombre: "E022.Injectable Dermis", imagen: "/Bioana.jpeg" },
   { nombre: "E023.DiViDiaper", imagen: "/Bioana.jpeg" },
