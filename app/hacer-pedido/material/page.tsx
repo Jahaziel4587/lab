@@ -13,7 +13,9 @@ const MATERIALES_POR_MAQUINA: Record<string, string[]> = {
     "PLA retardante de fuego 1.75mm (Bambu Lab)",
     "Nylon retardante de fuego 1.75 (Bambu Lab)",
     "Otro (Especifica en la descripción)",
-    
+    "ABS",
+    "TPU",
+
   ],
   "Resina Formlabs 3B": [
     "Rigid 10K",
@@ -42,7 +44,9 @@ const MATERIALES_POR_MAQUINA: Record<string, string[]> = {
     "Acrílico blanco 3mm",
     "Acrílico negro 3mm",
     "Acrílico Transparente 4mm",
+  "Acrilico 6mm",
     "MDF 4mm",
+    "MDF 3mm",
     "Cartón",
     "Tela",
     "Papel",
@@ -54,6 +58,7 @@ const MATERIALES_POR_MAQUINA: Record<string, string[]> = {
     "HDPE 12.7mm",
     "MDF 18 mm",
     "Polipropileno",
+    "PEEK",
     "Otro (Especifica en la descripción)",
   ],
   Libre: ["Libre"],
