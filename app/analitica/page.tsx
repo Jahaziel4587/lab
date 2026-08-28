@@ -98,6 +98,47 @@ function formatDate(d: Date | null) {
   return `${year}-${month}-${day}`;
 }
 
+function parseDate(value: any): Date | null {
+  if (!value) return null;
+
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value;
+  }
+
+  if (typeof value?.toDate === "function") {
+    const date = value.toDate();
+    return Number.isNaN(date.getTime()) ? null : date;
+  }
+
+  if (typeof value === "string") {
+    const match = value.match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (match) {
+      const date = new Date(
+        Number(match[1]),
+        Number(match[2]) - 1,
+        Number(match[3])
+      );
+      return Number.isNaN(date.getTime()) ? null : date;
+    }
+  }
+
+  return null;
+}
+
+function monthKey(date: Date) {
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function formatMonthLabel(key: string) {
+  const [year, month] = key.split("-").map(Number);
+  const label = new Intl.DateTimeFormat("es-MX", {
+    month: "long",
+    year: "numeric",
+  }).format(new Date(year, month - 1, 1));
+
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 // Normalizar para agrupar claves equivalentes
 function normalizeKey(x: string): string {
   return x
@@ -143,6 +184,7 @@ export default function AnaliticaPage() {
   const [lines, setLines] = useState<AnalyticLine[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [openProyecto, setOpenProyecto] = useState<string | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState("all");
 
   // para exportar a Excel
   const [exportRows, setExportRows] = useState<PedidoExportRow[]>([]);
@@ -171,7 +213,7 @@ export default function AnaliticaPage() {
             if (status === "cancelado") return;
 
             const fechaPedido: string =
-              d.fechaLimite || d.fechaEntregaReal || d.timestamp || "";
+              d.fechaLimite || d.timestamp || "";
             const fechaFinal: string = d.fechaEntregaReal || "";
             const titulo: string = d.titulo || "Sin título";
 
@@ -203,10 +245,10 @@ export default function AnaliticaPage() {
               });
             }
 
-            let fecha: Date | null = null;
-            if (fechaPedido && /^\d{4}-\d{2}-\d{2}/.test(fechaPedido)) {
-              fecha = new Date(fechaPedido);
-            }
+            // La analítica mensual se organiza exclusivamente por la fecha
+            // de entrega real. Si aún no existe, el pedido solo aparece al
+            // seleccionar "Todos los meses".
+            const fecha = parseDate(d.fechaEntregaReal);
 
             try {
               const linesRef = collection(
@@ -279,6 +321,31 @@ export default function AnaliticaPage() {
 
     cargar();
   }, [isAdmin]);
+
+  const availableMonths = useMemo(() => {
+    return Array.from(
+      new Set(
+        lines
+          .filter((line) => line.fecha)
+          .map((line) => monthKey(line.fecha as Date))
+      )
+    ).sort((a, b) => b.localeCompare(a));
+  }, [lines]);
+
+  const filteredLines = useMemo(() => {
+    if (selectedMonth === "all") return lines;
+    return lines.filter(
+      (line) => line.fecha && monthKey(line.fecha) === selectedMonth
+    );
+  }, [lines, selectedMonth]);
+
+  const filteredExportRows = useMemo(() => {
+    if (selectedMonth === "all") return exportRows;
+    return exportRows.filter((row) => {
+      const date = parseDate(row.fechaFinal);
+      return date && monthKey(date) === selectedMonth;
+    });
+  }, [exportRows, selectedMonth]);
 
 function MiniBreakdownTable({
   title,
@@ -421,7 +488,7 @@ function ChartCard({
   const proyectosStats = useMemo(() => {
     const map = new Map<string, ProyectoStats>();
 
-    for (const ln of lines) {
+    for (const ln of filteredLines) {
       const keyProyecto = ln.proyecto || "Sin proyecto";
       let stats = map.get(keyProyecto);
       if (!stats) {
@@ -477,7 +544,7 @@ function ChartCard({
     }
 
     return Array.from(map.values()).sort((a, b) => b.totalMXN - a.totalMXN);
-  }, [lines]);
+  }, [filteredLines]);
 
   /* ==========================
    * Aggregado por servicio
@@ -494,7 +561,7 @@ function ChartCard({
       }
     >();
 
-    for (const ln of lines) {
+    for (const ln of filteredLines) {
       const lbl = ln.serviceName || "(sin servicio)";
       const key = normalizeKey(lbl);
 
@@ -531,7 +598,7 @@ function ChartCard({
           .sort((a, b) => b.count - a.count),
       }))
       .sort((a, b) => b.totalCount - a.totalCount);
-  }, [lines]);
+  }, [filteredLines]);
 
   /* ==========================
    * Aggregado por material
@@ -548,7 +615,7 @@ function ChartCard({
       }
     >();
 
-    for (const ln of lines) {
+    for (const ln of filteredLines) {
       const lbl = ln.material || "(sin material)";
       const key = normalizeKey(lbl);
 
@@ -585,11 +652,11 @@ function ChartCard({
           .sort((a, b) => b.count - a.count),
       }))
       .sort((a, b) => b.totalCount - a.totalCount);
-  }, [lines]);
+  }, [filteredLines]);
 
   const totalGeneralMXN = useMemo(
-    () => lines.reduce((acc, ln) => acc + ln.subtotalMXN, 0),
-    [lines]
+    () => filteredLines.reduce((acc, ln) => acc + ln.subtotalMXN, 0),
+    [filteredLines]
   );
 
   // ==========================
@@ -644,7 +711,7 @@ function applyCurrencyFormat(ws: XLSX.WorkSheet, colIdxs: number[]) {
 }
 
   const handleDownloadXLSX = () => {
-    if (exportRows.length === 0) return;
+    if (filteredExportRows.length === 0) return;
 
     // --- Hoja principal (igual que antes, + columna de material) ---
     const headerMain = [
@@ -691,7 +758,7 @@ function applyCurrencyFormat(ws: XLSX.WorkSheet, colIdxs: number[]) {
 
     const wb = XLSX.utils.book_new();
 
-    const mainRows = exportRows.map(makeRowMain);
+    const mainRows = filteredExportRows.map(makeRowMain);
     const wsMain = XLSX.utils.aoa_to_sheet([headerMain, ...mainRows]);
     // Resumen: "Costo final del pedido" = col 5, "Costo material (MXN)" = col 7
 applyCurrencyFormat(wsMain, [5, 7]);
@@ -752,7 +819,7 @@ applyCurrencyFormat(wsMain, [5, 7]);
     };
 
     const byProject = new Map<string, PedidoExportRow[]>();
-    for (const r of exportRows) {
+    for (const r of filteredExportRows) {
       const key = r.proyecto || "Sin proyecto";
       if (!byProject.has(key)) byProject.set(key, []);
       byProject.get(key)!.push(r);
@@ -770,7 +837,8 @@ applyCurrencyFormat(wsProj, [10, 12]);
       XLSX.utils.book_append_sheet(wb, wsProj, safeName);
     });
 
-    XLSX.writeFile(wb, "analitica_pedidos.xlsx");
+    const suffix = selectedMonth === "all" ? "todos_los_meses" : selectedMonth;
+    XLSX.writeFile(wb, `analitica_pedidos_${suffix}.xlsx`);
   };
 
  return (
@@ -786,15 +854,38 @@ applyCurrencyFormat(wsProj, [10, 12]);
           </p>
         </div>
 
+        <div className="flex flex-col sm:flex-row gap-3 sm:items-end">
+          <label className="flex flex-col gap-1.5 text-xs font-medium text-white/60">
+            Filtrar información por mes
+            <select
+              value={selectedMonth}
+              onChange={(event) => {
+                setSelectedMonth(event.target.value);
+                setOpenProyecto(null);
+              }}
+              className="min-w-[220px] rounded-2xl border border-white/10 bg-white/[0.06] px-4 py-3 text-sm font-semibold text-white outline-none transition hover:bg-white/[0.1] focus:border-emerald-400/50"
+            >
+              <option value="all" className="bg-zinc-950 text-white">
+                Todos los meses
+              </option>
+              {availableMonths.map((month) => (
+                <option key={month} value={month} className="bg-zinc-950 text-white">
+                  {formatMonthLabel(month)}
+                </option>
+              ))}
+            </select>
+          </label>
+
         {view === "proyecto" && (
           <button
             onClick={handleDownloadXLSX}
-            disabled={exportRows.length === 0}
+            disabled={filteredExportRows.length === 0}
             className="inline-flex items-center justify-center rounded-2xl bg-gradient-to-r from-emerald-400 to-teal-500 px-5 py-3 text-sm font-semibold text-black shadow-[0_18px_50px_-24px_rgba(45,212,191,0.75)] hover:brightness-110 hover:-translate-y-[1px] transition disabled:opacity-45 disabled:cursor-not-allowed"
           >
             Descargar XLSX
           </button>
         )}
+        </div>
       </div>
 
       {/* Tabs horizontales */}
@@ -859,7 +950,9 @@ applyCurrencyFormat(wsProj, [10, 12]);
                     {formatMoney(totalGeneralMXN)}
                   </div>
                   <p className="mt-2 text-xs text-white/45">
-                    Todas las líneas de cotización registradas.
+                    {selectedMonth === "all"
+                      ? "Todas las líneas de cotización registradas."
+                      : `Líneas con entrega real en ${formatMonthLabel(selectedMonth)}.`}
                   </p>
                 </div>
 
