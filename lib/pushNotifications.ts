@@ -4,15 +4,35 @@ function normalizeEmail(value: unknown) {
   return String(value || "").trim().toLowerCase();
 }
 
-export async function getDisplayNameForUid(uid: string, fallbackEmail?: string | null) {
+function buildFullName(data: any) {
+  const nombre = String(data?.nombre || "").trim();
+  const apellido = String(data?.apellido || "").trim();
+  return [nombre, apellido].filter(Boolean).join(" ");
+}
+
+export async function getDisplayNameForUid(
+  uid: string,
+  fallbackEmail?: string | null,
+) {
   try {
     const userDoc = await adminDB.collection("users").doc(uid).get();
     if (userDoc.exists) {
-      const data = userDoc.data() as any;
-      const nombre = String(data?.nombre || "").trim();
-      const apellido = String(data?.apellido || "").trim();
-      const full = [nombre, apellido].filter(Boolean).join(" ");
+      const full = buildFullName(userDoc.data());
       if (full) return full;
+    }
+
+    const email = normalizeEmail(fallbackEmail);
+    if (email) {
+      const byEmail = await adminDB
+        .collection("users")
+        .where("email", "==", email)
+        .limit(1)
+        .get();
+
+      if (!byEmail.empty) {
+        const full = buildFullName(byEmail.docs[0].data());
+        if (full) return full;
+      }
     }
   } catch (error) {
     console.error("[push] No se pudo leer el nombre del usuario:", error);
