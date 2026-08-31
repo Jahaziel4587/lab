@@ -24,24 +24,24 @@ export default function PedidoChatCard({
   user,
 }: Props) {
   return (
-    <div className={`${cardClass} ${cardPad} lg:col-span-3 flex flex-col`}>
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-lg font-semibold text-white/90">
-            Canal de comunicación
-          </h2>
-          <p className="mt-1 text-sm text-white/60">
-            Mensajes entre administradores y usuarios sobre este pedido.
-          </p>
-        </div>
+    <div className={`${cardClass} ${cardPad} lg:col-span-3 flex min-w-0 flex-col`}>
+      <div>
+        <h2 className="text-lg font-semibold text-white/90">
+          Canal de comunicación
+        </h2>
+        <p className="mt-1 text-sm leading-relaxed text-white/60">
+          Mensajes sobre este pedido.
+        </p>
       </div>
 
-      <div className="mt-4 flex-1 rounded-2xl border border-white/10 bg-black/20 overflow-hidden flex flex-col">
-        <div className="flex-1 p-3 sm:p-4 overflow-y-auto space-y-2">
+      <div className="mt-4 flex min-h-[420px] max-h-[70dvh] flex-1 flex-col overflow-hidden rounded-2xl border border-white/10 bg-black/20 sm:min-h-[480px]">
+        <div className="flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4 space-y-3">
           {chatMessages.length === 0 ? (
-            <p className="text-white/55 text-sm text-center mt-6">
-              Aún no hay mensajes en este pedido.
-            </p>
+            <div className="flex min-h-48 items-center justify-center px-4">
+              <p className="text-center text-sm text-white/55">
+                Aún no hay mensajes en este pedido.
+              </p>
+            </div>
           ) : (
             chatMessages.map((m) => {
               const fecha =
@@ -50,7 +50,6 @@ export default function PedidoChatCard({
                   : null;
 
               const isMine = user && m.userId && m.userId === user.uid;
-
               const email = m.userEmail || m.userName || undefined;
               const friendlyName =
                 (email && nameByEmail[email]) ||
@@ -68,19 +67,19 @@ export default function PedidoChatCard({
                   className={`flex ${isMine ? "justify-end" : "justify-start"}`}
                 >
                   <div
-                    className={`max-w-[85%] rounded-2xl px-3 py-2 ${
+                    className={`min-w-0 max-w-[92%] sm:max-w-[80%] rounded-2xl px-3 py-2.5 ${
                       isMine ? bubbleMine : bubbleOther
                     }`}
                   >
-                    <div className="flex items-center justify-between gap-3 mb-1">
-                      <span className="text-[11px] font-semibold text-white/80">
+                    <div className="mb-1.5 flex flex-col gap-0.5 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                      <span className="truncate text-[11px] font-semibold text-white/80">
                         {friendlyName}
                         {m.isAdmin ? " · Admin" : ""}
                       </span>
 
                       {fecha && (
-                        <span className="text-[10px] text-white/45">
-                          {fecha.toLocaleDateString()}{" "}
+                        <span className="shrink-0 text-[10px] text-white/45">
+                          {fecha.toLocaleDateString()} {" "}
                           {fecha.toLocaleTimeString([], {
                             hour: "2-digit",
                             minute: "2-digit",
@@ -89,7 +88,7 @@ export default function PedidoChatCard({
                       )}
                     </div>
 
-                    <p className="whitespace-pre-wrap text-sm leading-relaxed">
+                    <p className="whitespace-pre-wrap break-words text-sm leading-relaxed">
                       {m.text}
                     </p>
                   </div>
@@ -103,7 +102,7 @@ export default function PedidoChatCard({
 
         <form
           onSubmit={handleSendMessage}
-          className="border-t border-white/10 p-3 sm:p-4"
+          className="shrink-0 border-t border-white/10 bg-black/25 p-3 sm:p-4 pb-[calc(0.75rem+env(safe-area-inset-bottom))] sm:pb-4"
         >
           <textarea
             className={textareaClass}
