@@ -1,5 +1,5 @@
 export const cardClass =
-  "rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-xl shadow-[0_30px_120px_-90px_rgba(0,0,0,0.95)]";
+  "rounded-2xl border border-white/10 bg-white/[0.03] backdrop-blur-sm sm:backdrop-blur-xl shadow-none sm:shadow-[0_30px_120px_-90px_rgba(0,0,0,0.95)]";
 
 export const cardPad = "p-4 sm:p-6";
 
@@ -24,15 +24,15 @@ export const statusPillClass = (status: any) => {
   const s = String(status || "").trim().toLowerCase();
 
   if (s === "en proceso") {
-    return `${pillBase} bg-yellow-500/15 text-yellow-200 border-yellow-400/30 shadow-[0_10px_28px_-18px_rgba(234,179,8,0.75)]`;
+    return `${pillBase} bg-yellow-500/15 text-yellow-200 border-yellow-400/30 shadow-none sm:shadow-[0_10px_28px_-18px_rgba(234,179,8,0.75)]`;
   }
 
   if (s === "listo") {
-    return `${pillBase} bg-emerald-500/15 text-emerald-200 border-emerald-400/30 shadow-[0_10px_28px_-18px_rgba(45,212,191,0.75)]`;
+    return `${pillBase} bg-emerald-500/15 text-emerald-200 border-emerald-400/30 shadow-none sm:shadow-[0_10px_28px_-18px_rgba(45,212,191,0.75)]`;
   }
 
   if (s === "cancelado") {
-    return `${pillBase} bg-red-500/15 text-red-200 border-red-400/30 shadow-[0_10px_28px_-18px_rgba(239,68,68,0.7)]`;
+    return `${pillBase} bg-red-500/15 text-red-200 border-red-400/30 shadow-none sm:shadow-[0_10px_28px_-18px_rgba(239,68,68,0.7)]`;
   }
 
   return `${pillBase} bg-white/5 text-white/80 border-white/15`;
@@ -50,7 +50,7 @@ export const btnSoft =
   "inline-flex min-h-11 w-full sm:w-auto items-center justify-center rounded-xl border border-white/12 bg-white/5 px-4 py-2.5 text-sm text-white/85 hover:bg-white/10 active:bg-white/15 transition";
 
 export const btnPrimary =
-  "inline-flex min-h-11 w-full sm:w-auto items-center justify-center rounded-xl bg-emerald-500/15 border border-emerald-400/30 px-4 py-2.5 text-sm text-emerald-100 hover:bg-emerald-500/20 active:bg-emerald-500/25 transition shadow-[0_12px_30px_-22px_rgba(16,185,129,0.9)]";
+  "inline-flex min-h-11 w-full sm:w-auto items-center justify-center rounded-xl bg-emerald-500/15 border border-emerald-400/30 px-4 py-2.5 text-sm text-emerald-100 hover:bg-emerald-500/20 active:bg-emerald-500/25 transition shadow-none sm:shadow-[0_12px_30px_-22px_rgba(16,185,129,0.9)]";
 
 export const btnDanger =
   "inline-flex min-h-11 w-full sm:w-auto items-center justify-center rounded-xl border border-red-400/25 bg-red-500/10 px-3 py-2.5 text-sm text-red-200 hover:bg-red-500/15 active:bg-red-500/20 transition";
