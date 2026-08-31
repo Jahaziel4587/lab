@@ -8,7 +8,7 @@ type Particle = {
   vx: number;
   vy: number;
   r: number;
-  a: number; // alpha
+  a: number;
 };
 
 export default function ParticlesBackground() {
@@ -20,37 +20,53 @@ export default function ParticlesBackground() {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d", {
+      alpha: true,
+      desynchronized: true,
+    });
     if (!ctx) return;
 
-    const prefersReduced =
-      window.matchMedia?.("(prefers-reduced-motion: reduce)")?.matches ?? false;
+    const mobileQuery = window.matchMedia("(max-width: 767px)");
+    const reducedMotionQuery = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    );
 
-    // --------- TUNING (ajústalo a tu gusto) ---------
-    const BASE_COUNT = 60;
-    const LINK_DIST = 140;
-    const SPEED = 0.25;
+    let isMobile = mobileQuery.matches;
+    let prefersReduced = reducedMotionQuery.matches;
+    let isVisible = !document.hidden;
+    let lastFrame = 0;
 
-    // Glow / color
-    const DOT_RGB = "45, 212, 191";      // teal
-    const GLOW_RGB = "52, 211, 153";     // emerald
+    const DOT_RGB = "45, 212, 191";
+    const GLOW_RGB = "52, 211, 153";
 
-    const DOT_ALPHA_MULT = 0.85;         // más visible
-    const DOT_GLOW_MULT = 0.65;          // intensidad del glow (puntos)
-    const DOT_SHADOW_BLUR = 16;          // 10–18 buen rango
+    const getConfig = () => ({
+      count: prefersReduced ? 12 : isMobile ? 20 : 60,
+      linkDist: isMobile ? 105 : 140,
+      speed: prefersReduced ? 0 : isMobile ? 0.14 : 0.25,
+      targetFps: isMobile ? 30 : 60,
+      dotShadowBlur: isMobile ? 0 : 16,
+      lineShadowBlur: isMobile ? 0 : 8,
+      lineAlpha: isMobile ? 0.11 : 0.22,
+      drawHalo: !isMobile,
+      drawLinks: !prefersReduced,
+    });
 
-    const LINE_ALPHA_MULT = 0.22;        // más visible que antes (0.10)
-    const LINE_SHADOW_BLUR = 8;          // glow en líneas (sutil)
-    // -----------------------------------------------
-
-    const rand = (min: number, max: number) => Math.random() * (max - min) + min;
+    const rand = (min: number, max: number) =>
+      Math.random() * (max - min) + min;
 
     const resize = () => {
-      const dpr = Math.max(1, window.devicePixelRatio || 1);
+      isMobile = mobileQuery.matches;
+
+      // Limitar DPR reduce muchísimo el número de píxeles que el canvas
+      // necesita redibujar en teléfonos Android de alta densidad.
+      const maxDpr = isMobile ? 1.25 : 2;
+      const dpr = Math.min(
+        Math.max(1, window.devicePixelRatio || 1),
+        maxDpr,
+      );
 
       canvas.width = Math.floor(window.innerWidth * dpr);
       canvas.height = Math.floor(window.innerHeight * dpr);
-
       canvas.style.width = "100vw";
       canvas.style.height = "100vh";
 
@@ -58,50 +74,65 @@ export default function ParticlesBackground() {
     };
 
     const init = () => {
-      particlesRef.current = Array.from({ length: BASE_COUNT }).map(() => ({
-        x: rand(0, window.innerWidth),
-        y: rand(0, window.innerHeight),
-        vx: rand(-SPEED, SPEED),
-        vy: rand(-SPEED, SPEED),
-        r: rand(0.9, 2.1),
-        a: rand(0.25, 0.8),
-      }));
+      const config = getConfig();
+
+      particlesRef.current = Array.from({ length: config.count }).map(
+        () => ({
+          x: rand(0, window.innerWidth),
+          y: rand(0, window.innerHeight),
+          vx: rand(-config.speed, config.speed),
+          vy: rand(-config.speed, config.speed),
+          r: isMobile ? rand(0.8, 1.6) : rand(0.9, 2.1),
+          a: isMobile ? rand(0.2, 0.55) : rand(0.25, 0.8),
+        }),
+      );
     };
 
-    const drawDot = (p: Particle) => {
-      // Halo suave (radial) + punto sólido + glow (shadow)
-      const haloR = p.r * 4.2;
+    const drawDot = (p: Particle, config: ReturnType<typeof getConfig>) => {
+      if (config.drawHalo) {
+        const haloR = p.r * 4.2;
+        const gradient = ctx.createRadialGradient(
+          p.x,
+          p.y,
+          0,
+          p.x,
+          p.y,
+          haloR,
+        );
 
-      // Halo (sin shadow para que no “reviente”)
-      const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, haloR);
-      g.addColorStop(0, `rgba(${GLOW_RGB}, ${p.a * 0.20})`);
-      g.addColorStop(1, `rgba(${GLOW_RGB}, 0)`);
+        gradient.addColorStop(0, `rgba(${GLOW_RGB}, ${p.a * 0.2})`);
+        gradient.addColorStop(1, `rgba(${GLOW_RGB}, 0)`);
 
-      ctx.save();
-      ctx.globalCompositeOperation = "source-over";
-      ctx.fillStyle = g;
-      ctx.beginPath();
-      ctx.arc(p.x, p.y, haloR, 0, Math.PI * 2);
-      ctx.fill();
-      ctx.restore();
+        ctx.fillStyle = gradient;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, haloR, 0, Math.PI * 2);
+        ctx.fill();
+      }
 
-      // Punto con glow
-      ctx.save();
-      ctx.shadowBlur = DOT_SHADOW_BLUR;
-      ctx.shadowColor = `rgba(${GLOW_RGB}, ${p.a * DOT_GLOW_MULT})`;
-      ctx.fillStyle = `rgba(${DOT_RGB}, ${p.a * DOT_ALPHA_MULT})`;
+      if (config.dotShadowBlur > 0) {
+        ctx.save();
+        ctx.shadowBlur = config.dotShadowBlur;
+        ctx.shadowColor = `rgba(${GLOW_RGB}, ${p.a * 0.65})`;
+        ctx.fillStyle = `rgba(${DOT_RGB}, ${p.a * 0.85})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+        return;
+      }
+
+      ctx.fillStyle = `rgba(${DOT_RGB}, ${p.a * 0.72})`;
       ctx.beginPath();
       ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
       ctx.fill();
-      ctx.restore();
     };
 
-    const step = () => {
+    const renderFrame = () => {
+      const config = getConfig();
       ctx.clearRect(0, 0, window.innerWidth, window.innerHeight);
 
       const pts = particlesRef.current;
 
-      // Partículas
       for (const p of pts) {
         if (!prefersReduced) {
           p.x += p.vx;
@@ -113,16 +144,18 @@ export default function ParticlesBackground() {
         if (p.y < -20) p.y = window.innerHeight + 20;
         if (p.y > window.innerHeight + 20) p.y = -20;
 
-        drawDot(p);
+        drawDot(p, config);
       }
 
-      // Líneas (con glow sutil)
-      ctx.save();
-      ctx.lineWidth = 1;
+      if (!config.drawLinks) return;
 
-      // glow en líneas
-      ctx.shadowBlur = LINE_SHADOW_BLUR;
-      ctx.shadowColor = `rgba(${GLOW_RGB}, 0.25)`;
+      ctx.save();
+      ctx.lineWidth = isMobile ? 0.7 : 1;
+
+      if (config.lineShadowBlur > 0) {
+        ctx.shadowBlur = config.lineShadowBlur;
+        ctx.shadowColor = `rgba(${GLOW_RGB}, 0.25)`;
+      }
 
       for (let i = 0; i < pts.length; i++) {
         for (let j = i + 1; j < pts.length; j++) {
@@ -130,23 +163,50 @@ export default function ParticlesBackground() {
           const b = pts[j];
           const dx = a.x - b.x;
           const dy = a.y - b.y;
-          const d = Math.sqrt(dx * dx + dy * dy);
+          const distanceSquared = dx * dx + dy * dy;
+          const maxDistanceSquared = config.linkDist * config.linkDist;
 
-          if (d < LINK_DIST) {
-            const alpha = (1 - d / LINK_DIST) * LINE_ALPHA_MULT;
+          // Evita calcular sqrt para parejas que ya sabemos que están lejos.
+          if (distanceSquared >= maxDistanceSquared) continue;
 
-            ctx.beginPath();
-            ctx.moveTo(a.x, a.y);
-            ctx.lineTo(b.x, b.y);
-            ctx.strokeStyle = `rgba(${DOT_RGB}, ${alpha})`;
-            ctx.stroke();
-          }
+          const distance = Math.sqrt(distanceSquared);
+          const alpha =
+            (1 - distance / config.linkDist) * config.lineAlpha;
+
+          ctx.beginPath();
+          ctx.moveTo(a.x, a.y);
+          ctx.lineTo(b.x, b.y);
+          ctx.strokeStyle = `rgba(${DOT_RGB}, ${alpha})`;
+          ctx.stroke();
         }
       }
 
       ctx.restore();
+    };
+
+    const step = (timestamp: number) => {
+      if (!isVisible) return;
+
+      const config = getConfig();
+      const frameInterval = 1000 / config.targetFps;
+
+      if (timestamp - lastFrame >= frameInterval) {
+        lastFrame = timestamp;
+        renderFrame();
+      }
 
       rafRef.current = requestAnimationFrame(step);
+    };
+
+    const restartAnimation = () => {
+      if (rafRef.current !== null) {
+        cancelAnimationFrame(rafRef.current);
+      }
+
+      if (isVisible) {
+        lastFrame = 0;
+        rafRef.current = requestAnimationFrame(step);
+      }
     };
 
     const onResize = () => {
@@ -154,21 +214,42 @@ export default function ParticlesBackground() {
       init();
     };
 
+    const onVisibilityChange = () => {
+      isVisible = !document.hidden;
+      restartAnimation();
+    };
+
+    const onMediaChange = () => {
+      isMobile = mobileQuery.matches;
+      prefersReduced = reducedMotionQuery.matches;
+      resize();
+      init();
+      restartAnimation();
+    };
+
     resize();
     init();
-    rafRef.current = requestAnimationFrame(step);
-    window.addEventListener("resize", onResize);
+    restartAnimation();
+
+    window.addEventListener("resize", onResize, { passive: true });
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    mobileQuery.addEventListener?.("change", onMediaChange);
+    reducedMotionQuery.addEventListener?.("change", onMediaChange);
 
     return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      if (rafRef.current !== null) cancelAnimationFrame(rafRef.current);
       window.removeEventListener("resize", onResize);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+      mobileQuery.removeEventListener?.("change", onMediaChange);
+      reducedMotionQuery.removeEventListener?.("change", onMediaChange);
     };
   }, []);
 
   return (
     <canvas
       ref={canvasRef}
-      className="fixed inset-0 pointer-events-none -z-10 opacity-90"
+      aria-hidden="true"
+      className="fixed inset-0 pointer-events-none -z-10 opacity-70 sm:opacity-90"
     />
   );
 }
