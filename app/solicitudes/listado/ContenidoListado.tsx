@@ -443,116 +443,25 @@ export default function ListadoPedidosPage() {
                 <div className="pointer-events-none absolute inset-x-0 top-0 h-20 bg-gradient-to-b from-emerald-500/10 to-transparent sm:h-24" />
 
                 {/* Mobile */}
-                <div className="relative space-y-3 p-3 sm:p-4 lg:hidden">
+                <div className="relative divide-y divide-white/10 lg:hidden">
                   {pedidosPaginados.map((p) => (
-                    <article
+                    <div
                       key={p.id}
-                      className="rounded-2xl border border-white/10 bg-black/20 p-4"
+                      className="flex items-center justify-between gap-4 px-4 py-3.5"
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="min-w-0 flex-1">
-                          <h2 className="break-words text-base font-semibold leading-snug text-white/95">
-                            {p.titulo || "Sin título"}
-                          </h2>
-                          <p className="mt-1 break-all text-[10px] text-white/35">
-                            ID: {p.id}
-                          </p>
-                        </div>
-
-                        {!isAdmin && (
-                          <span className={statusPillClass(p.status || "enviado")}>
-                            {statusLabel(p.status || "enviado")}
-                          </span>
-                        )}
-                      </div>
-
-                      <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-4 text-sm">
-                        <div className="col-span-2">
-                          <div className="text-[11px] uppercase tracking-wide text-white/40">
-                            Solicitante
-                          </div>
-                          <div className="mt-1 break-words text-white/80">
-                            {solicitanteDe(p)}
-                          </div>
-                        </div>
-
-                        <div>
-                          <div className="text-[11px] uppercase tracking-wide text-white/40">
-                            Entrega propuesta
-                          </div>
-                          <div className="mt-1 text-white/80">
-                            {p.fechaLimite || "—"}
-                          </div>
-                        </div>
-
-                        <div>
-                          <div className="text-[11px] uppercase tracking-wide text-white/40">
-                            Costos, base
-                          </div>
-                          <div className="mt-1 font-medium tabular-nums text-white/85">
-                            {p.costoBaseProyecto > 0
-                              ? fmtMXN(Number(p.costoBaseProyecto))
-                              : "—"}
-                          </div>
-                        </div>
-
-                        <div className="col-span-2">
-                          <div className="text-[11px] uppercase tracking-wide text-white/40">
-                            Entrega real
-                          </div>
-                          <div className="mt-1">
-                            {isAdmin ? (
-                              <input
-                                type="date"
-                                value={p.fechaEntregaReal || ""}
-                                onChange={(e) =>
-                                  actualizarCampo(
-                                    p.id,
-                                    "fechaEntregaReal",
-                                    e.target.value,
-                                  )
-                                }
-                                className="min-h-11 w-full rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-base text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/25 [color-scheme:dark]"
-                              />
-                            ) : (
-                              <span className="text-white/80">
-                                {p.fechaEntregaReal || "Pendiente"}
-                              </span>
-                            )}
-                          </div>
-                        </div>
-
-                        {isAdmin && (
-                          <div className="col-span-2">
-                            <div className="text-[11px] uppercase tracking-wide text-white/40">
-                              Status
-                            </div>
-                            <select
-                              value={p.status || "enviado"}
-                              onChange={(e) =>
-                                actualizarCampo(p.id, "status", e.target.value)
-                              }
-                              className={`${statusPillClass(
-                                p.status || "enviado",
-                              )} mt-2 min-h-11 w-full justify-center [&>option]:bg-white [&>option]:text-black`}
-                            >
-                              <option value="enviado">Enviado</option>
-                              <option value="visto">Visto</option>
-                              <option value="en proceso">En proceso</option>
-                              <option value="listo">Listo</option>
-                              <option value="cancelado">Cancelado</option>
-                            </select>
-                          </div>
-                        )}
-                      </div>
-
                       <Link
                         href={`/solicitudes/listado/${p.id}`}
-                        className="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition active:bg-emerald-500/20"
+                        className="min-w-0 flex-1 break-words text-sm font-medium leading-snug text-emerald-200 underline decoration-emerald-400/30 underline-offset-4 transition active:text-emerald-100"
                       >
-                        Ver detalles
+                        {p.titulo || "Sin título"}
                       </Link>
-                    </article>
+
+                      <div className="shrink-0 text-right text-sm font-medium tabular-nums text-white/80">
+                        {p.costoBaseProyecto > 0
+                          ? fmtMXN(Number(p.costoBaseProyecto))
+                          : "—"}
+                      </div>
+                    </div>
                   ))}
                 </div>
 
