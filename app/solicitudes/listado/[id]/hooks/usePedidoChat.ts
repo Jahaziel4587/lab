@@ -3,7 +3,6 @@ import {
   addDoc,
   collection,
   doc,
-  getDoc,
   getDocs,
   onSnapshot,
   orderBy,
@@ -18,15 +17,12 @@ export function usePedidoChat(
   id?: string,
   pedido?: any,
   isAdmin?: boolean,
-  user?: any
+  user?: any,
 ) {
   const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
   const [newMessage, setNewMessage] = useState("");
   const [nameByEmail, setNameByEmail] = useState<Record<string, string>>({});
-
   const chatEndRef = useRef<HTMLDivElement | null>(null);
-
-  const ownerEmail = pedido?.correoUsuario || pedido?.usuario || null;
 
   useEffect(() => {
     const loadUsers = async () => {
@@ -59,7 +55,7 @@ export function usePedidoChat(
 
     const qChat = query(
       collection(db, "pedidos", id, "chat"),
-      orderBy("createdAt", "asc")
+      orderBy("createdAt", "asc"),
     );
 
     const unsub = onSnapshot(
@@ -69,7 +65,6 @@ export function usePedidoChat(
 
         snap.forEach((d) => {
           const data = d.data() as any;
-
           arr.push({
             id: d.id,
             text: data.text || "",
@@ -86,15 +81,14 @@ export function usePedidoChat(
 
         setChatMessages(arr);
       },
-      (err) => console.error("Error escuchando chat:", err)
+      (err) => console.error("Error escuchando chat:", err),
     );
 
     return () => unsub();
   }, [id]);
 
   useEffect(() => {
-    if (!id || !user) return;
-    if (chatMessages.length === 0) return;
+    if (!id || !user || chatMessages.length === 0) return;
 
     const updates: Promise<void>[] = [];
 
@@ -103,27 +97,30 @@ export function usePedidoChat(
 
       if (isAdmin) {
         if (!esMio && !m.vistoPorAdmin) {
-          const ref = doc(db, "pedidos", id, "chat", m.id);
-          updates.push(updateDoc(ref, { vistoPorAdmin: true }));
+          updates.push(
+            updateDoc(doc(db, "pedidos", id, "chat", m.id), {
+              vistoPorAdmin: true,
+            }),
+          );
         }
-      } else {
-        if (!esMio && !m.vistoPorUser) {
-          const ref = doc(db, "pedidos", id, "chat", m.id);
-          updates.push(updateDoc(ref, { vistoPorUser: true }));
-        }
+      } else if (!esMio && !m.vistoPorUser) {
+        updates.push(
+          updateDoc(doc(db, "pedidos", id, "chat", m.id), {
+            vistoPorUser: true,
+          }),
+        );
       }
     });
 
     if (updates.length > 0) {
       Promise.all(updates).catch((err) =>
-        console.error("Error al marcar mensajes:", err)
+        console.error("Error al marcar mensajes:", err),
       );
     }
   }, [chatMessages, id, isAdmin, user]);
 
   useEffect(() => {
     if (!chatEndRef.current) return;
-
     const parent = chatEndRef.current.parentElement;
     if (!parent) return;
 
@@ -135,7 +132,6 @@ export function usePedidoChat(
 
   const handleSendMessage = async (e: FormEvent) => {
     e.preventDefault();
-
     if (!id || !user) return;
 
     const text = newMessage.trim();
@@ -143,11 +139,9 @@ export function usePedidoChat(
 
     try {
       const displayName =
-        user.displayName || (user as any).name || user.email || "Usuario";
+        user.displayName || user.name || user.email || "Usuario";
 
-      const chatColRef = collection(db, "pedidos", id, "chat");
-
-      const msgData = {
+      const msgRef = await addDoc(collection(db, "pedidos", id, "chat"), {
         text,
         createdAt: serverTimestamp(),
         userId: user.uid,
@@ -157,53 +151,37 @@ export function usePedidoChat(
         vistoPorAdmin: !!isAdmin,
         vistoPorUser: !isAdmin,
         notificacionCreada: false,
-      };
+      });
 
-      const msgRef = await addDoc(chatColRef, msgData);
       setNewMessage("");
 
-      setTimeout(async () => {
-        try {
-          const snap = await getDoc(msgRef);
-          if (!snap.exists()) return;
+      try {
+        const idToken = await user.getIdToken();
+        const response = await fetch("/api/notifications/send", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({
+            type: "chat_message",
+            pedidoId: id,
+            message: text,
+          }),
+        });
 
-          const data = snap.data() as any;
-          if (data.notificacionCreada) return;
-
-          const sigueSinLeer = isAdmin
-            ? !data.vistoPorUser
-            : !data.vistoPorAdmin;
-
-          if (!sigueSinLeer) return;
-
-          const titulo = pedido?.titulo || "Sin título";
-
-          if (isAdmin) {
-            if (ownerEmail) {
-              await addDoc(collection(db, "notifications"), {
-                userEmail: ownerEmail,
-                pedidoId: id,
-                tipo: "chat_msg_para_usuario",
-                mensaje: `Tu pedido "${titulo}" tiene un mensaje nuevo.`,
-                createdAt: serverTimestamp(),
-                leido: false,
-              });
-            }
-          } else {
-            await addDoc(collection(db, "notifications_admin"), {
-              pedidoId: id,
-              tipo: "chat_msg_para_admin",
-              mensaje: `El pedido "${titulo}" tiene un mensaje nuevo.`,
-              createdAt: serverTimestamp(),
-              leido: false,
-            });
-          }
-
-          await updateDoc(msgRef, { notificacionCreada: true });
-        } catch (err) {
-          console.error("Error al evaluar notificación:", err);
+        if (!response.ok) {
+          const result = await response.json().catch(() => null);
+          throw new Error(result?.error || "No se pudo enviar el push");
         }
-      }, 60_000);
+
+        await updateDoc(msgRef, { notificacionCreada: true });
+      } catch (notificationError) {
+        console.error(
+          "El mensaje se guardó, pero no se pudo enviar la notificación push:",
+          notificationError,
+        );
+      }
     } catch (err) {
       console.error("Error al enviar mensaje:", err);
       alert("No se pudo enviar el mensaje.");
