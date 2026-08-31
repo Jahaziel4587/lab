@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminAuth, adminDB } from "@/lib/firebaseAdmin";
 import {
-  getAdminEmails,
   getDisplayNameForUid,
   sendPushToEmails,
 } from "@/lib/pushNotifications";
@@ -11,6 +10,10 @@ export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 const CHAT_ADMIN_EMAIL = "jahaziel4587@gmail.com";
+const ORDER_NOTIFICATION_EMAILS = [
+  "jahaziel4587@gmail.com",
+  "manuel.garcia@bioana.com.mx",
+];
 
 function normalizeEmail(value: unknown) {
   return String(value || "").trim().toLowerCase();
@@ -67,18 +70,17 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: true, alreadyNotified: true });
       }
 
-      const adminEmails = await getAdminEmails();
       const notificationBody = `${senderName}: ${titulo}`;
 
       const result = await sendPushToEmails({
-        emails: adminEmails,
+        emails: ORDER_NOTIFICATION_EMAILS,
         title: "Nuevo pedido",
         body: notificationBody,
         url: absoluteUrl,
       });
 
       await Promise.all(
-        adminEmails.map((email) =>
+        ORDER_NOTIFICATION_EMAILS.map((email) =>
           adminDB.collection("notifications").add({
             userEmail: email,
             pedidoId,
