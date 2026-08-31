@@ -10,23 +10,21 @@ type Props = {
 
 export default function DetalleHeader({ id, onBack }: Props) {
   return (
-    <>
-      <div className="flex items-center justify-between">
-        <button onClick={onBack} className={btnGhost}>
-          <FiArrowLeft /> Regresar
-        </button>
-      </div>
+    <div className="min-w-0 flex-1">
+      <button onClick={onBack} className={btnGhost}>
+        <FiArrowLeft /> Regresar
+      </button>
 
-      <div className="mt-6">
-        <h1 className="text-2xl sm:text-3xl font-semibold tracking-tight text-white/95">
+      <div className="mt-4 sm:mt-6">
+        <h1 className="text-xl sm:text-3xl font-semibold tracking-tight text-white/95">
           Detalles del pedido
         </h1>
 
-        <div className="mt-2 text-sm text-white/60">
+        <div className="mt-2 text-xs sm:text-sm text-white/60">
           <span className="text-white/75">ID:</span>{" "}
           <span className="font-semibold text-white/85 break-all">{id}</span>
         </div>
       </div>
-    </>
+    </div>
   );
 }
