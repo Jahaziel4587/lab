@@ -43,121 +43,27 @@ export default function ProyectoPedidosTable({
     <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl border border-white/10 bg-white/[0.035] backdrop-blur-sm sm:backdrop-blur-2xl ring-1 ring-white/5 sm:shadow-[0_30px_120px_-80px_rgba(0,0,0,0.95)]">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-20 sm:h-24 bg-gradient-to-b from-emerald-500/10 to-transparent" />
 
-      {/* Mobile: cards legibles, sin comprimir siete columnas */}
-      <div className="relative space-y-3 p-3 sm:p-4 lg:hidden">
+      {/* Mobile/tablet: título como enlace + costo */}
+      <div className="relative divide-y divide-white/10 lg:hidden">
         {pedidos.map((pedido) => (
-          <article
+          <div
             key={pedido.id}
-            className="rounded-2xl border border-white/10 bg-black/20 p-4"
+            className="flex items-center justify-between gap-4 px-4 py-3.5"
           >
-            <div className="flex items-start justify-between gap-3">
-              <div className="min-w-0 flex-1">
-                <h3 className="break-words text-base font-semibold leading-snug text-white/95">
-                  {pedido.titulo || "Sin título"}
-                </h3>
-                <p className="mt-1 break-all text-[10px] text-white/35">
-                  ID: {pedido.id}
-                </p>
-              </div>
-
-              {!isAdmin && (
-                <span className={projectStatusPillClass(pedido.status)}>
-                  {statusLabel(pedido.status)}
-                </span>
-              )}
-            </div>
-
-            <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-4 text-sm">
-              <div className="col-span-2">
-                <div className="text-[11px] uppercase tracking-wide text-white/40">
-                  Solicitante
-                </div>
-                <div className="mt-1 break-words text-white/80">
-                  {pedido.nombreUsuario || pedido.correoUsuario || "—"}
-                </div>
-              </div>
-
-              <div>
-                <div className="text-[11px] uppercase tracking-wide text-white/40">
-                  Entrega propuesta
-                </div>
-                <div className="mt-1 text-white/80">
-                  {pedido.fechaLimite || "—"}
-                </div>
-              </div>
-
-              <div>
-                <div className="text-[11px] uppercase tracking-wide text-white/40">
-                  Costos, base
-                </div>
-                <div className="mt-1 font-medium tabular-nums text-white/85">
-                  {Number(pedido.subtotalBaseMXN || 0) > 0
-                    ? fmtMXN(Number(pedido.subtotalBaseMXN))
-                    : "—"}
-                </div>
-              </div>
-
-              <div className="col-span-2">
-                <div className="text-[11px] uppercase tracking-wide text-white/40">
-                  Entrega real
-                </div>
-                <div className="mt-1">
-                  {isAdmin ? (
-                    <input
-                      type="date"
-                      value={pedido.fechaEntregaReal || ""}
-                      onChange={(event) => {
-                        void onActualizarCampo(
-                          pedido,
-                          "fechaEntregaReal",
-                          event.target.value,
-                        );
-                      }}
-                      className="min-h-11 w-full rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-base text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/25 [color-scheme:dark]"
-                    />
-                  ) : (
-                    <span className="text-white/80">
-                      {pedido.fechaEntregaReal || "Pendiente"}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {isAdmin && (
-                <div className="col-span-2">
-                  <div className="text-[11px] uppercase tracking-wide text-white/40">
-                    Status
-                  </div>
-                  <select
-                    value={pedido.status || "enviado"}
-                    onChange={(event) => {
-                      void onActualizarCampo(
-                        pedido,
-                        "status",
-                        event.target.value,
-                      );
-                    }}
-                    className={`${projectStatusPillClass(
-                      pedido.status,
-                    )} mt-2 min-h-11 w-full justify-center [&>option]:bg-white [&>option]:text-black`}
-                  >
-                    {STATUS_OPTIONS.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </div>
-              )}
-            </div>
-
             <Link
               href={`/solicitudes/listado/${pedido.pedidoId}`}
-              className="mt-4 inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-emerald-400/25 bg-emerald-500/10 px-4 py-2.5 text-sm font-medium text-emerald-100 transition active:bg-emerald-500/20"
+              className="min-w-0 flex-1 break-words text-sm font-medium leading-snug text-emerald-100 transition hover:text-emerald-50 active:text-white"
+              title={pedido.titulo}
             >
-              Ver detalles
+              {pedido.titulo || "Sin título"}
             </Link>
-          </article>
+
+            <span className="shrink-0 text-sm tabular-nums text-white/75">
+              {Number(pedido.subtotalBaseMXN || 0) > 0
+                ? fmtMXN(Number(pedido.subtotalBaseMXN))
+                : "—"}
+            </span>
+          </div>
         ))}
       </div>
 
