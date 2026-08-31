@@ -16,7 +16,8 @@ import type { Pedido, Usuario } from "../types";
 
 export function useProyectoCalendario(
   proyecto: string,
-  isAdmin: boolean
+  isAdmin: boolean,
+  enabled: boolean,
 ) {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [usuarios, setUsuarios] = useState<Usuario[]>([]);
@@ -30,10 +31,15 @@ export function useProyectoCalendario(
   const [error, setError] = useState("");
 
   const cargarDatos = useCallback(async () => {
-    if (!isAdmin) {
-      setCargando(false);
-      return;
-    }
+    if (!enabled) {
+  setPedidos([]);
+  setUsuarios([]);
+  setSeleccionados(new Set());
+  setCargando(false);
+  setCargandoShare(false);
+  setError("");
+  return;
+}
 
     try {
       setCargando(true);
@@ -165,24 +171,36 @@ export function useProyectoCalendario(
           })
       );
 
-      setCargandoShare(true);
+      if (isAdmin) {
+  setCargandoShare(true);
 
-      const shareRef = doc(db, "proyectos_shares", proyecto);
-      const shareSnap = await getDoc(shareRef);
+  const shareRef = doc(
+    db,
+    "proyectos_shares",
+    proyecto,
+  );
 
-      if (shareSnap.exists()) {
-        const data = shareSnap.data() as Record<string, any>;
+  const shareSnap = await getDoc(shareRef);
 
-        setSeleccionados(
-          new Set(
-            Array.isArray(data.users)
-              ? data.users
-              : []
-          )
-        );
-      } else {
-        setSeleccionados(new Set());
-      }
+  if (shareSnap.exists()) {
+    const data =
+      shareSnap.data() as Record<string, any>;
+
+    setSeleccionados(
+      new Set(
+        Array.isArray(data.users)
+          ? data.users
+          : [],
+      ),
+    );
+  } else {
+    setSeleccionados(new Set());
+  }
+} else {
+  setUsuarios([]);
+  setSeleccionados(new Set());
+  setCargandoShare(false);
+}
     } catch (loadError) {
       console.error("Error al cargar proyecto:", loadError);
       setError("No fue posible cargar los pedidos del proyecto.");
@@ -190,7 +208,7 @@ export function useProyectoCalendario(
       setCargando(false);
       setCargandoShare(false);
     }
-  }, [isAdmin, proyecto]);
+  }, [enabled, isAdmin, proyecto]);
 
   useEffect(() => {
     void cargarDatos();
@@ -202,6 +220,11 @@ const actualizarCampo = useCallback(
     campo: string,
     valor: string
   ) => {
+    if (!isAdmin) {
+  throw new Error(
+    "No tienes permisos para modificar este pedido.",
+  );
+}
     const valorAnterior =
       pedido[campo as keyof Pedido] ?? "";
 
@@ -358,7 +381,7 @@ const actualizarCampo = useCallback(
       throw updateError;
     }
   },
-  []
+  [isAdmin],
 );
   const toggleSeleccion = useCallback((email: string) => {
     setSeleccionados((current) => {

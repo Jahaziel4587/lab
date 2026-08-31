@@ -11,6 +11,7 @@ import { STATUS_OPTIONS } from "../../../constants";
 
 type ProyectoPedidosTableProps = {
   pedidos: Pedido[];
+  isAdmin: boolean;
   page: number;
   totalPages: number;
   totalProyectoMXN: number;
@@ -25,6 +26,7 @@ export default function ProyectoPedidosTable({
   pedidos,
   page,
   totalPages,
+  isAdmin,
   totalProyectoMXN,
   onActualizarCampo,
 }: ProyectoPedidosTableProps) {
@@ -96,20 +98,30 @@ export default function ProyectoPedidosTable({
                   {pedido.fechaLimite || "—"}
                 </td>
 
-                <td className="py-2.5 px-4">
-                  <input
-                    type="date"
-                    value={pedido.fechaEntregaReal || ""}
-                    onChange={(event) => {
-                      void onActualizarCampo(
-                        pedido,
-                        "fechaEntregaReal",
-                        event.target.value
-                      );
-                    }}
-                    className="w-[140px] rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/25 [color-scheme:dark]"
-                  />
-                </td>
+               <td className="py-2.5 px-4">
+  {isAdmin ? (
+    <input
+      type="date"
+      value={pedido.fechaEntregaReal || ""}
+      onChange={(event) => {
+        void onActualizarCampo(
+          pedido,
+          "fechaEntregaReal",
+          event.target.value,
+        );
+      }}
+      className="w-[140px] rounded-2xl border
+        border-white/10 bg-white/[0.05] px-3 py-2
+        text-sm text-white focus:outline-none
+        focus:ring-2 focus:ring-emerald-400/25
+        [color-scheme:dark]"
+    />
+  ) : (
+    <span className="text-white/75">
+      {pedido.fechaEntregaReal || "—"}
+    </span>
+  )}
+</td>
 
                 <td className="py-2.5 px-4 text-white/80 text-right tabular-nums">
                   {Number(pedido.subtotalBaseMXN || 0) > 0
@@ -122,29 +134,45 @@ export default function ProyectoPedidosTable({
             
 
                 <td className="py-2.5 px-4">
-                  <select
-                    value={pedido.status || "enviado"}
-                    onChange={(event) => {
-                      void onActualizarCampo(
-                        pedido,
-                        "status",
-                        event.target.value
-                      );
-                    }}
-                    className={`${projectStatusPillClass(
-                      pedido.status
-                    )} [&>option]:text-black [&>option]:bg-white`}
-                  >
-                    {STATUS_OPTIONS.map((option) => (
-                      <option
-                        key={option.value}
-                        value={option.value}
-                      >
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </td>
+  {isAdmin ? (
+    <select
+      value={pedido.status || "enviado"}
+      onChange={(event) => {
+        void onActualizarCampo(
+          pedido,
+          "status",
+          event.target.value,
+        );
+      }}
+      className={`${projectStatusPillClass(
+        pedido.status,
+      )} [&>option]:bg-white [&>option]:text-black`}
+    >
+      {STATUS_OPTIONS.map((option) => (
+        <option
+          key={option.value}
+          value={option.value}
+        >
+          {option.label}
+        </option>
+      ))}
+    </select>
+  ) : (
+    <span
+      className={projectStatusPillClass(
+        pedido.status,
+      )}
+    >
+      {STATUS_OPTIONS.find(
+        (option) =>
+          option.value ===
+          (pedido.status || "enviado")
+            .trim()
+            .toLowerCase(),
+      )?.label || pedido.status || "Enviado"}
+    </span>
+  )}
+</td>
 
                 <td className="py-2.5 px-4">
                   <Link

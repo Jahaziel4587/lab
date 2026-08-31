@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { addMonths, startOfMonth } from "date-fns";
 import { useAuth } from "@/src/Context/AuthContext";
-
+import Link from "next/link";
 import CalendarioMensual from "./components/CalendarioMensual";
 import PedidosPendientesTable from "./components/PedidosPendientesTable";
 import ProyectosFechados from "./components/ProyectosFechados";
@@ -13,7 +13,11 @@ import type { ProyectoStats } from "./types";
 import { normStatus } from "./utils";
 
 export default function CalendarioPage() {
-  const { isAdmin } = useAuth();
+  const {
+  user,
+  isAdmin,
+  loading: authLoading,
+} = useAuth();
 
   const {
     pedidos,
@@ -21,7 +25,7 @@ export default function CalendarioPage() {
     cargandoEjecuciones,
     error,
     actualizarCampo,
-  } = useCalendarioPedidos();
+ } = useCalendarioPedidos(Boolean(user));
 
   const [currentMonth, setCurrentMonth] = useState<Date>(
     startOfMonth(new Date())
@@ -132,7 +136,49 @@ export default function CalendarioPage() {
     pedidosConFecha,
     busquedaFechados,
   ]);
+if (authLoading) {
+  return (
+    <div className="mx-auto max-w-6xl p-6">
+      <div
+        className="rounded-2xl border border-white/10
+          bg-black/40 p-10 text-center text-white/60"
+      >
+        Verificando sesión...
+      </div>
+    </div>
+  );
+}
 
+if (!user) {
+  return (
+    <div className="mx-auto max-w-xl px-4 py-16">
+      <div
+        className="rounded-3xl border border-white/10
+          bg-black/50 p-8 text-center text-white
+          backdrop-blur-xl"
+      >
+        <h1 className="text-xl font-semibold">
+          Inicia sesión para consultar el calendario
+        </h1>
+
+        <p className="mt-2 text-sm text-white/60">
+          Esta información está disponible solamente para
+          usuarios de la plataforma.
+        </p>
+
+        <Link
+          href="/login"
+          className="mt-6 inline-flex min-h-11 items-center
+            justify-center rounded-xl bg-emerald-400
+            px-6 py-2 font-semibold text-black
+            transition hover:brightness-110"
+        >
+          Iniciar sesión
+        </Link>
+      </div>
+    </div>
+  );
+}
   if (cargando) {
     return (
       <div className="max-w-6xl mx-auto p-6">
@@ -153,46 +199,53 @@ export default function CalendarioPage() {
     );
   }
 
-  return (
-    <div className="max-w-6xl mx-auto p-6 space-y-10">
-      {cargandoEjecuciones && (
-        <div className="rounded-2xl border border-emerald-400/15 bg-emerald-500/[0.06] px-4 py-3 text-sm text-emerald-100/80">
-          Cargando repeticiones de pedidos...
-        </div>
-      )}
+ return (
+ <div
+  className="mx-auto max-w-6xl space-y-6
+    px-3 py-5 sm:space-y-10 sm:p-6"
+>
+    {cargandoEjecuciones && (
+      <div
+        className="rounded-2xl border border-emerald-400/15
+          bg-emerald-500/[0.06] px-4 py-3
+          text-sm text-emerald-100/80"
+      >
+        Cargando repeticiones de pedidos...
+      </div>
+    )}
 
-      <CalendarioMensual
-        currentMonth={currentMonth}
-        pedidos={pedidosConFecha}
-        isAdmin={Boolean(isAdmin)}
-        onPrevMonth={() =>
-          setCurrentMonth((month) =>
-            addMonths(month, -1)
-          )
-        }
-        onNextMonth={() =>
-          setCurrentMonth((month) =>
-            addMonths(month, 1)
-          )
-        }
+    <CalendarioMensual
+      currentMonth={currentMonth}
+      pedidos={pedidosConFecha}
+      isAdmin={Boolean(isAdmin)}
+      onPrevMonth={() =>
+        setCurrentMonth((month) =>
+          addMonths(month, -1),
+        )
+      }
+      onNextMonth={() =>
+        setCurrentMonth((month) =>
+          addMonths(month, 1),
+        )
+      }
+    />
+
+    {/* Exclusivo para administradores */}
+    {isAdmin && (
+      <PedidosPendientesTable
+        pedidos={pedidosSinFecha}
+        onActualizarCampo={actualizarCampo}
       />
+    )}
 
-      {isAdmin && (
-        <PedidosPendientesTable
-          pedidos={pedidosSinFecha}
-          onActualizarCampo={actualizarCampo}
-        />
-      )}
-
-      {isAdmin && (
-        <ProyectosFechados
-          proyectos={proyectosConFecha}
-          pedidos={pedidosFechadosFiltrados}
-          totalPedidos={pedidosConFecha.length}
-          busqueda={busquedaFechados}
-          onBusquedaChange={setBusquedaFechados}
-        />
-      )}
-    </div>
-  );
+    {/* Visible para todos los usuarios */}
+    <ProyectosFechados
+      proyectos={proyectosConFecha}
+      pedidos={pedidosFechadosFiltrados}
+      totalPedidos={pedidosConFecha.length}
+      busqueda={busquedaFechados}
+      onBusquedaChange={setBusquedaFechados}
+    />
+  </div>
+);
 }

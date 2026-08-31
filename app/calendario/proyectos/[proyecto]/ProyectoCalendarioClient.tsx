@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import Link from "next/link";
+
 import { useAuth } from "@/src/Context/AuthContext";
 import { PROJECT_PAGE_SIZE } from "../../constants";
 import SearchInput from "../../components/SearchInput";
@@ -16,7 +16,11 @@ export default function ProyectoCalendarioClient({
 }: {
   proyecto: string;
 }) {
-  const { isAdmin } = useAuth();
+  const {
+  user,
+  isAdmin,
+  loading: authLoading,
+} = useAuth();
 
   const {
     pedidos,
@@ -30,7 +34,11 @@ export default function ProyectoCalendarioClient({
     actualizarCampo,
     toggleSeleccion,
     guardarCompartir,
-  } = useProyectoCalendario(proyecto, Boolean(isAdmin));
+  } = useProyectoCalendario(
+  proyecto,
+  Boolean(isAdmin),
+  Boolean(user),
+);
 
   const [busqueda, setBusqueda] = useState("");
   const [page, setPage] = useState(1);
@@ -81,20 +89,38 @@ export default function ProyectoCalendarioClient({
     );
   }, [pedidosFiltrados, pageSafe]);
 
-  if (!isAdmin) {
-    return (
-      <div className="max-w-5xl mx-auto bg-white text-black p-6 rounded-xl shadow">
-        <p>No autorizado.</p>
-
-        <Link
-          href="/calendario"
-          className="text-blue-600 underline"
-        >
-          Volver al calendario
-        </Link>
+  if (authLoading) {
+  return (
+    <div className="mx-auto max-w-5xl px-4 py-16">
+      <div
+        className="rounded-3xl border border-white/10
+          bg-black/40 p-10 text-center text-white/60"
+      >
+        Verificando sesión...
       </div>
-    );
-  }
+    </div>
+  );
+}
+
+if (!user) {
+  return (
+    <div className="mx-auto max-w-xl px-4 py-16">
+      <div
+        className="rounded-3xl border border-white/10
+          bg-black/50 p-8 text-center text-white"
+      >
+        <h1 className="text-xl font-semibold">
+          Debes iniciar sesión
+        </h1>
+
+        <p className="mt-2 text-sm text-white/60">
+          No tienes acceso a la información de este proyecto
+          sin una sesión activa.
+        </p>
+      </div>
+    </div>
+  );
+}
 
   if (cargando) {
     return (
@@ -118,11 +144,12 @@ export default function ProyectoCalendarioClient({
 
   return (
     <div className="mx-auto max-w-7xl px-4 sm:px-8 py-10 text-white">
-      <ProyectoHeader
-        proyecto={proyecto}
-        totalProyectoMXN={totalProyectoMXN}
-        onCompartir={() => setAbiertoCompartir(true)}
-      />
+     <ProyectoHeader
+  proyecto={proyecto}
+  totalProyectoMXN={totalProyectoMXN}
+  isAdmin={Boolean(isAdmin)}
+  onCompartir={() => setAbiertoCompartir(true)}
+/>
 
       <div className="mt-6 rounded-3xl border border-white/10 bg-white/[0.05] backdrop-blur-2xl ring-1 ring-white/5 shadow-[0_20px_90px_-70px_rgba(0,0,0,0.95)] p-4 sm:p-5">
         <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
@@ -155,11 +182,12 @@ export default function ProyectoCalendarioClient({
         ) : (
           <>
             <ProyectoPedidosTable
-              pedidos={pedidosPaginados}
-              page={pageSafe}
-              totalPages={totalPages}
-              totalProyectoMXN={totalProyectoMXN}
-              onActualizarCampo={actualizarCampo}
+            pedidos={pedidosPaginados}
+            page={pageSafe}
+            totalPages={totalPages}
+            totalProyectoMXN={totalProyectoMXN}
+            isAdmin={Boolean(isAdmin)}
+            onActualizarCampo={actualizarCampo}
             />
 
             <ProyectoPagination
@@ -171,7 +199,7 @@ export default function ProyectoCalendarioClient({
         )}
       </div>
 
-      {abiertoCompartir && (
+     {isAdmin && abiertoCompartir && (
         <CompartirProyectoModal
           proyecto={proyecto}
           usuarios={usuarios}

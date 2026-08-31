@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useAuth } from "../../src/Context/AuthContext";
-import { FiUser, FiBell } from "react-icons/fi";
+import { FiUser, FiBell, FiMenu, FiX } from "react-icons/fi";
 import { collection, doc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
 import { db } from "@/src/firebase/firebaseConfig";
 import PushNotificationSetup from "./PushNotificationSetup";
@@ -26,7 +26,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   const [userNotis, setUserNotis] = useState<NotiItem[]>([]);
   const [adminNotis, setAdminNotis] = useState<NotiItem[]>([]);
   const [panelAbierto, setPanelAbierto] = useState(false);
-
+const [menuAbierto, setMenuAbierto] = useState(false);
   const notificaciones = useMemo(() => {
     const base = [...userNotis, ...(isAdmin ? adminNotis : [])];
     return base.sort((a, b) => {
@@ -125,9 +125,28 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
   };
 
   const handleIconClick = async () => {
-    if (user) await logout();
-    else window.location.href = "/login";
-  };
+  if (!user) {
+    window.location.href = "/login";
+    return;
+  }
+
+  const confirmarCierre = window.confirm(
+    "¿Estás seguro de que quieres cerrar sesión?",
+  );
+
+  if (!confirmarCierre) {
+    return;
+  }
+
+  try {
+    await logout();
+  } catch (error) {
+    console.error("No fue posible cerrar la sesión:", error);
+    window.alert(
+      "No fue posible cerrar la sesión. Inténtalo nuevamente.",
+    );
+  }
+};
 
   return (
 <div className="min-h-screen text-white relative bg-neutral-950">
@@ -153,12 +172,19 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
 
       <header className="sticky top-0 z-40 border-b border-white/10 bg-black/40 backdrop-blur-xl">
         <div className="mx-auto max-w-7xl px-6 py-4 flex items-center justify-between">
-          <Link
-            href="/"
-            className="font-semibold text-sm tracking-wider text-white/90 hover:text-white transition"
-          >
-            BIOANA PROTOTYPING LAB
-          </Link>
+         <Link
+  href="/"
+  onClick={() => setMenuAbierto(false)}
+  className="shrink-0 font-semibold tracking-wider text-white/90 hover:text-white transition"
+>
+  <span className="hidden sm:inline text-sm">
+    BIOANA PROTOTYPING LAB
+  </span>
+
+  <span className="sm:hidden text-xs">
+    BIOANA PROTOLAB
+  </span>
+</Link>
 
           <nav className="hidden lg:flex items-center gap-6 text-sm text-white/75">
             <Link data-tutorial="nav-calendar" href="/calendario" className="hover:text-white transition">
@@ -286,12 +312,14 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
             )}
 
             <div className="relative group">
-              <button
-                type="button"
-                onClick={handleIconClick}
-                className="w-9 h-9 rounded-2xl border border-white/10 bg-white/[0.04]
-                  text-white flex items-center justify-center hover:bg-white/[0.07] transition"
-              >
+             <button
+  type="button"
+  onClick={handleIconClick}
+  aria-label={user ? "Cerrar sesión" : "Iniciar sesión"}
+  title={user ? "Cerrar sesión" : "Iniciar sesión"}
+  className="w-9 h-9 rounded-2xl border border-white/10 bg-white/[0.04]
+    text-white flex items-center justify-center hover:bg-white/[0.07] transition"
+>
                 <FiUser />
               </button>
 
@@ -301,37 +329,83 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                 </div>
               </div>
             </div>
+            <button
+  type="button"
+  onClick={() => setMenuAbierto((prev) => !prev)}
+  aria-label={menuAbierto ? "Cerrar menú" : "Abrir menú"}
+  aria-expanded={menuAbierto}
+  className="lg:hidden w-9 h-9 rounded-2xl border border-white/10
+    bg-white/[0.04] text-white flex items-center justify-center
+    hover:bg-white/[0.07] transition"
+>
+  {menuAbierto ? <FiX size={19} /> : <FiMenu size={19} />}
+</button>
           </div>
         </div>
 
-        <div className="lg:hidden px-6 pb-4">
-          <div className="flex flex-wrap gap-3 text-xs text-white/70">
-            <Link href="/calendario" className="hover:text-white transition">
-              Calendar
-            </Link>
-            <Link href="/about" className="hover:text-white transition">
-              Information
-            </Link>
-           
-            <Link href="/solicitudes" className="hover:text-white transition">
-              My Projects
-            </Link>
-            <Link href="/hacer-pedido/proyecto" className="hover:text-white transition">
-              Place Order
-            </Link>
-            
-            {isAdmin && (
-              <Link href="/cotizador" className="hover:text-white transition">
-                Quoter
-              </Link>
-            )}
-            {isAdmin && (
-              <Link href="/analitica" className="hover:text-white transition">
-                Analytics
-              </Link>
-            )}
-          </div>
-        </div>
+       {menuAbierto && (
+  <div className="lg:hidden border-t border-white/10 px-4 py-4">
+    <nav className="grid grid-cols-2 gap-2 text-sm">
+      <Link
+        href="/calendario"
+        onClick={() => setMenuAbierto(false)}
+        className="rounded-xl border border-white/10 bg-white/[0.03]
+          px-4 py-3 text-white/75 hover:bg-white/[0.07] hover:text-white transition"
+      >
+        Calendar
+      </Link>
+
+      <Link
+        href="/about"
+        onClick={() => setMenuAbierto(false)}
+        className="rounded-xl border border-white/10 bg-white/[0.03]
+          px-4 py-3 text-white/75 hover:bg-white/[0.07] hover:text-white transition"
+      >
+        Information
+      </Link>
+
+      <Link
+        href="/solicitudes"
+        onClick={() => setMenuAbierto(false)}
+        className="rounded-xl border border-white/10 bg-white/[0.03]
+          px-4 py-3 text-white/75 hover:bg-white/[0.07] hover:text-white transition"
+      >
+        My Projects
+      </Link>
+
+      <Link
+        href="/hacer-pedido/proyecto"
+        onClick={() => setMenuAbierto(false)}
+        className="rounded-xl border border-emerald-400/30 bg-emerald-400/10
+          px-4 py-3 text-emerald-300 hover:bg-emerald-400/15 transition"
+      >
+        Place Order
+      </Link>
+
+      {isAdmin && (
+        <Link
+          href="/cotizador"
+          onClick={() => setMenuAbierto(false)}
+          className="rounded-xl border border-white/10 bg-white/[0.03]
+            px-4 py-3 text-white/75 hover:bg-white/[0.07] hover:text-white transition"
+        >
+          Quoter
+        </Link>
+      )}
+
+      {isAdmin && (
+        <Link
+          href="/analitica"
+          onClick={() => setMenuAbierto(false)}
+          className="rounded-xl border border-white/10 bg-white/[0.03]
+            px-4 py-3 text-white/75 hover:bg-white/[0.07] hover:text-white transition"
+        >
+          Analytics
+        </Link>
+      )}
+    </nav>
+  </div>
+)}
       </header>
 
     <main className="relative z-10 px-0">{children}</main>

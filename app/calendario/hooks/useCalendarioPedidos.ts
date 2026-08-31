@@ -15,7 +15,9 @@ import type { Pedido } from "../types";
 
 type FirestoreData = Record<string, unknown>;
 
-export function useCalendarioPedidos() {
+export function useCalendarioPedidos(
+  enabled: boolean,
+) {
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [cargando, setCargando] = useState(true);
   const [cargandoEjecuciones, setCargandoEjecuciones] =
@@ -23,6 +25,13 @@ export function useCalendarioPedidos() {
   const [error, setError] = useState("");
 
   const cargarPedidos = useCallback(async () => {
+    if (!enabled) {
+  setPedidos([]);
+  setCargando(false);
+  setCargandoEjecuciones(false);
+  setError("");
+  return;
+}
     const inicioTotal = performance.now();
 
     try {
@@ -292,7 +301,7 @@ export function useCalendarioPedidos() {
       setCargando(false);
       setCargandoEjecuciones(false);
     }
-  }, []);
+  }, [enabled]);
 
   useEffect(() => {
     void cargarPedidos();
