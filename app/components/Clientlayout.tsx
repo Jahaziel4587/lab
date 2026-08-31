@@ -207,11 +207,14 @@ const [menuAbierto, setMenuAbierto] = useState(false);
                 Quoter
               </Link>
             )}
-            {isAdmin && (
-              <Link data-tutorial="nav-analytics" href="/analitica" className="hover:text-white transition">
-                Analytics
-              </Link>
-            )}
+          <Link
+  data-tutorial="nav-analytics"
+  href="/analitica"
+  className="hover:text-white transition"
+>
+  Analytics
+</Link>
+          
           </nav>
 
           {/* derecha */}
@@ -394,14 +397,14 @@ const [menuAbierto, setMenuAbierto] = useState(false);
       )}
 
       {isAdmin && (
-        <Link
-          href="/analitica"
-          onClick={() => setMenuAbierto(false)}
-          className="rounded-xl border border-white/10 bg-white/[0.03]
-            px-4 py-3 text-white/75 hover:bg-white/[0.07] hover:text-white transition"
-        >
-          Analytics
-        </Link>
+       <Link
+  href="/analitica"
+  onClick={() => setMenuAbierto(false)}
+  className="rounded-xl border border-white/10 bg-white/[0.03]
+    px-4 py-3 text-white/75 hover:bg-white/[0.07] hover:text-white transition"
+>
+  Analytics
+</Link>
       )}
     </nav>
   </div>

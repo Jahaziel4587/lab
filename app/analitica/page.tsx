@@ -177,7 +177,7 @@ const PIE_COLORS = [
 ];
 
 export default function AnaliticaPage() {
-  const { isAdmin } = useAuth();
+  const { user } = useAuth();
 
   const [view, setView] = useState<ViewKey>("proyecto");
   const [loading, setLoading] = useState(true);
@@ -190,7 +190,7 @@ export default function AnaliticaPage() {
   const [exportRows, setExportRows] = useState<PedidoExportRow[]>([]);
 
   useEffect(() => {
-    if (!isAdmin) return;
+    if (!user) return;
 
     const cargar = async () => {
       setLoading(true);
@@ -320,7 +320,7 @@ export default function AnaliticaPage() {
     };
 
     cargar();
-  }, [isAdmin]);
+  }, [user]);
 
   const availableMonths = useMemo(() => {
     return Array.from(
