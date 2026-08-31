@@ -6,6 +6,7 @@ import { useAuth } from "../../src/Context/AuthContext";
 import { FiUser, FiBell } from "react-icons/fi";
 import { collection, doc, onSnapshot, query, updateDoc, where } from "firebase/firestore";
 import { db } from "@/src/firebase/firebaseConfig";
+import PushNotificationSetup from "./PushNotificationSetup";
 import ParticlesBackground from "../components/ParticlesBackground";
 
 type NotiItem = {
@@ -219,7 +220,9 @@ export default function ClientLayout({ children }: { children: React.ReactNode }
                         Cerrar
                       </button>
                     </div>
-
+<div className="mb-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
+  <PushNotificationSetup />
+</div>
                     {notificaciones.length === 0 ? (
                       <p className="text-white/60 text-xs">
                         No tienes notificaciones por el momento.
