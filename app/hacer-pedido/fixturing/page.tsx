@@ -70,12 +70,12 @@ export default function FixturingPage() {
   }, []);
 
   const procesosOptions = [
-    "Prueba",
+    
     "Producción",
     "Inspección / Calidad",
     "Capacitación",
     "R&D",
-    "Validación",
+    "V&V",
   ];
 
   const tiempoOptions = [
