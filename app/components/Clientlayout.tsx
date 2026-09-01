@@ -223,7 +223,7 @@ export default function ClientLayout({
               href="/calendario"
               className="hover:text-white transition"
             >
-              Order Overview
+              History
             </Link>
             <Link
               data-tutorial="nav-about"
@@ -408,7 +408,7 @@ export default function ClientLayout({
                 onClick={cerrarMenu}
                 className={mobileLinkClass}
               >
-                Order Overview
+                History
               </Link>
 
               <Link
