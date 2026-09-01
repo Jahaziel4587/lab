@@ -16,13 +16,8 @@ import { formatFirebaseDate, buildFixtureOrderUrl } from "../helpers";
 import FilePicker from "../components/FilePicker";
 import ApprovalRow from "../components/ApprovalRow";
 
-function PedidosAsociados({
-  pedidos,
-}: {
-  pedidos: LinkedPedido[];
-}) {
+function PedidosAsociados({ pedidos }: { pedidos: LinkedPedido[] }) {
   const router = useRouter();
-
   const total = pedidos.reduce((sum, p) => sum + Number(p.subtotal || 0), 0);
 
   if (pedidos.length === 0) {
@@ -125,6 +120,7 @@ export default function ConceptoDiseno({
   ) => void;
 }) {
   const router = useRouter();
+  void isAdmin;
 
   const toggleConcept = (id: string) => {
     setExpandedConceptIds((prev) =>
@@ -144,19 +140,17 @@ export default function ConceptoDiseno({
           </p>
         </div>
 
-        {isAdmin && (
-          <button
-            type="button"
-            onClick={() => {
-              if (!expandedConceptIds.includes("new")) {
-                setExpandedConceptIds((prev) => [...prev, "new"]);
-              }
-            }}
-            className={btnPrimary}
-          >
-            <FiPlus /> Agregar {nextConceptLabel}
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => {
+            if (!expandedConceptIds.includes("new")) {
+              setExpandedConceptIds((prev) => [...prev, "new"]);
+            }
+          }}
+          className={btnPrimary}
+        >
+          <FiPlus /> Agregar {nextConceptLabel}
+        </button>
       </div>
 
       <div className="mt-6">
@@ -164,7 +158,6 @@ export default function ConceptoDiseno({
           {conceptos.map((item, index) => {
             const isOpen = expandedConceptIds.includes(item.id);
             const fecha = formatFirebaseDate(item.createdAt);
-
             const pedidosDeVersion = linkedPedidos.filter(
               (p) =>
                 p.fixtureRelacionadoFase === "concepto" &&
@@ -285,7 +278,7 @@ export default function ConceptoDiseno({
             );
           })}
 
-          {isAdmin && (conceptos.length === 0 || isNewConceptOpen) && (
+          {(conceptos.length === 0 || isNewConceptOpen) && (
             <div className="w-full rounded-2xl border border-emerald-300/20 bg-emerald-400/10 p-4">
               <button
                 type="button"
@@ -382,12 +375,6 @@ export default function ConceptoDiseno({
           )}
         </div>
       </div>
-
-      {!isAdmin && conceptos.length === 0 && (
-        <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">
-          Aún no hay conceptos registrados.
-        </div>
-      )}
     </section>
   );
 }
