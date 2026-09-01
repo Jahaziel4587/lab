@@ -58,19 +58,11 @@ export default function DetalleFixture({
 
   const [loading, setLoading] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
-const [
-  syncingMonday,
-  setSyncingMonday,
-] = useState(false);
+  const [syncingMonday, setSyncingMonday] = useState(false);
 
-const [
-  mondayFixturingSynced,
-  setMondayFixturingSynced,
-] = useState(
-  Boolean(
-    pedido?.mondayFixturing?.groupId
-  )
-);
+  const [mondayFixturingSynced, setMondayFixturingSynced] = useState(
+    Boolean(pedido?.mondayFixturing?.groupId)
+  );
   const [faseActual, setFaseActual] = useState(
     pedido?.faseFixture || "proof_of_concept_solicitud"
   );
@@ -164,14 +156,11 @@ const [
   }, [conceptos.length]);
 
   const nextPruebaLabel = useMemo(() => {
-    // Obtiene el concepto aprobado más reciente.
     const conceptoAprobado = [...conceptos]
       .reverse()
       .find((concepto) => concepto.status === "aprobado");
 
     const base = conceptoAprobado?.versionLabel || "VA";
-
-    // Solo considera las pruebas pertenecientes al concepto aprobado actual.
     const baseEscapada = base.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const patronVersion = new RegExp(`^${baseEscapada}\\.(\\d+)$`);
 
@@ -180,7 +169,6 @@ const [
         const coincidencia = String(prueba.versionLabel || "").match(
           patronVersion
         );
-
         return coincidencia ? Number(coincidencia[1]) : null;
       })
       .filter((numero): numero is number => numero !== null);
@@ -216,12 +204,11 @@ const [
     }
   };
 
-  const getFreshUserPermissions =
-    async (): Promise<UserPermissionData | null> => {
-      const found = await getUserPermissionsByEmail(user?.email);
-      setUserData(found);
-      return found;
-    };
+  const getFreshUserPermissions = async (): Promise<UserPermissionData | null> => {
+    const found = await getUserPermissionsByEmail(user?.email);
+    setUserData(found);
+    return found;
+  };
 
   const loadLinkedPedidos = async () => {
     try {
@@ -298,56 +285,34 @@ const [
     });
   };
 
-const sincronizarConceptoMonday = async ({
-  versionId,
-  action,
-}: {
-  versionId: string;
-  action:
-    | "version_created"
-    | "decision_recorded";
-}) => {
-  if (!user) {
-    throw new Error(
-      "No hay una sesión activa."
-    );
-  }
+  const sincronizarConceptoMonday = async ({
+    versionId,
+    action,
+  }: {
+    versionId: string;
+    action: "version_created" | "decision_recorded";
+  }) => {
+    if (!user) throw new Error("No hay una sesión activa.");
 
-  const idToken =
-    await user.getIdToken();
-
-  const response = await fetch(
-    "/api/monday/fixturing/concepto",
-    {
+    const idToken = await user.getIdToken();
+    const response = await fetch("/api/monday/fixturing/concepto", {
       method: "POST",
       headers: {
-        "Content-Type":
-          "application/json",
-        Authorization:
-          `Bearer ${idToken}`,
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${idToken}`,
       },
-      body: JSON.stringify({
-        pedidoId,
-        versionId,
-        action,
-      }),
+      body: JSON.stringify({ pedidoId, versionId, action }),
+    });
+
+    const result = await response.json().catch(() => null);
+    if (!response.ok) {
+      throw new Error(
+        result?.error || "No se pudo sincronizar el concepto con Monday."
+      );
     }
-  );
 
-  const result = await response
-    .json()
-    .catch(() => null);
-
-  if (!response.ok) {
-    throw new Error(
-      result?.error ||
-        "No se pudo sincronizar el concepto con Monday."
-    );
-  }
-
-  return result;
-};
-
+    return result;
+  };
 
   const buildFirmaPayload = (decision: Decision, rejectReason?: string) =>
     buildFixtureFirmaPayload({
@@ -379,7 +344,6 @@ const sincronizarConceptoMonday = async ({
   const guardarConcepto = async (e: FormEvent) => {
     e.preventDefault();
 
-    if (!isAdmin) return alert("Solo administradores pueden registrar conceptos.");
     if (!conceptoDesc.trim()) return alert("Agrega la descripción del concepto.");
 
     try {
@@ -392,68 +356,50 @@ const sincronizarConceptoMonday = async ({
       });
 
       const conceptoRef = await addDoc(
-  collection(
-    db,
-    "pedidos",
-    pedidoId,
-    "fixture_conceptos"
-  ),
-  {
-    versionLabel: nextConceptLabel,
-    descripcion:
-      conceptoDesc.trim(),
-    especificacionesExtra:
-      conceptoSpecs
-        .map((s) => s.trim())
-        .filter(Boolean),
-    archivos,
-    status: "pendiente",
-    creadoPor:
-      user?.email || "",
-    createdAt: new Date(),
-
-    monday: {
-      syncStatus: "pending",
-    },
-  }
-);
+        collection(db, "pedidos", pedidoId, "fixture_conceptos"),
+        {
+          versionLabel: nextConceptLabel,
+          descripcion: conceptoDesc.trim(),
+          especificacionesExtra: conceptoSpecs
+            .map((s) => s.trim())
+            .filter(Boolean),
+          archivos,
+          status: "pendiente",
+          creadoPor: user?.email || "",
+          createdAt: new Date(),
+          monday: { syncStatus: "pending" },
+        }
+      );
 
       await updateDoc(doc(db, "pedidos", pedidoId), {
         faseFixture: "concepto_diseno",
       });
-
       setFaseActual("concepto_diseno");
 
       await registrarHistorial(
         "concepto_creado",
         `Se registró el concepto de diseño ${nextConceptLabel}.`
       );
-          /*
- * Crear la subactividad de firma para el PM.
- *
- * Si Monday falla, la versión ya guardada en
- * Firebase se conserva.
- */
-try {
-  await sincronizarConceptoMonday({
-    versionId: conceptoRef.id,
-    action: "version_created",
-  });
-} catch (mondayError) {
-  console.error(
-    "El concepto se guardó, pero Monday no se sincronizó:",
-    mondayError
-  );
 
-  alert(
-    [
-      `El concepto ${nextConceptLabel} se guardó correctamente, pero no se pudo crear su subactividad de firma en Monday.`,
-      mondayError instanceof Error
-        ? `\n\nDetalle:\n${mondayError.message}`
-        : "",
-    ].join("")
-  );
-}
+      try {
+        await sincronizarConceptoMonday({
+          versionId: conceptoRef.id,
+          action: "version_created",
+        });
+      } catch (mondayError) {
+        console.error(
+          "El concepto se guardó, pero Monday no se sincronizó:",
+          mondayError
+        );
+        alert(
+          `El concepto ${nextConceptLabel} se guardó correctamente, pero no se pudo crear su subactividad de firma en Monday.${
+            mondayError instanceof Error
+              ? `\n\nDetalle:\n${mondayError.message}`
+              : ""
+          }`
+        );
+      }
+
       setConceptoDesc("");
       setConceptoSpecs([""]);
       setConceptoFiles([]);
@@ -473,7 +419,6 @@ try {
     rejectReason?: string
   ) => {
     const freshUserData = await getFreshUserPermissions();
-
     const freshCanApprovePM = !!freshUserData?.pmProjects?.some(
       (project) => String(project || "").trim() === pedidoProyecto
     );
@@ -492,7 +437,6 @@ try {
 
     try {
       setLoading(true);
-
       const prevFirmas = concepto.firmas || {};
       const nuevasFirmas = {
         ...prevFirmas,
@@ -501,19 +445,12 @@ try {
 
       await updateDoc(
         doc(db, "pedidos", pedidoId, "fixture_conceptos", concepto.id),
-        {
-          status: decision,
-          firmas: nuevasFirmas,
-        }
+        { status: decision, firmas: nuevasFirmas }
       );
 
       const nextFase =
         decision === "aprobado" ? "prueba_diseno" : "concepto_diseno";
-
-      await updateDoc(doc(db, "pedidos", pedidoId), {
-        faseFixture: nextFase,
-      });
-
+      await updateDoc(doc(db, "pedidos", pedidoId), { faseFixture: nextFase });
       setFaseActual(nextFase);
 
       await registrarHistorial(
@@ -524,31 +461,26 @@ try {
             : "."
         }`
       );
-        /*
- * La decisión ya está guardada en Firebase.
- * Ahora completamos la firma y actualizamos
- * la actividad principal en Monday.
- */
-try {
-  await sincronizarConceptoMonday({
-    versionId: concepto.id,
-    action: "decision_recorded",
-  });
-} catch (mondayError) {
-  console.error(
-    "La decisión se guardó, pero Monday no se sincronizó:",
-    mondayError
-  );
 
-  alert(
-    [
-      `La decisión sobre ${concepto.versionLabel} se guardó correctamente, pero Monday no pudo actualizarse.`,
-      mondayError instanceof Error
-        ? `\n\nDetalle:\n${mondayError.message}`
-        : "",
-    ].join("")
-  );
-}
+      try {
+        await sincronizarConceptoMonday({
+          versionId: concepto.id,
+          action: "decision_recorded",
+        });
+      } catch (mondayError) {
+        console.error(
+          "La decisión se guardó, pero Monday no se sincronizó:",
+          mondayError
+        );
+        alert(
+          `La decisión sobre ${concepto.versionLabel} se guardó correctamente, pero Monday no pudo actualizarse.${
+            mondayError instanceof Error
+              ? `\n\nDetalle:\n${mondayError.message}`
+              : ""
+          }`
+        );
+      }
+
       await loadSubcollections();
     } catch (error) {
       console.error(error);
@@ -561,7 +493,6 @@ try {
   const guardarPrueba = async (e: FormEvent) => {
     e.preventDefault();
 
-    if (!isAdmin) return alert("Solo administradores pueden registrar pruebas.");
     if (!pruebaDesc.trim()) return alert("Agrega la descripción de la prueba.");
 
     try {
@@ -585,7 +516,6 @@ try {
       await updateDoc(doc(db, "pedidos", pedidoId), {
         faseFixture: "prueba_diseno",
       });
-
       setFaseActual("prueba_diseno");
 
       await registrarHistorial(
@@ -595,7 +525,6 @@ try {
 
       setPruebaDesc("");
       setPruebaFiles([]);
-
       await loadSubcollections();
     } catch (error) {
       console.error(error);
@@ -615,36 +544,33 @@ try {
 
     try {
       setLoading(true);
-
       const prevFirmas = prueba.firmas || {};
-
       const nuevasFirmas = {
         ...prevFirmas,
         [rol]: buildFirmaPayload(decision, rejectReason),
       };
 
       const allRoles: ApprovalRole[] = ["pm", "disenador", "encargado"];
-
       const completa = allRoles.every(
         (r) => nuevasFirmas[r]?.decision === "aprobado"
       );
-
       const rechazada = allRoles.some(
         (r) => nuevasFirmas[r]?.decision === "rechazado"
       );
 
-      await updateDoc(doc(db, "pedidos", pedidoId, "fixture_pruebas", prueba.id), {
-        firmas: nuevasFirmas,
-        status: completa ? "aprobado" : rechazada ? "rechazado" : "pendiente",
-      });
+      await updateDoc(
+        doc(db, "pedidos", pedidoId, "fixture_pruebas", prueba.id),
+        {
+          firmas: nuevasFirmas,
+          status: completa ? "aprobado" : rechazada ? "rechazado" : "pendiente",
+        }
+      );
 
       if (completa && !rechazada) {
         await updateDoc(doc(db, "pedidos", pedidoId), {
           faseFixture: "spec_draft",
         });
-
         setFaseActual("spec_draft");
-
         await registrarHistorial(
           "prueba_diseno_aprobada",
           `La prueba ${prueba.versionLabel} fue aprobada por PM, diseñador y encargado.`
@@ -655,9 +581,7 @@ try {
         await updateDoc(doc(db, "pedidos", pedidoId), {
           faseFixture: "prueba_diseno",
         });
-
         setFaseActual("prueba_diseno");
-
         await registrarHistorial(
           "prueba_diseno_rechazada",
           `La prueba ${prueba.versionLabel} fue rechazada por ${userDisplayName}. Motivo: ${String(
@@ -678,7 +602,6 @@ try {
   const guardarBeta = async (e: FormEvent) => {
     e.preventDefault();
 
-    if (!isAdmin) return alert("Solo administradores pueden registrar beta.");
     if (!betaDesc.trim()) return alert("Agrega la propuesta beta.");
 
     try {
@@ -702,7 +625,6 @@ try {
       await updateDoc(doc(db, "pedidos", pedidoId), {
         faseFixture: "fase_beta",
       });
-
       setFaseActual("fase_beta");
 
       await registrarHistorial(
@@ -712,7 +634,6 @@ try {
 
       setBetaDesc("");
       setBetaFiles([]);
-
       await loadSubcollections();
     } catch (error) {
       console.error(error);
@@ -732,9 +653,7 @@ try {
 
     try {
       setLoading(true);
-
       const prevFirmas = beta.firmas || {};
-
       const nuevasFirmas = {
         ...prevFirmas,
         [rol]: buildFirmaPayload(decision, rejectReason),
@@ -743,7 +662,6 @@ try {
       const completa =
         nuevasFirmas.pm?.decision === "aprobado" &&
         nuevasFirmas.encargado?.decision === "aprobado";
-
       const rechazada =
         nuevasFirmas.pm?.decision === "rechazado" ||
         nuevasFirmas.encargado?.decision === "rechazado";
@@ -757,9 +675,7 @@ try {
         await updateDoc(doc(db, "pedidos", pedidoId), {
           faseFixture: "spec_final",
         });
-
         setFaseActual("spec_final");
-
         await registrarHistorial(
           "beta_aprobada",
           `La propuesta ${beta.versionLabel} fue aprobada por PM y encargado.`
@@ -770,9 +686,7 @@ try {
         await updateDoc(doc(db, "pedidos", pedidoId), {
           faseFixture: "fase_beta",
         });
-
         setFaseActual("fase_beta");
-
         await registrarHistorial(
           "beta_rechazada",
           `La propuesta ${beta.versionLabel} fue rechazada por ${userDisplayName}. Motivo: ${String(
@@ -803,7 +717,6 @@ try {
 
     try {
       setLoading(true);
-
       await updateDoc(doc(db, "pedidos", pedidoId), {
         faseFixture: "spec_draft",
         specDraft: {
@@ -812,15 +725,12 @@ try {
           fecha: new Date().toISOString(),
         },
       });
-
       setFaseActual("spec_draft");
       setSpecDraftGenerada(true);
-
       await registrarHistorial(
         "spec_draft_generada",
         "Se generó la Spec Draft como guía para la versión beta."
       );
-
       alert("Spec Draft registrada.");
     } catch (error) {
       console.error(error);
@@ -843,7 +753,6 @@ try {
 
     try {
       setLoading(true);
-
       await updateDoc(doc(db, "pedidos", pedidoId), {
         faseFixture: "spec_final",
         specFinal: {
@@ -852,15 +761,12 @@ try {
           fecha: new Date().toISOString(),
         },
       });
-
       setFaseActual("spec_final");
       setSpecFinalGenerada(true);
-
       await registrarHistorial(
         "spec_final_generada",
         "Se registró la Spec Final para formato QMS."
       );
-
       alert("Spec Final registrada. Después conectamos aquí la generación DOCX QMS.");
     } catch (error) {
       console.error(error);
@@ -873,37 +779,29 @@ try {
   const descargarSolicitudFormalPDF = async () => {
     try {
       setGeneratingPdf(true);
-
       const response = await fetch(
         `/api/fixtures/${pedidoId}/solicitud-formal-docx`,
-        {
-          method: "POST",
-        }
+        { method: "POST" }
       );
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => null);
         throw new Error(
-          errorData?.detail ||
-            errorData?.error ||
-            "No se pudo generar el DOCX."
+          errorData?.detail || errorData?.error || "No se pudo generar el DOCX."
         );
       }
 
       const blob = await response.blob();
       const url = window.URL.createObjectURL(blob);
-
       const safeTitle = String(pedido?.titulo || pedido?.io || "solicitud-formal")
         .replace(/[^\w\dáéíóúÁÉÍÓÚñÑ.-]+/g, "_")
         .replace(/_+/g, "_");
-
       const a = document.createElement("a");
       a.href = url;
       a.download = `${safeTitle}.docx`;
       document.body.appendChild(a);
       a.click();
       a.remove();
-
       window.URL.revokeObjectURL(url);
     } catch (error) {
       console.error("Error descargando DOCX:", error);
@@ -916,76 +814,46 @@ try {
       setGeneratingPdf(false);
     }
   };
-const sincronizarFixtureExistente =
-  async () => {
+
+  const sincronizarFixtureExistente = async () => {
     if (!user) {
-      alert(
-        "No hay una sesión activa."
-      );
+      alert("No hay una sesión activa.");
       return;
     }
 
     if (mondayFixturingSynced) {
-      alert(
-        "Este fixture ya está conectado con Monday."
-      );
+      alert("Este fixture ya está conectado con Monday.");
       return;
     }
 
     const confirmed = window.confirm(
       "Se creará en Monday el grupo y la estructura de este fixture. ¿Deseas continuar?"
     );
-
-    if (!confirmed) {
-      return;
-    }
+    if (!confirmed) return;
 
     try {
       setSyncingMonday(true);
-
-      const idToken =
-        await user.getIdToken();
-
-      const response = await fetch(
-        "/api/monday/fixturing/create",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-            Authorization:
-              `Bearer ${idToken}`,
-          },
-          body: JSON.stringify({
-            pedidoId,
-          }),
-        }
-      );
-
-      const result = await response
-        .json()
-        .catch(() => null);
-
+      const idToken = await user.getIdToken();
+      const response = await fetch("/api/monday/fixturing/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ pedidoId }),
+      });
+      const result = await response.json().catch(() => null);
       if (!response.ok) {
-        throw new Error(
-          result?.error ||
-            "No se pudo sincronizar el fixture."
-        );
+        throw new Error(result?.error || "No se pudo sincronizar el fixture.");
       }
-
       setMondayFixturingSynced(true);
-
       alert(
         result?.alreadySynced
           ? "Este fixture ya estaba conectado con Monday."
           : "El fixture se sincronizó correctamente con Monday."
       );
     } catch (error) {
-      console.error(
-        "Error migrando fixture a Monday:",
-        error
-      );
-
+      console.error("Error migrando fixture a Monday:", error);
       alert(
         error instanceof Error
           ? error.message
@@ -995,6 +863,7 @@ const sincronizarFixtureExistente =
       setSyncingMonday(false);
     }
   };
+
   const renderTabContent = () => {
     if (activeTab === "resumen") {
       return (
@@ -1117,59 +986,42 @@ const sincronizarFixtureExistente =
 
   return (
     <div className="mx-auto max-w-7xl px-4 py-10 text-white sm:px-8">
-     <div className="flex flex-wrap items-center gap-3">
-  <button
-    type="button"
-    onClick={() =>
-      window.history.back()
-    }
-    className={btnSoft}
-  >
-    <FiArrowLeft />
-    Regresar
-  </button>
+      <div className="flex flex-wrap items-center gap-3">
+        <button
+          type="button"
+          onClick={() => window.history.back()}
+          className={btnSoft}
+        >
+          <FiArrowLeft />
+          Regresar
+        </button>
 
-  {isAdmin &&
-    pedido?.tipoPedido === "fixture" &&
-    !mondayFixturingSynced && (
-      <button
-        type="button"
-        onClick={
-          sincronizarFixtureExistente
-        }
-        disabled={syncingMonday}
-        className={`${btnSoft} disabled:cursor-not-allowed disabled:opacity-50`}
-      >
-        <FiRefreshCw
-          className={
-            syncingMonday
-              ? "animate-spin"
-              : ""
-          }
-        />
+        {isAdmin && pedido?.tipoPedido === "fixture" && !mondayFixturingSynced && (
+          <button
+            type="button"
+            onClick={sincronizarFixtureExistente}
+            disabled={syncingMonday}
+            className={`${btnSoft} disabled:cursor-not-allowed disabled:opacity-50`}
+          >
+            <FiRefreshCw className={syncingMonday ? "animate-spin" : ""} />
+            {syncingMonday ? "Sincronizando..." : "Sincronizar con Monday"}
+          </button>
+        )}
 
-        {syncingMonday
-          ? "Sincronizando..."
-          : "Sincronizar con Monday"}
-      </button>
-    )}
-
-  {mondayFixturingSynced && (
-    <span className="rounded-full border border-emerald-300/25 bg-emerald-400/10 px-4 py-2 text-sm text-emerald-100">
-      Conectado con Monday
-    </span>
-  )}
-</div>
+        {mondayFixturingSynced && (
+          <span className="rounded-full border border-emerald-300/25 bg-emerald-400/10 px-4 py-2 text-sm text-emerald-100">
+            Conectado con Monday
+          </span>
+        )}
+      </div>
 
       <div className="mt-6">
         <p className="text-sm uppercase tracking-[0.35em] text-emerald-300/80">
           Fixturing & Jigs
         </p>
-
         <h1 className="mt-2 text-3xl font-semibold text-white md:text-4xl">
           Detalles del pedido FXT
         </h1>
-
         <p className="mt-3 max-w-3xl text-sm text-white/60">
           Expediente formal del fixture: Solicitud, Concepto de diseño, Prueba,
           SPEC Draft, Beta y SPEC Final.
@@ -1180,7 +1032,6 @@ const sincronizarFixtureExistente =
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
           {tabs.map((tab, index) => {
             const selected = activeTab === tab.key;
-
             return (
               <button
                 key={tab.key}
