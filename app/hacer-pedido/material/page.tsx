@@ -2,12 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
-import { FiArrowLeft, FiArrowRight } from "react-icons/fi";
+import { FiArrowRight } from "react-icons/fi";
+import OrderFlowHeader from "../components/OrderFlowHeader";
 
-// Diccionario de materiales por máquina
 const MATERIALES_POR_MAQUINA: Record<string, string[]> = {
   Filamento: [
-    //"PLA 2.85mm (Ultimaker 2+)",
     "PLA 1.75mm (Bambu Lab)",
     "Nylon 1.75 (Bambu Lab)",
     "PLA retardante de fuego 1.75mm (Bambu Lab)",
@@ -15,7 +14,6 @@ const MATERIALES_POR_MAQUINA: Record<string, string[]> = {
     "Otro (Especifica en la descripción)",
     "ABS",
     "TPU",
-
   ],
   "Resina Formlabs 3B": [
     "Rigid 10K",
@@ -44,7 +42,7 @@ const MATERIALES_POR_MAQUINA: Record<string, string[]> = {
     "Acrílico blanco 3mm",
     "Acrílico negro 3mm",
     "Acrílico Transparente 4mm",
-  "Acrilico 6mm",
+    "Acrilico 6mm",
     "MDF 4mm",
     "MDF 3mm",
     "Cartón",
@@ -72,18 +70,6 @@ export default function MaterialPage() {
   const router = useRouter();
   const [maquina, setMaquina] = useState<string | null>(null);
 
-  const baseButton =
-    "flex items-center gap-2 px-4 py-2 rounded-full " +
-    "bg-white/10 text-white backdrop-blur " +
-    "border border-white/10 " +
-    "hover:bg-white/20 transition";
-
-  const cardBase =
-    "group relative w-full rounded-2xl overflow-hidden " +
-    "bg-white/5 backdrop-blur border border-white/10 " +
-    "shadow-[0_10px_35px_rgba(0,0,0,0.35)] " +
-    "hover:bg-white/10 transition text-left";
-
   useEffect(() => {
     const stored = localStorage.getItem("maquina");
     if (stored) {
@@ -106,56 +92,66 @@ export default function MaterialPage() {
   if (!maquina) return null;
 
   return (
-    <div className="relative">
-      <button onClick={() => router.push("/hacer-pedido/maquinas")} className={`${baseButton} mb-4`}>
-        <FiArrowLeft className="opacity-80" /> Regresar
-      </button>
-
-      <h1 className="text-2xl md:text-3xl font-semibold text-white mb-1">
-        Selecciona el material
-      </h1>
-      <p className="text-sm text-white/60 mb-6">
-        Máquina seleccionada: <span className="text-white/80 font-medium">{maquina}</span>
-      </p>
+    <div className="mx-auto w-full max-w-6xl px-3 py-4 sm:px-6 sm:py-8">
+      <OrderFlowHeader
+        step={4}
+        title="Selecciona el material"
+        description="Selecciona el material principal que se utilizará en el pedido."
+        detail={`Técnica seleccionada: ${maquina}`}
+        onBack={() => router.push("/hacer-pedido/maquinas")}
+      />
 
       {materiales.length === 0 ? (
-        <div className="text-white/70 bg-white/5 border border-white/10 rounded-2xl p-5">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.035] p-5 text-white/65">
           No hay materiales configurados para esta máquina.
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
-          {materiales.map((mat, idx) => (
-            <button
-              key={`${mat}-${idx}`}
-              onClick={() => seleccionarMaterial(mat)}
-              className={cardBase}
-            >
-              <div className="absolute inset-x-0 bottom-0 h-1 bg-emerald-400/40" />
+        <>
+          <div className="space-y-2.5 sm:hidden">
+            {materiales.map((mat, idx) => (
+              <button
+                key={`${mat}-${idx}`}
+                type="button"
+                onClick={() => seleccionarMaterial(mat)}
+                className="flex min-h-[68px] w-full items-center gap-3 rounded-2xl border border-white/10 bg-white/[0.035] px-3.5 py-3 text-left active:bg-white/[0.08]"
+              >
+                <span className="w-11 shrink-0 text-xl font-bold tracking-tight text-emerald-300">
+                  {pad2(idx + 1)}
+                </span>
+                <span className="min-w-0 flex-1 break-words text-sm font-semibold leading-snug text-white/90">
+                  {mat}
+                </span>
+                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-white/[0.06] text-white/55">
+                  <FiArrowRight />
+                </span>
+              </button>
+            ))}
+          </div>
 
-              <div className="p-6 flex items-center justify-between gap-6">
-                <div className="min-w-0">
-                  <div className="text-5xl font-bold text-emerald-300 tracking-tight">
-                    {pad2(idx + 1)}
+          <div className="hidden grid-cols-2 gap-6 sm:grid md:grid-cols-3">
+            {materiales.map((mat, idx) => (
+              <button
+                key={`${mat}-${idx}`}
+                onClick={() => seleccionarMaterial(mat)}
+                className="group relative w-full overflow-hidden rounded-2xl border border-white/10 bg-white/5 text-left shadow-[0_10px_35px_rgba(0,0,0,0.35)] backdrop-blur transition hover:bg-white/10"
+              >
+                <div className="absolute inset-x-0 bottom-0 h-1 bg-emerald-400/40" />
+                <div className="flex items-center justify-between gap-6 p-6">
+                  <div className="min-w-0">
+                    <div className="text-5xl font-bold tracking-tight text-emerald-300">
+                      {pad2(idx + 1)}
+                    </div>
+                    <div className="mt-1 text-lg font-semibold text-white">{mat}</div>
+                    <div className="mt-2 text-sm text-white/50">Click para continuar</div>
                   </div>
-
-                  <div className="mt-1 text-lg font-semibold text-white">
-                    {mat}
-                  </div>
-
-                  <div className="mt-2 text-sm text-white/50">
-                    Click para continuar
-                  </div>
-                </div>
-
-                <div className="shrink-0">
-                  <div className="h-11 w-11 rounded-full bg-white/10 border border-white/10 flex items-center justify-center group-hover:bg-white/20 transition">
+                  <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-white/10 bg-white/10 transition group-hover:bg-white/20">
                     <FiArrowRight className="text-white/80" />
                   </div>
                 </div>
-              </div>
-            </button>
-          ))}
-        </div>
+              </button>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );
