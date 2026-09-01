@@ -10,11 +10,7 @@ import FilePicker from "../components/FilePicker";
 import VersionList from "../components/VersionList";
 import ApprovalRow from "../components/ApprovalRow";
 
-function PedidosAsociados({
-  pedidos,
-}: {
-  pedidos: LinkedPedido[];
-}) {
+function PedidosAsociados({ pedidos }: { pedidos: LinkedPedido[] }) {
   const router = useRouter();
   const total = pedidos.reduce((sum, p) => sum + Number(p.subtotal || 0), 0);
 
@@ -99,6 +95,7 @@ export default function FaseBeta({
   ) => void;
 }) {
   const router = useRouter();
+  void isAdmin;
 
   const pedidosBeta = linkedPedidos.filter(
     (p) => p.fixtureRelacionadoFase === "beta"
@@ -132,32 +129,30 @@ export default function FaseBeta({
 
       <PedidosAsociados pedidos={pedidosBeta} />
 
-      {isAdmin && (
-        <form onSubmit={onGuardarBeta} className="mt-5 space-y-4">
-          <div className="rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
-            Nueva propuesta: <strong>{nextBetaLabel}</strong>
-          </div>
+      <form onSubmit={onGuardarBeta} className="mt-5 space-y-4">
+        <div className="rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-3 text-sm text-emerald-100">
+          Nueva propuesta: <strong>{nextBetaLabel}</strong>
+        </div>
 
-          <textarea
-            className={`${inputClass} min-h-[110px]`}
-            value={betaDesc}
-            onChange={(e) => setBetaDesc(e.target.value)}
-            placeholder="Materiales, presupuesto, ajustes, decisiones críticas, etc..."
-          />
+        <textarea
+          className={`${inputClass} min-h-[110px]`}
+          value={betaDesc}
+          onChange={(e) => setBetaDesc(e.target.value)}
+          placeholder="Materiales, presupuesto, ajustes, decisiones críticas, etc..."
+        />
 
-          <FilePicker
-            label="Adjuntar archivos de beta"
-            files={betaFiles}
-            inputRef={betaInputRef}
-            onChange={(list) => addFiles(list, setBetaFiles, betaInputRef)}
-            onRemove={(i) => removeFile(i, setBetaFiles)}
-          />
+        <FilePicker
+          label="Adjuntar archivos de beta"
+          files={betaFiles}
+          inputRef={betaInputRef}
+          onChange={(list) => addFiles(list, setBetaFiles, betaInputRef)}
+          onRemove={(i) => removeFile(i, setBetaFiles)}
+        />
 
-          <button disabled={loading} className={btnPrimary}>
-            <FiCheck /> Guardar beta
-          </button>
-        </form>
-      )}
+        <button disabled={loading} className={btnPrimary}>
+          <FiCheck /> Guardar beta
+        </button>
+      </form>
 
       <VersionList
         title="Betas registradas"
