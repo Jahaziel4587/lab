@@ -19,10 +19,10 @@ function ArchivosSolicitud({
   if (!archivos || archivos.length === 0) return null;
 
   return (
-    <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-4">
-      <div className="mb-3 flex items-center gap-2 text-sm font-semibold text-white/80">
-        <FiPaperclip />
-        {title}
+    <div className="mt-4 rounded-2xl border border-white/10 bg-black/20 p-3 sm:p-4">
+      <div className="mb-3 flex items-start gap-2 text-sm font-semibold leading-relaxed text-white/80">
+        <FiPaperclip className="mt-0.5 shrink-0" />
+        <span className="break-words">{title}</span>
       </div>
 
       <div className="grid gap-2">
@@ -32,7 +32,8 @@ function ArchivosSolicitud({
             href={file.url}
             target="_blank"
             rel="noopener noreferrer"
-            className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-4 py-3 text-sm text-emerald-100 transition hover:bg-white/[0.08]"
+            className="flex min-h-11 min-w-0 items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-3 sm:px-4 py-3 text-sm text-emerald-100 transition hover:bg-white/[0.08]"
+            title={file.name}
           >
             <span className="min-w-0 truncate">{file.name}</span>
             <FiDownload className="shrink-0" />
@@ -76,14 +77,8 @@ export default function ResumenSolicitud({
         setLoadingArchivos(true);
 
         const [visuales, tecnicos] = await Promise.all([
-          listFixtureFolderFiles({
-            pedidoId,
-            folder: "explicacion-visual",
-          }),
-          listFixtureFolderFiles({
-            pedidoId,
-            folder: "archivos-tecnicos",
-          }),
+          listFixtureFolderFiles({ pedidoId, folder: "explicacion-visual" }),
+          listFixtureFolderFiles({ pedidoId, folder: "archivos-tecnicos" }),
         ]);
 
         setArchivosVisuales(visuales);
@@ -140,12 +135,12 @@ export default function ResumenSolicitud({
 
   return (
     <section className={cardClass}>
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2 className="text-xl font-semibold">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 flex-1">
+          <h2 className="text-lg font-semibold sm:text-xl">
             Resumen de solicitud formal
           </h2>
-          <p className="mt-1 text-sm text-white/55">
+          <p className="mt-1 text-sm leading-relaxed text-white/55">
             Esta información se considera congelada como base del proceso.
           </p>
 
@@ -160,12 +155,12 @@ export default function ResumenSolicitud({
           </button>
         </div>
 
-        <span className="rounded-full border border-emerald-300/30 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-100">
+        <span className="w-fit shrink-0 rounded-full border border-emerald-300/30 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-100">
           {pedido?.status || "En proceso"}
         </span>
       </div>
 
-      <div className="mt-5 grid gap-4 text-sm md:grid-cols-2">
+      <div className="mt-5 grid gap-3 text-sm sm:gap-4 md:grid-cols-2">
         <Info label="Título" value={pedido?.titulo} />
         <Info label="ID / Referencia" value={pedido?.io} />
         <Info label="Proyecto" value={pedido?.proyecto} />
@@ -173,20 +168,14 @@ export default function ResumenSolicitud({
         <Info label="Fase actual" value={faseActual} />
       </div>
 
-      <div className="mt-6 grid gap-5">
+      <div className="mt-5 grid gap-4 sm:mt-6 sm:gap-5">
         <Block title="1. Necesidad">
           <InfoText label="Problemática" value={necesidad?.problematica} />
-          <InfoText
-            label="Piezas / producto"
-            value={necesidad?.piezasProducto}
-          />
+          <InfoText label="Piezas / producto" value={necesidad?.piezasProducto} />
         </Block>
 
         <Block title="2. Alcance">
-          <InfoText
-            label="Para qué sí se usará"
-            value={alcance?.descripcion}
-          />
+          <InfoText label="Para qué sí se usará" value={alcance?.descripcion} />
           <InfoText
             label="Proceso donde se usará"
             value={(alcance?.procesos || []).join(", ")}
@@ -216,25 +205,13 @@ export default function ResumenSolicitud({
         </Block>
 
         <Block title="4. Inputs">
-          <div className="grid gap-3 md:grid-cols-2">
+          <div className="grid gap-2.5 sm:gap-3 md:grid-cols-2">
             <BooleanInfo label="Cuarto limpio" value={inputs?.cuartoLimpio} />
             <BooleanInfo label="Horno" value={inputs?.horno} />
-            <BooleanInfo
-              label="Rigidez / dureza"
-              value={inputs?.rigidezDureza}
-            />
-            <BooleanInfo
-              label="Esterilizable"
-              value={inputs?.esterilizable}
-            />
-            <BooleanInfo
-              label="Dimensiones críticas"
-              value={inputs?.dimensionesCriticas}
-            />
-            <BooleanInfo
-              label="Reportar presupuestos al PM"
-              value={inputs?.presupuestoPM}
-            />
+            <BooleanInfo label="Rigidez / dureza" value={inputs?.rigidezDureza} />
+            <BooleanInfo label="Esterilizable" value={inputs?.esterilizable} />
+            <BooleanInfo label="Dimensiones críticas" value={inputs?.dimensionesCriticas} />
+            <BooleanInfo label="Reportar presupuestos al PM" value={inputs?.presupuestoPM} />
           </div>
 
           {inputs?.equipos?.length > 0 && (
@@ -244,26 +221,17 @@ export default function ResumenSolicitud({
               </p>
               <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-white/70">
                 {inputs.equipos.map((eq: string, index: number) => (
-                  <li key={index}>{eq}</li>
+                  <li key={index} className="break-words">{eq}</li>
                 ))}
               </ul>
             </div>
           )}
 
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <InfoText
-              label="Temperatura máxima"
-              value={inputs?.temperaturaMax}
-            />
-            <InfoText
-              label="Detalle rigidez / dureza"
-              value={inputs?.rigidezDetalle}
-            />
+          <div className="mt-4 grid gap-2.5 sm:gap-3 md:grid-cols-2">
+            <InfoText label="Temperatura máxima" value={inputs?.temperaturaMax} />
+            <InfoText label="Detalle rigidez / dureza" value={inputs?.rigidezDetalle} />
             <InfoText label="Referencia DWG" value={inputs?.referenciaDWG} />
-            <InfoText
-              label="Tiempo para trabajar"
-              value={inputs?.tiempoTrabajo}
-            />
+            <InfoText label="Tiempo para trabajar" value={inputs?.tiempoTrabajo} />
           </div>
 
           <InfoText label="Información extra" value={inputs?.extra} />
