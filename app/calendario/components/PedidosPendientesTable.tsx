@@ -1,10 +1,11 @@
 "use client";
 
+import { useMemo, useState } from "react";
 import Link from "next/link";
 import type { Pedido } from "../types";
 import { pedidoDetailHref } from "../utils";
 import StatusSelect from "./StatusSelect";
-import { FiCalendar } from "react-icons/fi";
+import { FiCalendar, FiX } from "react-icons/fi";
 
 type PedidosPendientesTableProps = {
   pedidos: Pedido[];
@@ -15,10 +16,71 @@ type PedidosPendientesTableProps = {
   ) => Promise<void>;
 };
 
+const MESES = [
+  "Enero",
+  "Febrero",
+  "Marzo",
+  "Abril",
+  "Mayo",
+  "Junio",
+  "Julio",
+  "Agosto",
+  "Septiembre",
+  "Octubre",
+  "Noviembre",
+  "Diciembre",
+];
+
 export default function PedidosPendientesTable({
   pedidos,
   onActualizarCampo,
 }: PedidosPendientesTableProps) {
+  const [pedidoFecha, setPedidoFecha] = useState<Pedido | null>(null);
+  const [dia, setDia] = useState("");
+  const [mes, setMes] = useState("");
+  const [anio, setAnio] = useState("");
+
+  const anioActual = new Date().getFullYear();
+  const anios = useMemo(
+    () => Array.from({ length: 8 }, (_, index) => anioActual - 2 + index),
+    [anioActual],
+  );
+
+  const diasDelMes = useMemo(() => {
+    if (!mes || !anio) return 31;
+    return new Date(Number(anio), Number(mes), 0).getDate();
+  }, [mes, anio]);
+
+  const abrirSelectorFecha = (pedido: Pedido) => {
+    setPedidoFecha(pedido);
+
+    if (pedido.fechaEntregaReal) {
+      const [year, month, day] = pedido.fechaEntregaReal.split("-");
+      setAnio(year || "");
+      setMes(month || "");
+      setDia(day || "");
+    } else {
+      setAnio("");
+      setMes("");
+      setDia("");
+    }
+  };
+
+  const cerrarSelectorFecha = () => {
+    setPedidoFecha(null);
+    setDia("");
+    setMes("");
+    setAnio("");
+  };
+
+  const confirmarFecha = () => {
+    if (!pedidoFecha || !dia || !mes || !anio) return;
+
+    const fecha = `${anio}-${mes.padStart(2, "0")}-${dia.padStart(2, "0")}`;
+    void onActualizarCampo(pedidoFecha, "fechaEntregaReal", fecha);
+    cerrarSelectorFecha();
+  };
+
   return (
     <section className="space-y-4">
       <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
@@ -36,7 +98,7 @@ export default function PedidosPendientesTable({
         </div>
       </div>
 
-      {/* Móvil: solo la información necesaria para programar el pedido. */}
+      {/* Móvil */}
       <div className="space-y-2 md:hidden">
         {pedidos.length === 0 ? (
           <div className="rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-10 text-center text-sm text-white/45">
@@ -60,28 +122,15 @@ export default function PedidosPendientesTable({
               </p>
 
               <div className="mt-3 flex items-center gap-2">
-                {/*
-                  El input permanece visible para el navegador móvil en lugar de
-                  cubrirlo con un input transparente. Así Android/iOS solo
-                  actualizan la fecha después de una selección real del usuario.
-                */}
-                <label
-                  className="relative flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] text-white/75"
+                <button
+                  type="button"
+                  onClick={() => abrirSelectorFecha(pedido)}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.05] text-white/75 transition active:bg-white/[0.12]"
                   aria-label={`Seleccionar fecha para ${pedido.titulo}`}
+                  title="Seleccionar fecha"
                 >
-                  <FiCalendar aria-hidden="true" className="pointer-events-none text-lg" />
-                  <input
-                    type="date"
-                    value={pedido.fechaEntregaReal || ""}
-                    aria-label={`Seleccionar fecha para ${pedido.titulo}`}
-                    onChange={(event) => {
-                      const nuevaFecha = event.currentTarget.value;
-                      if (!nuevaFecha) return;
-                      void onActualizarCampo(pedido, "fechaEntregaReal", nuevaFecha);
-                    }}
-                    className="absolute inset-0 h-full w-full cursor-pointer opacity-[0.01] [color-scheme:dark]"
-                  />
-                </label>
+                  <FiCalendar aria-hidden="true" className="text-lg" />
+                </button>
 
                 <div className="min-w-0 flex-1">
                   <StatusSelect
@@ -96,6 +145,110 @@ export default function PedidosPendientesTable({
           ))
         )}
       </div>
+
+      {/* Selector de fecha propio para móvil: nunca guarda hasta Confirmar. */}
+      {pedidoFecha && (
+        <div className="fixed inset-0 z-[100] flex items-end bg-black/70 p-3 md:hidden">
+          <div className="w-full rounded-3xl border border-white/10 bg-neutral-950 p-4 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div className="min-w-0">
+                <p className="text-xs uppercase tracking-[0.16em] text-white/40">
+                  Fecha de entrega real
+                </p>
+                <h3 className="mt-1 truncate text-base font-semibold text-white/90">
+                  {pedidoFecha.titulo || "Sin título"}
+                </h3>
+              </div>
+
+              <button
+                type="button"
+                onClick={cerrarSelectorFecha}
+                className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/5 text-white/70"
+                aria-label="Cerrar selector de fecha"
+              >
+                <FiX />
+              </button>
+            </div>
+
+            <div className="mt-5 grid grid-cols-3 gap-2">
+              <div>
+                <label className="mb-1.5 block text-xs text-white/50">Día</label>
+                <select
+                  value={dia}
+                  onChange={(event) => setDia(event.target.value)}
+                  className="h-12 w-full rounded-xl border border-white/10 bg-white/[0.06] px-2 text-base text-white outline-none [&>option]:bg-neutral-900"
+                >
+                  <option value="">—</option>
+                  {Array.from({ length: diasDelMes }, (_, index) => index + 1).map(
+                    (value) => (
+                      <option key={value} value={String(value)}>
+                        {value}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-xs text-white/50">Mes</label>
+                <select
+                  value={mes}
+                  onChange={(event) => {
+                    const nuevoMes = event.target.value;
+                    setMes(nuevoMes);
+                    if (dia && anio && nuevoMes) {
+                      const max = new Date(Number(anio), Number(nuevoMes), 0).getDate();
+                      if (Number(dia) > max) setDia("");
+                    }
+                  }}
+                  className="h-12 w-full rounded-xl border border-white/10 bg-white/[0.06] px-2 text-sm text-white outline-none [&>option]:bg-neutral-900"
+                >
+                  <option value="">—</option>
+                  {MESES.map((nombre, index) => (
+                    <option key={nombre} value={String(index + 1)}>
+                      {nombre}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="mb-1.5 block text-xs text-white/50">Año</label>
+                <select
+                  value={anio}
+                  onChange={(event) => setAnio(event.target.value)}
+                  className="h-12 w-full rounded-xl border border-white/10 bg-white/[0.06] px-2 text-base text-white outline-none [&>option]:bg-neutral-900"
+                >
+                  <option value="">—</option>
+                  {anios.map((value) => (
+                    <option key={value} value={String(value)}>
+                      {value}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
+            <div className="mt-5 flex gap-2">
+              <button
+                type="button"
+                onClick={cerrarSelectorFecha}
+                className="min-h-12 flex-1 rounded-xl border border-white/10 bg-white/5 px-4 text-sm font-medium text-white/75"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={confirmarFecha}
+                disabled={!dia || !mes || !anio}
+                className="min-h-12 flex-1 rounded-xl border border-emerald-400/25 bg-emerald-500/15 px-4 text-sm font-semibold text-emerald-100 disabled:cursor-not-allowed disabled:opacity-35"
+              >
+                Confirmar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Vista de computadora: se conserva completa. */}
       <div className="relative hidden overflow-hidden rounded-3xl border border-white/10 bg-white/[0.035] backdrop-blur-2xl ring-1 ring-white/5 shadow-[0_30px_120px_-80px_rgba(0,0,0,0.95)] md:block">
