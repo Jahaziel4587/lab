@@ -38,6 +38,7 @@ export default function ClientLayout({
   const [adminNotis, setAdminNotis] = useState<NotiItem[]>([]);
   const [panelAbierto, setPanelAbierto] = useState(false);
   const [menuAbierto, setMenuAbierto] = useState(false);
+  const [limpiandoNotis, setLimpiandoNotis] = useState(false);
 
   const notificaciones = useMemo(() => {
     const base = [...userNotis, ...(isAdmin ? adminNotis : [])];
@@ -136,6 +137,46 @@ export default function ClientLayout({
       );
     } catch (e) {
       console.error("Error marcando notificaciones como leídas:", e);
+    }
+  };
+
+  const limpiarNotificaciones = async () => {
+    if (!user || notificaciones.length === 0 || limpiandoNotis) return;
+
+    const confirmar = window.confirm(
+      "¿Quieres borrar todas las notificaciones? Esta acción no se puede deshacer.",
+    );
+    if (!confirmar) return;
+
+    setLimpiandoNotis(true);
+
+    try {
+      const idToken = await user.getIdToken();
+      const response = await fetch("/api/notifications/clear", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${idToken}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          items: notificaciones.map((notificacion) => ({
+            id: notificacion.id,
+            origen: notificacion.origen,
+          })),
+        }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json().catch(() => ({}));
+        throw new Error(data?.error || "No fue posible limpiar las notificaciones");
+      }
+    } catch (error) {
+      console.error("Error limpiando notificaciones:", error);
+      window.alert(
+        "No fue posible borrar las notificaciones. Inténtalo nuevamente.",
+      );
+    } finally {
+      setLimpiandoNotis(false);
     }
   };
 
@@ -290,13 +331,25 @@ export default function ClientLayout({
                       <span className="font-semibold text-sm text-white">
                         Notificaciones
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => setPanelAbierto(false)}
-                        className="min-h-10 px-2 text-[11px] text-white/60 hover:text-white transition"
-                      >
-                        Cerrar
-                      </button>
+                      <div className="flex items-center gap-1">
+                        {notificaciones.length > 0 && (
+                          <button
+                            type="button"
+                            onClick={limpiarNotificaciones}
+                            disabled={limpiandoNotis}
+                            className="min-h-10 px-2 text-[11px] font-medium text-emerald-300/85 hover:text-emerald-200 disabled:cursor-not-allowed disabled:opacity-50 transition"
+                          >
+                            {limpiandoNotis ? "Clearing..." : "Clear"}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => setPanelAbierto(false)}
+                          className="min-h-10 px-2 text-[11px] text-white/60 hover:text-white transition"
+                        >
+                          Cerrar
+                        </button>
+                      </div>
                     </div>
 
                     <div className="mb-3 rounded-xl border border-white/10 bg-white/[0.03] p-3">
