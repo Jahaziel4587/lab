@@ -124,6 +124,7 @@ export default function PruebaDiseno({
   ) => void | Promise<void>;
 }) {
   const router = useRouter();
+  void isAdmin;
   const [expandedPruebaIds, setExpandedPruebaIds] = useState<string[]>([]);
   const [uploadingVersionId, setUploadingVersionId] = useState<string | null>(null);
   const [addedFilesByVersion, setAddedFilesByVersion] = useState<
@@ -145,9 +146,6 @@ export default function PruebaDiseno({
     (sum, p) => sum + Number(p.subtotal || 0),
     0
   );
-
-  const canAddFiles =
-    isAdmin || canApprovePM || canApproveDesigner || canApproveProcessOwner;
 
   const getDisplayedFiles = (item: FixtureVersion) => {
     const byUrl = new Map<string, UploadedFile>();
@@ -209,19 +207,17 @@ export default function PruebaDiseno({
           </p>
         </div>
 
-        {isAdmin && (
-          <button
-            type="button"
-            onClick={() => {
-              if (!expandedPruebaIds.includes("new")) {
-                setExpandedPruebaIds((prev) => [...prev, "new"]);
-              }
-            }}
-            className={btnPrimary}
-          >
-            <FiPlus /> Agregar {nextPruebaLabel}
-          </button>
-        )}
+        <button
+          type="button"
+          onClick={() => {
+            if (!expandedPruebaIds.includes("new")) {
+              setExpandedPruebaIds((prev) => [...prev, "new"]);
+            }
+          }}
+          className={btnPrimary}
+        >
+          <FiPlus /> Agregar {nextPruebaLabel}
+        </button>
       </div>
 
       <div className="mt-5 rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-3">
@@ -296,51 +292,47 @@ export default function PruebaDiseno({
                       </p>
                     )}
 
-                    {(displayedFiles.length > 0 || canAddFiles) && (
-                      <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
-                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-white/40">
-                            <FiPaperclip />
-                            Archivos
-                          </div>
-
-                          {canAddFiles && (
-                            <label className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white/80 transition hover:bg-white/10 sm:min-h-0 sm:py-1.5">
-                              <FiUpload />
-                              {uploadingVersionId === item.id
-                                ? "Subiendo..."
-                                : "Agregar archivos"}
-                              <input
-                                type="file"
-                                multiple
-                                disabled={uploadingVersionId !== null}
-                                className="hidden"
-                                onChange={(event) => {
-                                  agregarArchivosVersion(item, event.target.files);
-                                  event.target.value = "";
-                                }}
-                              />
-                            </label>
-                          )}
+                    <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-white/40">
+                          <FiPaperclip />
+                          Archivos
                         </div>
 
-                        {displayedFiles.length > 0 && (
-                          <div className="mt-3 space-y-1.5">
-                            {displayedFiles.map((file) => (
-                              <a
-                                key={file.url}
-                                href={file.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="block break-all text-sm text-emerald-200 underline decoration-white/20 underline-offset-2 hover:text-emerald-100"
-                              >
-                                {file.name}
-                              </a>
-                            ))}
-                          </div>
-                        )}
+                        <label className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white/80 transition hover:bg-white/10 sm:min-h-0 sm:py-1.5">
+                          <FiUpload />
+                          {uploadingVersionId === item.id
+                            ? "Subiendo..."
+                            : "Agregar archivos"}
+                          <input
+                            type="file"
+                            multiple
+                            disabled={uploadingVersionId !== null}
+                            className="hidden"
+                            onChange={(event) => {
+                              agregarArchivosVersion(item, event.target.files);
+                              event.target.value = "";
+                            }}
+                          />
+                        </label>
                       </div>
-                    )}
+
+                      {displayedFiles.length > 0 && (
+                        <div className="mt-3 space-y-1.5">
+                          {displayedFiles.map((file) => (
+                            <a
+                              key={file.url}
+                              href={file.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="block break-all text-sm text-emerald-200 underline decoration-white/20 underline-offset-2 hover:text-emerald-100"
+                            >
+                              {file.name}
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </div>
 
                     <div className="mt-4">
                       <button
@@ -416,7 +408,7 @@ export default function PruebaDiseno({
             );
           })}
 
-          {isAdmin && (pruebas.length === 0 || isNewPruebaOpen) && (
+          {(pruebas.length === 0 || isNewPruebaOpen) && (
             <div className="w-full rounded-2xl border border-emerald-300/20 bg-emerald-400/10 p-4">
               <button
                 type="button"
@@ -494,12 +486,6 @@ export default function PruebaDiseno({
           )}
         </div>
       </div>
-
-      {!isAdmin && pruebas.length === 0 && (
-        <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">
-          Aún no hay pruebas registradas.
-        </div>
-      )}
     </section>
   );
 }
