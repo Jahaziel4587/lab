@@ -33,6 +33,32 @@ body {
   scrollbar-width: none;     /* Firefox */
 }
 
+/* Navegación de fases FXT: en teléfono funciona como una tira horizontal compacta. */
+@media (max-width: 639px) {
+  [class~="sm:grid-cols-2"][class~="lg:grid-cols-6"] {
+    display: flex;
+    gap: 0.5rem;
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scroll-snap-type: x proximity;
+    scrollbar-width: none;
+    padding-bottom: 0.25rem;
+  }
+
+  [class~="sm:grid-cols-2"][class~="lg:grid-cols-6"]::-webkit-scrollbar {
+    display: none;
+  }
+
+  [class~="sm:grid-cols-2"][class~="lg:grid-cols-6"] > button {
+    width: auto;
+    min-width: 9.5rem;
+    min-height: 2.75rem;
+    flex: 0 0 auto;
+    scroll-snap-align: start;
+    padding-inline: 0.9rem;
+  }
+}
+
 /* Ilumina el elemento target del paso actual (especialmente útil en el menú) */
 .tour-highlight {
   color: rgb(52, 211, 153) !important; /* emerald-400 */
