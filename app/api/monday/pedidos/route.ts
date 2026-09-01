@@ -3,13 +3,17 @@ import { FieldValue, Timestamp } from "firebase-admin/firestore";
 import { adminAuth, adminDB } from "@/lib/firebaseAdmin";
 import { createPedidoItem } from "@/lib/monday/createPedidoItem";
 import {
-  getAdminEmails,
   getDisplayNameForUid,
   sendPushToEmails,
 } from "@/lib/pushNotifications";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const ORDER_NOTIFICATION_EMAILS = [
+  "jahaziel4587@gmail.com",
+  "manuel.garcia@bioana.com.mx",
+];
 
 function normalizeEmail(value: unknown) {
   return String(value || "")
@@ -138,7 +142,6 @@ export async function POST(request: NextRequest) {
 
     if (pedido.pushNotifications?.orderCreated !== true) {
       try {
-        const adminEmails = await getAdminEmails();
         const senderName = await getDisplayNameForUid(
           decodedToken.uid,
           decodedToken.email,
@@ -149,14 +152,14 @@ export async function POST(request: NextRequest) {
         const notificationBody = `${senderName}: ${tituloPedido}`;
 
         await sendPushToEmails({
-          emails: adminEmails,
+          emails: ORDER_NOTIFICATION_EMAILS,
           title: "Nuevo pedido",
           body: notificationBody,
           url: urlProtolab,
         });
 
         await Promise.all(
-          adminEmails.map((email) =>
+          ORDER_NOTIFICATION_EMAILS.map((email) =>
             adminDB.collection("notifications").add({
               userEmail: email,
               pedidoId,
