@@ -13,16 +13,13 @@ import {
 } from "firebase/firestore";
 import { auth, db, storage } from "@/src/firebase/firebaseConfig";
 import { useRouter, useSearchParams } from "next/navigation";
-import { FiX, FiUpload, FiVideo, FiArrowLeft } from "react-icons/fi";
+import { FiX, FiUpload, FiVideo } from "react-icons/fi";
+import OrderFlowHeader from "../components/OrderFlowHeader";
 
 export default function EspecificacionesPage() {
-  // Sufijo editable por el usuario
   const [titulo, setTitulo] = useState("");
   const [prefijoTitulo, setPrefijoTitulo] = useState<string>("");
-
-  // Título final garantizado único
   const [tituloFinalUnico, setTituloFinalUnico] = useState("");
-
   const [explicacion, setExplicacion] = useState("");
   const [fecha, setFecha] = useState("");
   const [archivos, setArchivos] = useState<File[]>([]);
@@ -37,59 +34,41 @@ export default function EspecificacionesPage() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const router = useRouter();
-const searchParams = useSearchParams();
+  const searchParams = useSearchParams();
 
-const fixtureRelacionadoId =
-  searchParams.get("fixtureRelacionadoId") ||
-  localStorage.getItem("fixtureRelacionadoId");
+  const fixtureRelacionadoId =
+    searchParams.get("fixtureRelacionadoId") ||
+    localStorage.getItem("fixtureRelacionadoId");
 
-const fixtureRelacionadoFase =
-  searchParams.get("fixtureRelacionadoFase") ||
-  localStorage.getItem("fixtureRelacionadoFase");
+  const fixtureRelacionadoFase =
+    searchParams.get("fixtureRelacionadoFase") ||
+    localStorage.getItem("fixtureRelacionadoFase");
 
-const fixtureRelacionadoVersion =
-  searchParams.get("fixtureRelacionadoVersion") ||
-  localStorage.getItem("fixtureRelacionadoVersion");
+  const fixtureRelacionadoVersion =
+    searchParams.get("fixtureRelacionadoVersion") ||
+    localStorage.getItem("fixtureRelacionadoVersion");
 
-const fixtureRelacionadoProyecto =
-  searchParams.get("proyecto") ||
-  localStorage.getItem("fixtureRelacionadoProyecto");
-
-
-  // ---------- UI helpers ----------
-  const baseButton =
-    "inline-flex items-center gap-2 px-4 py-2 rounded-full " +
-    "bg-white/10 text-white backdrop-blur " +
-    "border border-white/10 " +
-    "hover:bg-white/20 transition disabled:opacity-60 disabled:cursor-not-allowed";
+  const fixtureRelacionadoProyecto =
+    searchParams.get("proyecto") ||
+    localStorage.getItem("fixtureRelacionadoProyecto");
 
   const primaryButton =
-    "inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full " +
-    "bg-emerald-500/90 text-black font-semibold " +
-    "hover:bg-emerald-400 transition disabled:opacity-60 disabled:cursor-not-allowed";
+    "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-emerald-500/90 px-4 py-2 text-sm font-semibold text-black transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-60 sm:rounded-full";
 
   const darkButton =
-    "inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full " +
-    "bg-white/10 text-white border border-white/10 backdrop-blur " +
-    "hover:bg-white/20 transition disabled:opacity-60 disabled:cursor-not-allowed";
+    "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.06] px-4 py-2 text-sm text-white transition hover:bg-white/15 disabled:cursor-not-allowed disabled:opacity-60 sm:rounded-full";
 
   const warnButton =
-    "inline-flex items-center justify-center gap-2 px-4 py-2 rounded-full " +
-    "bg-yellow-500/90 text-black font-semibold " +
-    "hover:bg-yellow-400 transition disabled:opacity-60 disabled:cursor-not-allowed";
+    "inline-flex min-h-11 items-center justify-center gap-2 rounded-xl bg-yellow-500/90 px-4 py-2 text-sm font-semibold text-black transition hover:bg-yellow-400 disabled:cursor-not-allowed disabled:opacity-60 sm:rounded-full";
 
   const card =
-    "rounded-2xl bg-white/5 backdrop-blur border border-white/10 " +
-    "shadow-[0_10px_35px_rgba(0,0,0,0.35)]";
+    "rounded-2xl border border-white/10 bg-white/[0.035] shadow-none sm:bg-white/5 sm:backdrop-blur sm:shadow-[0_10px_35px_rgba(0,0,0,0.35)]";
 
   const input =
-    "w-full px-3 py-2 rounded-xl bg-white/5 text-white " +
-    "border border-white/10 outline-none " +
-    "focus:ring-2 focus:ring-emerald-400/40 focus:border-emerald-300/30";
+    "w-full rounded-xl border border-white/10 bg-white/[0.05] px-3 py-3 text-base text-white outline-none placeholder:text-white/35 focus:border-emerald-300/30 focus:ring-2 focus:ring-emerald-400/30 sm:py-2 sm:text-sm";
 
-  const label = "block text-sm font-medium text-white/80 mb-1";
+  const label = "mb-1.5 block text-sm font-medium text-white/80";
 
-  // ---------- Helpers ----------
   const normalize = (s: string) =>
     (s || "")
       .toString()
@@ -117,7 +96,6 @@ const fixtureRelacionadoProyecto =
     if (!value) return null;
     const key = normalize(value);
     if (ABBR_MAP[key]) return ABBR_MAP[key];
-
     if (key.includes("2.85") && key.includes("pla")) return "UMKR";
     if (key.includes("1.75") && key.includes("pla")) return "BML";
     if (key.includes("1.75") && key.includes("nylon")) return "BML";
@@ -161,34 +139,26 @@ const fixtureRelacionadoProyecto =
 
     const proyecto = localStorage.getItem("proyecto");
     const code = getProyectoCode(proyecto);
-
     return `${abbrCandidate}_${code}_`;
   }
 
-  // ---------- Generar título único ----------
   async function generarTituloUnico(tituloBase: string): Promise<string> {
     let tituloTest = tituloBase;
     let i = 1;
 
     while (true) {
-      const q = query(
-        collection(db, "pedidos"),
-        where("titulo", "==", tituloTest)
-      );
+      const q = query(collection(db, "pedidos"), where("titulo", "==", tituloTest));
       const snap = await getDocs(q);
       if (snap.empty) return tituloTest;
-
       tituloTest = `${tituloBase}_${String(i).padStart(2, "0")}`;
       i++;
     }
   }
 
-  // Calcular prefijo al montar
   useEffect(() => {
     setPrefijoTitulo(computePrefijo());
   }, []);
 
-  // Debounce para no spamear Firestore en cada tecla
   useEffect(() => {
     let alive = true;
     const t = setTimeout(async () => {
@@ -210,7 +180,6 @@ const fixtureRelacionadoProyecto =
     };
   }, [titulo, prefijoTitulo]);
 
-  // -------------------- Archivos --------------------
   const handleSelectFiles = (e: React.ChangeEvent<HTMLInputElement>) => {
     const nuevosArchivos = Array.from(e.target.files || []);
     setArchivos((prev) => [...prev, ...nuevosArchivos]);
@@ -222,27 +191,22 @@ const fixtureRelacionadoProyecto =
     if (videoFile?.name === nombre) setVideoFile(null);
   };
 
-  const handleClickBoton = () => {
-    fileInputRef.current?.click();
-  };
-
+  const handleClickBoton = () => fileInputRef.current?.click();
   const totalArchivos = useMemo(() => archivos.length, [archivos]);
 
-  // -------------------- Upload / Guardado --------------------
   const handleUploadAll = async () => {
     if (!tituloFinalUnico) return alert("Agrega el título del pedido.");
     if (!fecha) return alert("Selecciona una fecha de entrega.");
 
     const prefijo = computePrefijo();
     setPrefijoTitulo(prefijo);
-
     setSubiendo(true);
 
     try {
       const proyecto =
-  fixtureRelacionadoProyecto ||
-  localStorage.getItem("proyecto") ||
-  "Sin proyecto";
+        fixtureRelacionadoProyecto ||
+        localStorage.getItem("proyecto") ||
+        "Sin proyecto";
       const servicio = localStorage.getItem("servicio") || "Sin servicio";
       const maquina = localStorage.getItem("maquina") || "Sin máquina";
       const material = localStorage.getItem("material") || "Sin material";
@@ -251,7 +215,6 @@ const fixtureRelacionadoProyecto =
       const pedidosCol = collection(db, "pedidos");
       const nuevoDocRef = doc(pedidosCol);
       const carpetaId = nuevoDocRef.id;
-
       const archivosSubidos: string[] = [];
 
       for (const archivo of archivos) {
@@ -265,7 +228,7 @@ const fixtureRelacionadoProyecto =
       if (videoFile) {
         const videoStorageRef = ref(
           storage,
-          `pedidos/${carpetaId}/${videoFile.name}`
+          `pedidos/${carpetaId}/${videoFile.name}`,
         );
         await uploadBytes(videoStorageRef, videoFile);
         urlDelVideo = await getDownloadURL(videoStorageRef);
@@ -273,109 +236,90 @@ const fixtureRelacionadoProyecto =
       }
 
       await setDoc(nuevoDocRef, {
-  titulo: tituloFinalUnico,
-  descripcion: explicacion,
-  fechaLimite: fecha,
-  proyecto,
-  servicio,
-  maquina,
-  material,
-  usuario,
-  archivos: archivosSubidos,
-  videoURL: urlDelVideo,
-  timestamp: serverTimestamp(),
-  correoUsuario: usuario,
+        titulo: tituloFinalUnico,
+        descripcion: explicacion,
+        fechaLimite: fecha,
+        proyecto,
+        servicio,
+        maquina,
+        material,
+        usuario,
+        archivos: archivosSubidos,
+        videoURL: urlDelVideo,
+        timestamp: serverTimestamp(),
+        correoUsuario: usuario,
+        fixtureRelacionadoId: fixtureRelacionadoId || null,
+        fixtureRelacionadoFase: fixtureRelacionadoFase || null,
+        fixtureRelacionadoVersion: fixtureRelacionadoVersion || null,
+        fixtureRelacionadoProyecto: fixtureRelacionadoProyecto || null,
+      });
 
-  fixtureRelacionadoId: fixtureRelacionadoId || null,
-  fixtureRelacionadoFase: fixtureRelacionadoFase || null,
-  fixtureRelacionadoVersion: fixtureRelacionadoVersion || null,
-  fixtureRelacionadoProyecto: fixtureRelacionadoProyecto || null,
-});
+      let mondaySincronizado = true;
 
-let mondaySincronizado = true;
+      try {
+        const currentUser = auth.currentUser;
+        if (!currentUser) throw new Error("No hay una sesión activa");
 
-try {
-  const currentUser = auth.currentUser;
+        const idToken = await currentUser.getIdToken();
+        const mondayResponse = await fetch("/api/monday/pedidos", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({ pedidoId: nuevoDocRef.id }),
+        });
 
-  if (!currentUser) {
-    throw new Error("No hay una sesión activa");
-  }
+        const responseText = await mondayResponse.text();
+        let mondayResult: { error?: string; mondayUserFound?: boolean } = {};
 
-  const idToken = await currentUser.getIdToken();
+        try {
+          mondayResult = responseText ? JSON.parse(responseText) : {};
+        } catch {
+          throw new Error(
+            `La ruta de Monday respondió con ${mondayResponse.status} y no devolvió JSON`,
+          );
+        }
 
-  const mondayResponse = await fetch(
-    "/api/monday/pedidos",
-    {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${idToken}`,
-      },
-      body: JSON.stringify({
-        pedidoId: nuevoDocRef.id,
-      }),
-    },
-  );
+        if (!mondayResponse.ok) {
+          throw new Error(
+            mondayResult.error ||
+              `Error ${mondayResponse.status} al sincronizar con Monday`,
+          );
+        }
 
-  const responseText = await mondayResponse.text();
-
-  let mondayResult: {
-    error?: string;
-    mondayUserFound?: boolean;
-  } = {};
-
-  try {
-    mondayResult = responseText
-      ? JSON.parse(responseText)
-      : {};
-  } catch {
-    throw new Error(
-      `La ruta de Monday respondió con ${mondayResponse.status} y no devolvió JSON`,
-    );
-  }
-
-  if (!mondayResponse.ok) {
-    throw new Error(
-      mondayResult.error ||
-        `Error ${mondayResponse.status} al sincronizar con Monday`,
-    );
-  }
-
-  if (mondayResult.mondayUserFound === false) {
-    console.warn(
-      "El pedido se creó en Monday, pero no se encontró una cuenta con el correo del solicitante.",
-    );
-  }
-} catch (mondayError) {
-  mondaySincronizado = false;
-
-  console.error(
-    "El pedido se guardó, pero Monday no pudo sincronizarse:",
-    mondayError,
-  );
-}
+        if (mondayResult.mondayUserFound === false) {
+          console.warn(
+            "El pedido se creó en Monday, pero no se encontró una cuenta con el correo del solicitante.",
+          );
+        }
+      } catch (mondayError) {
+        mondaySincronizado = false;
+        console.error(
+          "El pedido se guardó, pero Monday no pudo sincronizarse:",
+          mondayError,
+        );
+      }
 
       if (mondaySincronizado) {
-  alert("✅ Pedido enviado con éxito");
-} else {
-  alert(
-    "⚠️ El pedido se guardó correctamente, pero no pudo enviarse a Monday.",
-  );
-}
+        alert("✅ Pedido enviado con éxito");
+      } else {
+        alert("⚠️ El pedido se guardó correctamente, pero no pudo enviarse a Monday.");
+      }
+
       localStorage.removeItem("fixtureRelacionadoId");
-localStorage.removeItem("fixtureRelacionadoFase");
-localStorage.removeItem("fixtureRelacionadoVersion");
-localStorage.removeItem("fixtureRelacionadoProyecto");
+      localStorage.removeItem("fixtureRelacionadoFase");
+      localStorage.removeItem("fixtureRelacionadoVersion");
+      localStorage.removeItem("fixtureRelacionadoProyecto");
       router.push("/");
     } catch (err: any) {
       console.error(err);
       alert(`Error: ${err.message || err}`);
+    } finally {
+      setSubiendo(false);
     }
-
-    setSubiendo(false);
   };
 
-  // -------------------- Grabación de video --------------------
   const iniciarGrabacion = async () => {
     const mediaStream = await navigator.mediaDevices.getUserMedia({
       video: true,
@@ -430,121 +374,122 @@ localStorage.removeItem("fixtureRelacionadoProyecto");
   }, [stream]);
 
   return (
-    <div className="relative max-w-5xl mx-auto px-4 py-6 space-y-5">
-      {/* Top bar */}
-      <div className="flex items-center justify-between gap-3">
-        <button className={baseButton} onClick={() => router.back()}>
-          <FiArrowLeft className="opacity-80" /> Regresar
-        </button>
+    <div className="mx-auto w-full max-w-5xl px-3 py-4 sm:px-6 sm:py-8">
+      <OrderFlowHeader
+        step={5}
+        title="Especificaciones del pedido"
+        description="Completa la información final, adjunta la evidencia necesaria y envía la solicitud."
+        detail={
+          totalArchivos > 0
+            ? `${totalArchivos} archivo(s) listo(s) para enviar`
+            : "Los archivos son opcionales"
+        }
+        onBack={() => router.back()}
+      />
 
-        <div className="text-right text-xs text-white/60">
-          {totalArchivos > 0 ? (
-            <span>{totalArchivos} archivo(s) listo(s)</span>
-          ) : (
-            <span>Sin archivos aún</span>
-          )}
-        </div>
-      </div>
-
-      <div>
-        <h1 className="text-2xl md:text-3xl font-semibold text-white">
-          Especificaciones del pedido
-        </h1>
-        <p className="text-sm text-white/60 mt-1">
-          Completa la información final y adjunta archivos si aplica.
-        </p>
-      </div>
-
-      {/* Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-[1.2fr_0.8fr] gap-5">
-        {/* Form */}
-        <div className={`${card} p-5 space-y-5`}>
-          {/* Título */}
+      <div className="grid grid-cols-1 gap-3 sm:gap-5 lg:grid-cols-[1.2fr_0.8fr]">
+        <div className={`${card} space-y-5 p-4 sm:p-5`}>
           <div>
             <label className={label}>Título del pedido</label>
 
-            <div className="flex items-stretch w-full rounded-xl overflow-hidden border border-white/10 bg-white/5">
-              <span className="px-3 py-2 text-white/70 border-r border-white/10 select-none whitespace-nowrap">
-                {prefijoTitulo || "GEN_PRJ0_"}
-              </span>
-
+            {/* Móvil: prefijo separado para evitar que comprima el campo. */}
+            <div className="sm:hidden">
+              <div className="mb-2 inline-flex max-w-full rounded-lg border border-emerald-300/15 bg-emerald-400/[0.08] px-2.5 py-1.5 text-xs font-medium text-emerald-100">
+                <span className="truncate">{prefijoTitulo || "GEN_PRJ0_"}</span>
+              </div>
               <input
                 type="text"
                 value={titulo}
                 onChange={(e) => setTitulo(e.target.value)}
-                className="flex-1 px-3 py-2 bg-transparent text-white outline-none"
+                className={input}
+                placeholder="Nombre corto del pedido"
+              />
+            </div>
+
+            <div className="hidden items-stretch overflow-hidden rounded-xl border border-white/10 bg-white/5 sm:flex">
+              <span className="select-none whitespace-nowrap border-r border-white/10 px-3 py-2 text-white/70">
+                {prefijoTitulo || "GEN_PRJ0_"}
+              </span>
+              <input
+                type="text"
+                value={titulo}
+                onChange={(e) => setTitulo(e.target.value)}
+                className="min-w-0 flex-1 bg-transparent px-3 py-2 text-white outline-none"
                 placeholder="Escribe la parte final. Evita usar /"
               />
             </div>
 
-            <p className="text-xs text-white/50 mt-2">
+            <p className="mt-2 break-words text-xs leading-relaxed text-white/45">
               Se guardará como:{" "}
-              <span className="text-white/80 font-semibold">
+              <span className="font-semibold text-white/75">
                 {tituloFinalUnico || "..."}
               </span>
             </p>
           </div>
 
-          {/* Explicación */}
           <div>
             <label className={label}>Explicación del pedido</label>
             <textarea
               rows={5}
               value={explicacion}
               onChange={(e) => setExplicacion(e.target.value)}
-              className={input}
-              placeholder="Describe el pedido (medidas, tolerancias, objetivo, etc.)"
+              className={`${input} min-h-[130px] resize-y`}
+              placeholder="Describe medidas, tolerancias, objetivo, cantidad o cualquier detalle importante."
             />
           </div>
 
-          {/* Fecha */}
           <div>
             <label className={label}>Fecha propuesta</label>
             <input
               type="date"
               value={fecha}
               onChange={(e) => setFecha(e.target.value)}
-              className={input}
+              className={`${input} [color-scheme:dark]`}
             />
           </div>
 
-          {/* Submit */}
-          <button
-            onClick={handleUploadAll}
-            disabled={subiendo}
-            className="w-full h-12 rounded-full bg-emerald-500/90 hover:bg-emerald-400 text-black font-semibold transition disabled:opacity-60 disabled:cursor-not-allowed"
-          >
-            {subiendo ? "Subiendo..." : "Enviar pedido"}
-          </button>
-
-          <p className="text-xs text-white/40">
-            Al enviar, se guardan los archivos en Storage dentro de una carpeta con el ID del pedido.
-          </p>
+          {/* En escritorio se conserva el envío dentro de la tarjeta principal. */}
+          <div className="hidden lg:block">
+            <button
+              type="button"
+              onClick={handleUploadAll}
+              disabled={subiendo}
+              className={`${primaryButton} h-12 w-full`}
+            >
+              {subiendo ? "Enviando pedido..." : "Enviar pedido"}
+            </button>
+            <p className="mt-2 text-xs leading-relaxed text-white/40">
+              Los archivos se guardarán junto con el pedido y la solicitud se sincronizará automáticamente.
+            </p>
+          </div>
         </div>
 
-        {/* Attachments */}
-        <div className={`${card} p-5 space-y-4`}>
-          <div className="flex items-center justify-between">
-            <h2 className="text-white font-semibold">Archivos y video</h2>
-            <span className="text-xs text-white/50">
+        <div className={`${card} space-y-4 p-4 sm:p-5`}>
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <h2 className="font-semibold text-white">Archivos y video</h2>
+              <p className="mt-0.5 text-xs text-white/45">Opcional</p>
+            </div>
+            <span className="shrink-0 rounded-full bg-white/[0.06] px-2.5 py-1 text-xs text-white/55">
               {archivos.length} adjunto(s)
             </span>
           </div>
 
-          <div className="flex flex-wrap gap-2">
-            <button onClick={handleClickBoton} className={darkButton}>
+          <div className="grid grid-cols-1 gap-2 min-[380px]:grid-cols-2 lg:flex lg:flex-wrap">
+            <button type="button" onClick={handleClickBoton} className={darkButton}>
               <FiUpload /> Seleccionar archivos
             </button>
 
             <button
+              type="button"
               onClick={grabando ? detenerGrabacion : iniciarGrabacion}
               className={darkButton}
             >
-              <FiVideo /> {grabando ? "Detener" : "Grabarme"}
+              <FiVideo /> {grabando ? "Detener" : "Grabar video"}
             </button>
 
             {grabando && (
-              <button onClick={togglePausa} className={warnButton}>
+              <button type="button" onClick={togglePausa} className={warnButton}>
                 {pausado ? "Reanudar" : "Pausar"}
               </button>
             )}
@@ -556,7 +501,7 @@ localStorage.removeItem("fixtureRelacionadoProyecto");
               autoPlay
               muted
               playsInline
-              className="w-full h-56 bg-black/60 rounded-xl border border-white/10"
+              className="h-auto max-h-[55dvh] w-full rounded-xl border border-white/10 bg-black/60 object-cover sm:h-56"
             />
           )}
 
@@ -569,30 +514,32 @@ localStorage.removeItem("fixtureRelacionadoProyecto");
           />
 
           {archivos.length === 0 ? (
-            <div className="text-sm text-white/50 bg-white/5 border border-white/10 rounded-xl p-4">
+            <div className="rounded-xl border border-dashed border-white/10 bg-white/[0.025] p-4 text-center text-sm text-white/45">
               No has adjuntado archivos todavía.
             </div>
           ) : (
-            <div className="space-y-2 max-h-[52vh] overflow-auto pr-1">
+            <div className="max-h-[52vh] space-y-2 overflow-auto pr-1">
               {archivos.map((file) => (
                 <div
                   key={file.name}
-                  className="rounded-xl bg-white/5 border border-white/10 p-3"
+                  className="rounded-xl border border-white/10 bg-white/[0.04] p-3"
                 >
                   <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="text-sm text-white font-medium truncate">
+                    <div className="min-w-0 flex-1">
+                      <div className="break-words text-sm font-medium leading-snug text-white">
                         {file.name}
                       </div>
-                      <div className="text-xs text-white/50">
+                      <div className="mt-1 text-xs text-white/45">
                         {file.type || "archivo"} • {(file.size / 1024 / 1024).toFixed(2)} MB
                       </div>
                     </div>
 
                     <button
+                      type="button"
                       onClick={() => handleRemove(file.name)}
-                      className="h-9 w-9 rounded-full bg-white/10 border border-white/10 hover:bg-white/20 transition flex items-center justify-center"
+                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/10 bg-white/[0.06] transition hover:bg-white/15"
                       title="Quitar"
+                      aria-label={`Quitar ${file.name}`}
                     >
                       <FiX className="text-white/80" />
                     </button>
@@ -610,6 +557,21 @@ localStorage.removeItem("fixtureRelacionadoProyecto");
             </div>
           )}
         </div>
+      </div>
+
+      {/* En móvil el envío queda al final natural del recorrido. */}
+      <div className="mt-4 lg:hidden">
+        <button
+          type="button"
+          onClick={handleUploadAll}
+          disabled={subiendo}
+          className={`${primaryButton} h-13 w-full text-base`}
+        >
+          {subiendo ? "Enviando pedido..." : "Enviar pedido"}
+        </button>
+        <p className="mt-2 px-1 text-center text-xs leading-relaxed text-white/40">
+          Revisa la información y los archivos antes de enviar.
+        </p>
       </div>
     </div>
   );
