@@ -59,6 +59,195 @@ body {
   }
 }
 
+/* Analytics: vista móvil compacta y sin desbordes horizontales. */
+@media (max-width: 639px) {
+  .analytics-mobile {
+    overflow-x: hidden;
+  }
+
+  .analytics-mobile main {
+    padding-left: 0.75rem !important;
+    padding-right: 0.75rem !important;
+    padding-top: 1.25rem !important;
+    padding-bottom: 1.5rem !important;
+  }
+
+  .analytics-mobile h1 {
+    font-size: 1.5rem !important;
+    line-height: 1.85rem !important;
+  }
+
+  .analytics-mobile select {
+    min-width: 0 !important;
+    width: 100% !important;
+    min-height: 2.9rem;
+  }
+
+  .analytics-mobile label {
+    width: 100%;
+  }
+
+  .analytics-mobile button {
+    min-height: 2.75rem;
+    touch-action: manipulation;
+  }
+
+  .analytics-mobile .backdrop-blur-2xl,
+  .analytics-mobile .backdrop-blur-xl,
+  .analytics-mobile .backdrop-blur {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+
+  /* Navegación de Por proyecto / Servicios / Materiales en una sola fila. */
+  .analytics-mobile main > div > div:nth-of-type(2) > div:last-child {
+    display: grid !important;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 0.4rem !important;
+    padding: 0.45rem !important;
+  }
+
+  .analytics-mobile main > div > div:nth-of-type(2) button {
+    min-width: 0;
+    padding: 0.7rem 0.35rem !important;
+    font-size: 0.7rem !important;
+    white-space: nowrap;
+  }
+
+  .analytics-mobile section > div.relative {
+    padding: 1rem !important;
+  }
+
+  .analytics-mobile section .grid {
+    gap: 0.75rem !important;
+  }
+
+  .analytics-mobile section .rounded-3xl {
+    border-radius: 1.1rem !important;
+  }
+
+  /* Las tablas pasan a tarjetas verticales en móvil. */
+  .analytics-mobile section table {
+    display: block;
+    width: 100%;
+  }
+
+  .analytics-mobile section table thead {
+    display: none;
+  }
+
+  .analytics-mobile section table tbody {
+    display: block;
+    width: 100%;
+  }
+
+  .analytics-mobile section table tbody > tr {
+    display: grid;
+    width: 100%;
+    gap: 0.45rem;
+    padding: 0.85rem;
+    border-bottom: 1px solid rgba(255,255,255,0.08);
+  }
+
+  .analytics-mobile section table tbody > tr:last-child {
+    border-bottom: 0;
+  }
+
+  .analytics-mobile section table td {
+    display: block;
+    width: 100% !important;
+    min-width: 0;
+    padding: 0 !important;
+    text-align: left !important;
+    overflow-wrap: anywhere;
+  }
+
+  .analytics-mobile section table td:last-child button {
+    width: 100%;
+    margin-top: 0.25rem;
+  }
+
+  .analytics-mobile section table tr.bg-black\/25 {
+    padding: 0.65rem !important;
+  }
+
+  .analytics-mobile section table tr.bg-black\/25 > td {
+    padding: 0 !important;
+  }
+
+  /* Desgloses internos: nombre arriba, usos y costo debajo. */
+  .analytics-mobile section table table tbody > tr {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 0.25rem 0.75rem;
+    padding: 0.7rem 0.8rem;
+  }
+
+  .analytics-mobile section table table td:first-child {
+    grid-column: 1 / -1;
+    font-weight: 600;
+    color: rgba(255,255,255,0.88);
+  }
+
+  .analytics-mobile section table table td:nth-child(2) {
+    font-size: 0.72rem;
+    color: rgba(255,255,255,0.55);
+  }
+
+  .analytics-mobile section table table td:nth-child(2)::before {
+    content: "Usos: ";
+  }
+
+  .analytics-mobile section table table td:nth-child(3) {
+    text-align: right !important;
+    font-size: 0.76rem;
+    font-weight: 600;
+  }
+
+  /* Tarjetas de servicios y materiales. */
+  .analytics-mobile section .bg-black\/30 > .flex.items-start.justify-between {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .analytics-mobile section .bg-black\/30 > .flex.items-start.justify-between > .text-right {
+    width: 100%;
+    display: flex;
+    justify-content: space-between;
+    text-align: left !important;
+    gap: 0.75rem;
+  }
+
+  /* Recharts: leyendas en varias líneas para evitar scroll horizontal. */
+  .analytics-mobile .recharts-responsive-container {
+    min-width: 0 !important;
+  }
+
+  .analytics-mobile .recharts-legend-wrapper {
+    position: relative !important;
+    width: 100% !important;
+    left: 0 !important;
+    font-size: 10px !important;
+    line-height: 1.2 !important;
+  }
+
+  .analytics-mobile .recharts-default-legend {
+    display: flex !important;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.2rem 0.5rem;
+  }
+
+  .analytics-mobile .recharts-legend-item {
+    margin-right: 0 !important;
+  }
+
+  .analytics-mobile .h-64 {
+    height: 15rem !important;
+  }
+}
+
 /* Ilumina el elemento target del paso actual (especialmente útil en el menú) */
 .tour-highlight {
   color: rgb(52, 211, 153) !important; /* emerald-400 */
