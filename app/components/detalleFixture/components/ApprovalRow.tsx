@@ -65,20 +65,20 @@ export default function ApprovalRow({
   };
 
   return (
-    <div className="rounded-xl border border-white/10 bg-white/[0.03] p-4">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
-          <div className="flex flex-wrap items-center gap-2">
-            <p className="text-sm font-semibold text-white/85">{label}</p>
+    <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-3.5 sm:p-4">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-col items-start gap-2 min-[390px]:flex-row min-[390px]:flex-wrap min-[390px]:items-center">
+            <p className="break-words text-sm font-semibold text-white/85">{label}</p>
             <span
-              className={`rounded-full border px-3 py-1 text-[11px] font-semibold ${statusClass}`}
+              className={`shrink-0 rounded-full border px-3 py-1 text-[11px] font-semibold ${statusClass}`}
             >
               {normalizedFirma.decision || "pendiente"}
             </span>
           </div>
 
           {alreadyAnswered && normalizedFirma.nombre && (
-            <p className="mt-2 text-xs text-white/60">
+            <p className="mt-2 break-words text-xs leading-relaxed text-white/60">
               {normalizedFirma.decision === "aprobado"
                 ? "Aprobado por"
                 : "Rechazado por"}{" "}
@@ -89,20 +89,20 @@ export default function ApprovalRow({
           )}
 
           {alreadyAnswered && normalizedFirma.fecha && (
-            <p className="mt-1 text-[11px] text-white/35">
+            <p className="mt-1 break-words text-[11px] text-white/35">
               {normalizedFirma.fecha}
             </p>
           )}
 
           {normalizedFirma.decision === "rechazado" &&
             normalizedFirma.rejectReason && (
-              <div className="mt-3 rounded-xl border border-red-300/20 bg-red-400/10 px-3 py-2 text-xs leading-relaxed text-red-100">
+              <div className="mt-3 break-words rounded-xl border border-red-300/20 bg-red-400/10 px-3 py-2 text-xs leading-relaxed text-red-100">
                 Motivo: {normalizedFirma.rejectReason}
               </div>
             )}
 
           {!canApprove && !alreadyAnswered && (
-            <p className="mt-2 text-xs text-yellow-100/75">
+            <p className="mt-2 text-xs leading-relaxed text-yellow-100/75">
               Pendiente de firma. Tu cuenta no está asignada como{" "}
               {approvalKey === "pm" ? "PM del proyecto" : label}.
             </p>
@@ -113,7 +113,7 @@ export default function ApprovalRow({
           <button
             type="button"
             onClick={() => setSigningOpen((prev) => !prev)}
-            className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/75 hover:bg-white/10"
+            className="min-h-11 w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/75 transition hover:bg-white/10 active:bg-white/15 sm:min-h-0 sm:w-auto sm:rounded-lg sm:py-1.5"
           >
             {alreadyAnswered ? "Editar firma" : "Firmar"}
           </button>
@@ -129,7 +129,7 @@ export default function ApprovalRow({
           <select
             value={decision}
             onChange={(e) => setDecision(e.target.value as Decision | "")}
-            className="w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-emerald-400/20"
+            className="min-h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-emerald-400/20"
           >
             <option value="">Seleccionar decisión</option>
             <option value="aprobado">Aprobado</option>
@@ -141,15 +141,15 @@ export default function ApprovalRow({
               value={reason}
               onChange={(e) => setReason(e.target.value)}
               placeholder="Razón del rechazo o cambio de decisión..."
-              className="min-h-[82px] w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-white placeholder:text-white/35 outline-none focus:ring-2 focus:ring-emerald-400/20"
+              className="min-h-[96px] w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-xs text-white placeholder:text-white/35 outline-none focus:ring-2 focus:ring-emerald-400/20"
             />
           )}
 
-          <div className="flex flex-wrap gap-2">
+          <div className="grid grid-cols-1 gap-2 sm:flex sm:flex-wrap">
             <button
               type="button"
               onClick={submitDecision}
-              className="rounded-lg border border-emerald-300/25 bg-emerald-400/10 px-3 py-1.5 text-xs text-emerald-100 hover:bg-emerald-400/20"
+              className="min-h-11 rounded-xl border border-emerald-300/25 bg-emerald-400/10 px-3 py-2 text-xs text-emerald-100 transition hover:bg-emerald-400/20 sm:min-h-0 sm:rounded-lg sm:py-1.5"
             >
               Guardar firma
             </button>
@@ -157,7 +157,7 @@ export default function ApprovalRow({
             <button
               type="button"
               onClick={() => setSigningOpen(false)}
-              className="rounded-lg border border-white/10 bg-white/5 px-3 py-1.5 text-xs text-white/75 hover:bg-white/10"
+              className="min-h-11 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-white/75 transition hover:bg-white/10 sm:min-h-0 sm:rounded-lg sm:py-1.5"
             >
               Cancelar
             </button>
