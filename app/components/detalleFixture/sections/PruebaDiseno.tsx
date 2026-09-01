@@ -1,25 +1,31 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { Dispatch, FormEvent, RefObject, SetStateAction } from "react";
 import { useRouter } from "next/navigation";
+import { arrayUnion, doc, updateDoc } from "firebase/firestore";
 import {
   FiCheck,
   FiChevronDown,
   FiChevronRight,
   FiLink,
+  FiPaperclip,
   FiPlus,
+  FiUpload,
 } from "react-icons/fi";
+import { db } from "@/src/firebase/firebaseConfig";
 import type {
   FixtureVersion,
   LinkedPedido,
   ApprovalRole,
   Decision,
+  UploadedFile,
 } from "../types";
 import { cardClass, inputClass, btnPrimary } from "../styles";
 import { buildFixtureOrderUrl, formatFirebaseDate } from "../helpers";
 import FilePicker from "../components/FilePicker";
 import ApprovalRow from "../components/ApprovalRow";
+import { uploadFixtureFiles } from "../services/fixtureStorage";
 
 function PedidosAsociados({ pedidos }: { pedidos: LinkedPedido[] }) {
   const router = useRouter();
@@ -63,7 +69,7 @@ function PedidosAsociados({ pedidos }: { pedidos: LinkedPedido[] }) {
 }
 
 export default function PruebaDiseno({
-   pruebas,
+  pruebas,
   linkedPedidos,
   pedidoId,
   pedidoProyecto,
@@ -107,17 +113,22 @@ export default function PruebaDiseno({
   ) => void;
   onGuardarPrueba: (e: FormEvent) => void;
   userEmail?: string;
-  canApprovePM: boolean;canApproveDesigner: boolean;
-canApproveProcessOwner: boolean;
+  canApprovePM: boolean;
+  canApproveDesigner: boolean;
+  canApproveProcessOwner: boolean;
   onDecidirPrueba: (
     prueba: FixtureVersion,
     rol: ApprovalRole,
     decision: Decision,
     reason?: string
-  ) => void;
+  ) => void | Promise<void>;
 }) {
   const router = useRouter();
   const [expandedPruebaIds, setExpandedPruebaIds] = useState<string[]>([]);
+  const [uploadingVersionId, setUploadingVersionId] = useState<string | null>(null);
+  const [addedFilesByVersion, setAddedFilesByVersion] = useState<
+    Record<string, UploadedFile[]>
+  >({});
 
   const togglePrueba = (id: string) => {
     setExpandedPruebaIds((prev) =>
@@ -127,13 +138,65 @@ canApproveProcessOwner: boolean;
 
   const isNewPruebaOpen = expandedPruebaIds.includes("new");
   const pedidosDePrueba = linkedPedidos.filter(
-  (p) => p.fixtureRelacionadoFase === "prueba"
-);
+    (p) => p.fixtureRelacionadoFase === "prueba"
+  );
 
-const totalPruebaDiseno = pedidosDePrueba.reduce(
-  (sum, p) => sum + Number(p.subtotal || 0),
-  0
-);
+  const totalPruebaDiseno = pedidosDePrueba.reduce(
+    (sum, p) => sum + Number(p.subtotal || 0),
+    0
+  );
+
+  const canAddFiles =
+    isAdmin || canApprovePM || canApproveDesigner || canApproveProcessOwner;
+
+  const getDisplayedFiles = (item: FixtureVersion) => {
+    const byUrl = new Map<string, UploadedFile>();
+
+    [...(item.archivos || []), ...(addedFilesByVersion[item.id] || [])].forEach(
+      (file) => {
+        if (file?.url) byUrl.set(file.url, file);
+      }
+    );
+
+    return Array.from(byUrl.values());
+  };
+
+  const agregarArchivosVersion = async (
+    item: FixtureVersion,
+    list: FileList | null
+  ) => {
+    const files = Array.from(list || []);
+    if (files.length === 0 || uploadingVersionId) return;
+
+    try {
+      setUploadingVersionId(item.id);
+
+      const uploaded = await uploadFixtureFiles({
+        pedidoId,
+        files,
+        folder: `pruebas/${item.versionLabel}`,
+      });
+
+      if (uploaded.length > 0) {
+        await updateDoc(
+          doc(db, "pedidos", pedidoId, "fixture_pruebas", item.id),
+          {
+            archivos: arrayUnion(...uploaded),
+          }
+        );
+
+        setAddedFilesByVersion((prev) => ({
+          ...prev,
+          [item.id]: [...(prev[item.id] || []), ...uploaded],
+        }));
+      }
+    } catch (error) {
+      console.error("Error agregando archivos a la prueba:", error);
+      alert("No se pudieron agregar los archivos a esta prueba.");
+    } finally {
+      setUploadingVersionId(null);
+    }
+  };
 
   return (
     <section className={cardClass}>
@@ -160,19 +223,22 @@ const totalPruebaDiseno = pedidosDePrueba.reduce(
           </button>
         )}
       </div>
+
       <div className="mt-5 rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-3">
-  <p className="text-xs uppercase tracking-[0.18em] text-emerald-100/60">
-    Costo acumulado de prueba de diseño
-  </p>
-  <p className="mt-1 text-lg font-semibold text-emerald-50">
-    MXN {totalPruebaDiseno.toFixed(2)}
-  </p>
-</div>
+        <p className="text-xs uppercase tracking-[0.18em] text-emerald-100/60">
+          Costo acumulado de prueba de diseño
+        </p>
+        <p className="mt-1 text-lg font-semibold text-emerald-50">
+          MXN {totalPruebaDiseno.toFixed(2)}
+        </p>
+      </div>
+
       <div className="mt-6">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
           {pruebas.map((item, index) => {
             const isOpen = expandedPruebaIds.includes(item.id);
             const fecha = formatFirebaseDate(item.createdAt);
+            const displayedFiles = getDisplayedFiles(item);
 
             const pedidosDeVersion = linkedPedidos.filter(
               (p) =>
@@ -230,23 +296,49 @@ const totalPruebaDiseno = pedidosDePrueba.reduce(
                       </p>
                     )}
 
-                    {item.archivos && item.archivos.length > 0 && (
-                      <div className="mt-4 space-y-1">
-                        <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/40">
-                          Archivos
-                        </p>
+                    {(displayedFiles.length > 0 || canAddFiles) && (
+                      <div className="mt-4 rounded-xl border border-white/10 bg-black/20 p-3">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-white/40">
+                            <FiPaperclip />
+                            Archivos
+                          </div>
 
-                        {item.archivos.map((file) => (
-                          <a
-                            key={file.url}
-                            href={file.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="block truncate text-sm text-emerald-200 underline decoration-white/20 hover:text-emerald-100"
-                          >
-                            {file.name}
-                          </a>
-                        ))}
+                          {canAddFiles && (
+                            <label className="inline-flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs font-medium text-white/80 transition hover:bg-white/10 sm:min-h-0 sm:py-1.5">
+                              <FiUpload />
+                              {uploadingVersionId === item.id
+                                ? "Subiendo..."
+                                : "Agregar archivos"}
+                              <input
+                                type="file"
+                                multiple
+                                disabled={uploadingVersionId !== null}
+                                className="hidden"
+                                onChange={(event) => {
+                                  agregarArchivosVersion(item, event.target.files);
+                                  event.target.value = "";
+                                }}
+                              />
+                            </label>
+                          )}
+                        </div>
+
+                        {displayedFiles.length > 0 && (
+                          <div className="mt-3 space-y-1.5">
+                            {displayedFiles.map((file) => (
+                              <a
+                                key={file.url}
+                                href={file.url}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="block break-all text-sm text-emerald-200 underline decoration-white/20 underline-offset-2 hover:text-emerald-100"
+                              >
+                                {file.name}
+                              </a>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -271,44 +363,53 @@ const totalPruebaDiseno = pedidosDePrueba.reduce(
 
                     <PedidosAsociados pedidos={pedidosDeVersion} />
 
-                   <div className="mt-5 space-y-3">
-  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/40">
-    Aprobaciones de la prueba de diseño
-  </p>
+                    <div className="mt-5 space-y-3">
+                      <p className="text-xs font-semibold uppercase tracking-[0.18em] text-white/40">
+                        Aprobaciones de la prueba de diseño
+                      </p>
 
-  <ApprovalRow
-    label="Firma Project Manager"
-    approvalKey="pm"
-    firma={item.firmas?.pm}
-    currentUserEmail={userEmail}
-    canApprove={canApprovePM}
-    onDecision={(decision, reason) =>
-      onDecidirPrueba(item, "pm", decision, reason)
-    }
-  />
+                      <ApprovalRow
+                        label="Firma Project Manager"
+                        approvalKey="pm"
+                        firma={item.firmas?.pm}
+                        currentUserEmail={userEmail}
+                        canApprove={canApprovePM}
+                        pedidoId={pedidoId}
+                        pruebaId={item.id}
+                        versionLabel={item.versionLabel}
+                        onDecision={(decision, reason) =>
+                          onDecidirPrueba(item, "pm", decision, reason)
+                        }
+                      />
 
-  <ApprovalRow
-    label="Firma Diseñador"
-    approvalKey="disenador"
-    firma={item.firmas?.disenador}
-    currentUserEmail={userEmail}
-    canApprove={canApproveDesigner}
-    onDecision={(decision, reason) =>
-      onDecidirPrueba(item, "disenador", decision, reason)
-    }
-  />
+                      <ApprovalRow
+                        label="Firma Diseñador"
+                        approvalKey="disenador"
+                        firma={item.firmas?.disenador}
+                        currentUserEmail={userEmail}
+                        canApprove={canApproveDesigner}
+                        pedidoId={pedidoId}
+                        pruebaId={item.id}
+                        versionLabel={item.versionLabel}
+                        onDecision={(decision, reason) =>
+                          onDecidirPrueba(item, "disenador", decision, reason)
+                        }
+                      />
 
-  <ApprovalRow
-    label="Firma Encargado del proceso"
-    approvalKey="encargado"
-    firma={item.firmas?.encargado}
-    currentUserEmail={userEmail}
-    canApprove={canApproveProcessOwner}
-    onDecision={(decision, reason) =>
-      onDecidirPrueba(item, "encargado", decision, reason)
-    }
-  />
-</div>
+                      <ApprovalRow
+                        label="Firma Encargado del proceso"
+                        approvalKey="encargado"
+                        firma={item.firmas?.encargado}
+                        currentUserEmail={userEmail}
+                        canApprove={canApproveProcessOwner}
+                        pedidoId={pedidoId}
+                        pruebaId={item.id}
+                        versionLabel={item.versionLabel}
+                        onDecision={(decision, reason) =>
+                          onDecidirPrueba(item, "encargado", decision, reason)
+                        }
+                      />
+                    </div>
                   </div>
                 )}
               </div>
@@ -393,9 +494,7 @@ const totalPruebaDiseno = pedidosDePrueba.reduce(
           )}
         </div>
       </div>
-      
 
-      
       {!isAdmin && pruebas.length === 0 && (
         <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-4 text-sm text-white/55">
           Aún no hay pruebas registradas.
