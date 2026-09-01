@@ -392,7 +392,6 @@ export default function EspecificacionesPage() {
           <div>
             <label className={label}>Título del pedido</label>
 
-            {/* Móvil: prefijo separado para evitar que comprima el campo. */}
             <div className="sm:hidden">
               <div className="mb-2 inline-flex max-w-full rounded-lg border border-emerald-300/15 bg-emerald-400/[0.08] px-2.5 py-1.5 text-xs font-medium text-emerald-100">
                 <span className="truncate">{prefijoTitulo || "GEN_PRJ0_"}</span>
@@ -448,7 +447,6 @@ export default function EspecificacionesPage() {
             />
           </div>
 
-          {/* En escritorio se conserva el envío dentro de la tarjeta principal. */}
           <div className="hidden lg:block">
             <button
               type="button"
@@ -559,13 +557,12 @@ export default function EspecificacionesPage() {
         </div>
       </div>
 
-      {/* En móvil el envío queda al final natural del recorrido. */}
       <div className="mt-4 lg:hidden">
         <button
           type="button"
           onClick={handleUploadAll}
           disabled={subiendo}
-          className={`${primaryButton} h-13 w-full text-base`}
+          className={`${primaryButton} h-[52px] w-full text-base`}
         >
           {subiendo ? "Enviando pedido..." : "Enviar pedido"}
         </button>
