@@ -83,6 +83,7 @@ export default function EspecificacionesPage() {
     "nylon retardante de fuego ": "BML",
     "abs": "BML",
     "tpu": "BML",
+    "filamento": "BML",
     "resina formlabs 3b": "FL3B",
     "resina formlabs 2b": "FL2B",
     "laser co2": "Láser",
