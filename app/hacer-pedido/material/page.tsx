@@ -7,13 +7,13 @@ import OrderFlowHeader from "../components/OrderFlowHeader";
 
 const MATERIALES_POR_MAQUINA: Record<string, string[]> = {
   Filamento: [
-    "PLA 1.75mm (Bambu Lab)",
-    "Nylon 1.75 (Bambu Lab)",
-    "PLA retardante de fuego 1.75mm (Bambu Lab)",
-    "Nylon retardante de fuego 1.75 (Bambu Lab)",
-    "Otro (Especifica en la descripción)",
+    "PLA ",
+    "Nylon ",
+    "PLA retardante de fuego  ",
+    "Nylon retardante de fuego ",
     "ABS",
     "TPU",
+    "Otro (Especifica en la descripción)",
   ],
   "Resina Formlabs 3B": [
     "Rigid 10K",

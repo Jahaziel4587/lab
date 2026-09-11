@@ -79,8 +79,10 @@ export default function EspecificacionesPage() {
 
   const ABBR_MAP: Record<string, string> = {
     "pla 2.85mm": "UMKR",
-    "pla 1.75mm": "BML",
-    "nylon retardante de fuego 1.75 (bambu lab)": "BML",
+    "pla": "BML",
+    "nylon retardante de fuego ": "BML",
+    "abs": "BML",
+    "tpu": "BML",
     "resina formlabs 3b": "FL3B",
     "resina formlabs 2b": "FL2B",
     "laser co2": "Láser",
