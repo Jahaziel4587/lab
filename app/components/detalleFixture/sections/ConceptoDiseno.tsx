@@ -154,8 +154,9 @@ export default function ConceptoDiseno({
       </div>
 
       <div className="mt-6">
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-          {conceptos.map((item, index) => {
+        <div className="space-y-3">
+          {[...conceptos].reverse().map((item, reverseIndex) => {
+            const index = conceptos.length - 1 - reverseIndex;
             const isOpen = expandedConceptIds.includes(item.id);
             const fecha = formatFirebaseDate(item.createdAt);
             const pedidosDeVersion = linkedPedidos.filter(
@@ -167,7 +168,7 @@ export default function ConceptoDiseno({
             return (
               <div
                 key={item.id}
-                className={`w-full rounded-2xl border p-4 transition ${
+                className={`w-full rounded-2xl border px-4 py-3 transition ${
                   item.status === "aprobado"
                     ? "border-emerald-300/30 bg-emerald-400/10"
                     : item.status === "rechazado"
@@ -184,10 +185,10 @@ export default function ConceptoDiseno({
                     <p className="text-xs uppercase tracking-[0.22em] text-white/40">
                       Versión {index + 1}
                     </p>
-                    <p className="mt-1 text-lg font-semibold text-white/90">
+                    <p className="font-semibold text-white/90">
                       {item.versionLabel}
                     </p>
-                    <p className="mt-1 text-xs text-white/45">{fecha}</p>
+                    <p className="mt-0.5 text-xs text-white/45">{fecha}</p>
                   </div>
 
                   <div className="flex items-center gap-2">
