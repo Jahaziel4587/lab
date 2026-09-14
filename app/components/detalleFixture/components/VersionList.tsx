@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import type { ReactNode } from "react";
 import type { FixtureVersion } from "../types";
 import { formatFirebaseDate } from "../helpers";
@@ -11,6 +14,8 @@ export default function VersionList({
   items: FixtureVersion[];
   renderActions?: (item: FixtureVersion) => ReactNode;
 }) {
+  const [expandedIds, setExpandedIds] = useState<string[]>([]);
+
   if (items.length === 0) {
     return (
       <div className="mt-5 rounded-2xl border border-white/10 bg-black/20 p-3.5 sm:p-4 text-sm text-white/55">
@@ -24,7 +29,8 @@ export default function VersionList({
       <h3 className="text-base font-semibold text-white/90">{title}</h3>
 
       <div className="mt-3 space-y-3">
-        {items.map((item) => {
+        {[...items].reverse().map((item) => {
+          const isOpen = expandedIds.includes(item.id);
           const fecha = formatFirebaseDate(item.createdAt);
 
           return (
@@ -32,7 +38,14 @@ export default function VersionList({
               key={item.id}
               className="rounded-2xl border border-white/10 bg-black/20 p-3.5 sm:p-4"
             >
-              <div className="flex flex-col gap-2 min-[390px]:flex-row min-[390px]:items-start min-[390px]:justify-between min-[390px]:gap-3">
+              <button
+                type="button"
+                aria-expanded={isOpen}
+                onClick={() => setExpandedIds((prev) =>
+                  isOpen ? prev.filter((id) => id !== item.id) : [...prev, item.id]
+                )}
+                className="flex w-full flex-col gap-2 text-left min-[390px]:flex-row min-[390px]:items-start min-[390px]:justify-between min-[390px]:gap-3"
+              >
                 <div className="min-w-0">
                   <p className="break-words font-semibold text-white/90">
                     {item.versionLabel}
@@ -51,8 +64,10 @@ export default function VersionList({
                 >
                   {item.status || "pendiente"}
                 </span>
-              </div>
+              </button>
 
+              {isOpen && (
+                <div className="mt-3 border-t border-white/10 pt-3">
               {item.descripcion && (
                 <p className="mt-3 break-words whitespace-pre-wrap text-sm leading-relaxed text-white/75">
                   {item.descripcion}
@@ -88,6 +103,8 @@ export default function VersionList({
               {renderActions && (
                 <div className="mt-4 border-t border-white/10 pt-4">
                   {renderActions(item)}
+                </div>
+              )}
                 </div>
               )}
             </div>
