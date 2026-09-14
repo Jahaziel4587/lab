@@ -220,11 +220,11 @@ export default function PruebaDiseno({
         </button>
       </div>
 
-      <div className="mt-5 rounded-2xl border border-emerald-300/20 bg-emerald-400/10 px-4 py-3">
-        <p className="text-xs uppercase tracking-[0.18em] text-emerald-100/60">
+      <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3">
+        <p className="text-xs uppercase tracking-[0.18em] text-white/55">
           Costo acumulado de prueba de diseño
         </p>
-        <p className="mt-1 text-lg font-semibold text-emerald-50">
+        <p className="mt-1 text-lg font-semibold text-white/90">
           MXN {totalPruebaDiseno.toFixed(2)}
         </p>
       </div>
