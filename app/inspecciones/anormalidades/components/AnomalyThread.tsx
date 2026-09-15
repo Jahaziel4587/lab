@@ -478,7 +478,7 @@ export default function AnomalyThread({
                                     true,
                                   );
                                 }
-                              }
+                              }}
                               className="w-full rounded-lg px-3 py-2.5 text-left text-sm text-white/75 hover:bg-white/[0.06]"
                             >
                               Hacerlo nueva anormalidad
