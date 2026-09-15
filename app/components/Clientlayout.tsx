@@ -412,6 +412,7 @@ export default function ClientLayout({
                                 <Link
                                   href={href}
                                   onClick={() => setPanelAbierto(false)}
+                                  className="block rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400/60"
                                 >
                                   {contenido}
                                 </Link>
