@@ -446,8 +446,7 @@ export default function AnomalyThread({
                         : "border-amber-400/20 bg-amber-400/[0.07]"
                     }`}
                   >
-                    {isFollowUp &&
-                      canRouteReport &&
+                    {canRouteReport &&
                       !redirected && (
                         <details className="absolute right-3 top-3 z-10">
                           <summary
@@ -462,15 +461,23 @@ export default function AnomalyThread({
                           <div className="absolute right-0 mt-2 w-64 overflow-hidden rounded-xl border border-white/10 bg-[#151b19] p-1 shadow-2xl">
                             <button
                               type="button"
-                              onClick={() =>
-                                setRoutingSelection(
-                                  {
-                                    occurrenceId:
-                                      occurrence.id,
-                                    mode:
-                                      "new",
-                                  },
-                                )
+                              onClick={() => {
+                                if (
+                                  isFollowUp
+                                ) {
+                                  setRoutingSelection(
+                                    {
+                                      occurrenceId:
+                                        occurrence.id,
+                                      mode:
+                                        "new",
+                                    },
+                                  );
+                                } else {
+                                  setDecisionOpen(
+                                    true,
+                                  );
+                                }
                               }
                               className="w-full rounded-lg px-3 py-2.5 text-left text-sm text-white/75 hover:bg-white/[0.06]"
                             >
