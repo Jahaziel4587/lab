@@ -194,6 +194,30 @@ export function useAnomalies({
                         data.decidedByEmail,
                       )
                     : undefined,
+                decidedByName:
+                  data.decidedByName
+                    ? String(
+                        data.decidedByName,
+                      )
+                    : undefined,
+                responsiblePmUid:
+                  data.responsiblePmUid
+                    ? String(
+                        data.responsiblePmUid,
+                      )
+                    : undefined,
+                responsiblePmEmail:
+                  data.responsiblePmEmail
+                    ? String(
+                        data.responsiblePmEmail,
+                      )
+                    : undefined,
+                responsiblePmName:
+                  data.responsiblePmName
+                    ? String(
+                        data.responsiblePmName,
+                      )
+                    : undefined,
                 decidedAt:
                   data.decidedAt,
                 createdByUid: String(
@@ -805,7 +829,7 @@ return {
     pendingAnomalies,
     responsiblePms,
     hasAnomalies:
-      titledAnomalies.length > 0,
+      anomalies.length > 0,
     loading,
     loadingPms,
     saving,
