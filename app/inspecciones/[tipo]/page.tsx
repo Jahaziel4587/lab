@@ -678,6 +678,23 @@ export default function InspectionTypePage() {
     );
   };
 
+  const openAnomalyById = (
+    targetAnomalyId: string,
+  ) => {
+    const query =
+      buildCurrentQuery();
+
+    query.set(
+      "anomalia",
+      targetAnomalyId,
+    );
+
+    router.push(
+      `/inspecciones/${tipo}` +
+        `?${query.toString()}`,
+    );
+  };
+
   const cancelNewAnomalyReport =
     () => {
       if (
@@ -986,11 +1003,37 @@ export default function InspectionTypePage() {
             messages={
               anomalyThreadState.messages
             }
+            relatedAnomalies={
+              anomaliesState.anomalies
+                .filter(
+                  (anomaly) =>
+                    anomaly.id !==
+                      anomalyId &&
+                    Boolean(
+                      anomaly.title.trim(),
+                    ),
+                )
+            }
+            responsiblePms={
+              anomaliesState
+                .responsiblePms
+            }
+            loadingPms={
+              anomaliesState.loadingPms
+            }
             canDecide={
               anomalyThreadState.canDecide
             }
             sending={
               anomalyThreadState.sending
+            }
+            savingOccurrence={
+              anomalyThreadState
+                .savingOccurrence
+            }
+            routingOccurrence={
+              anomalyThreadState
+                .routingOccurrence
             }
             savingDecision={
               anomalyThreadState
@@ -999,8 +1042,19 @@ export default function InspectionTypePage() {
             onSendMessage={
               anomalyThreadState.sendMessage
             }
+            onReportOccurrence={
+              anomalyThreadState
+                .reportOccurrence
+            }
             onSaveDecision={
               anomalyThreadState.saveDecision
+            }
+            onRouteOccurrence={
+              anomalyThreadState
+                .routeOccurrence
+            }
+            onOpenAnomaly={
+              openAnomalyById
             }
           />
         );

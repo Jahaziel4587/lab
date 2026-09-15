@@ -54,6 +54,11 @@ export type AnomalyOccurrence = {
   createdByEmail: string;
   createdByName: string;
   createdAt?: unknown;
+  followUp?: boolean;
+  relatedFromAnomalyId?: string;
+  relatedFromOccurrenceId?: string;
+  redirectedToAnomalyId?: string;
+  redirectedToOccurrenceId?: string;
   redirectedFromAnomalyId?: string;
   redirectedByUid?: string;
   redirectedByEmail?: string;
@@ -63,7 +68,12 @@ export type AnomalyOccurrence = {
 export type AnomalyMessage = {
   id: string;
   text: string;
-  type?: "message" | "decision";
+  type?:
+    | "message"
+    | "decision"
+    | "routing";
+  targetAnomalyId?: string;
+  sourceAnomalyId?: string;
   createdByUid: string;
   createdByEmail: string;
   createdByName: string;
