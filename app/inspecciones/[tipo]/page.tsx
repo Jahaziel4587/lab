@@ -1,9 +1,11 @@
 "use client";
 
+import { useMemo } from "react";
 import {
   AlertCircle,
   ArrowLeft,
   Boxes,
+  CheckCircle2,
   FolderKanban,
   LoaderCircle,
 } from "lucide-react";
@@ -13,15 +15,31 @@ import {
   useSearchParams,
 } from "next/navigation";
 
+import AnomalyList from
+  "../anormalidades/components/AnomalyList";
+import AnomalyReportForm from
+  "../anormalidades/components/AnomalyReportForm";
+import { useAnomalies } from
+  "../anormalidades/hooks/useAnomalies";
+import type { InspectionAnomaly } from
+  "../anormalidades/types";
+import { buildAnomalyContext } from
+  "../anormalidades/utils";
+
 import CatalogList, {
   type CatalogListItem,
 } from "../components/CatalogList";
-import FindingTypeSelector from "../components/FindingTypeSelector";
-import InspectionOptionCard from "../components/InspectionOptionCard";
-import ProcessComponentList from "../components/ProcessComponentList";
+import FindingTypeSelector from
+  "../components/FindingTypeSelector";
+import InspectionOptionCard from
+  "../components/InspectionOptionCard";
+import ProcessComponentList from
+  "../components/ProcessComponentList";
 
-import { useInspectionCatalog } from "../hooks/useInspectionCatalog";
-import { useProcessComponents } from "../hooks/useProcessComponents";
+import { useInspectionCatalog } from
+  "../hooks/useInspectionCatalog";
+import { useProcessComponents } from
+  "../hooks/useProcessComponents";
 
 import {
   inspectionBackButtonClass,
@@ -36,30 +54,35 @@ import {
 
 export default function InspectionTypePage() {
   const router = useRouter();
-  const params = useParams<{ tipo: string }>();
-  const searchParams = useSearchParams();
+  const params =
+    useParams<{ tipo: string }>();
+  const searchParams =
+    useSearchParams();
 
   const tipo = params.tipo;
-  const origin = searchParams.get("origen");
-  const projectId = searchParams.get("proyecto");
-  const wiId = searchParams.get("wi");
+  const origin =
+    searchParams.get("origen");
+  const projectId =
+    searchParams.get("proyecto");
+  const wiId =
+    searchParams.get("wi");
   const processComponentId =
     searchParams.get("componente");
   const findingType =
     searchParams.get("hallazgo");
 
+  const anomalyAction =
+    searchParams.get("accion");
+  const anomalyId =
+    searchParams.get("anomalia");
+  const reportSent =
+    searchParams.get("enviado") === "1";
+
   const validInspectionType =
     isInspectionType(tipo);
+  const isEntrada =
+    tipo === "entrada";
 
-  const isEntrada = tipo === "entrada";
-
-  /*
-   * Los proyectos se consultan cuando:
-   *
-   * - Estamos en inspección de proceso.
-   * - Entrada está en la rama Proyectos.
-   * - Ya existe un proyecto en la URL.
-   */
   const shouldLoadProjects =
     validInspectionType &&
     (
@@ -74,9 +97,6 @@ export default function InspectionTypePage() {
       enabled: shouldLoadProjects,
     });
 
-  /*
-   * Decide qué catálogo de WI debe consultarse.
-   */
   const workInstructionScope:
     InspectionCatalogScope | null =
       (() => {
@@ -116,10 +136,6 @@ export default function InspectionTypePage() {
         workInstructionScope !== null,
     });
 
-  /*
-   * Convertimos los proyectos de Box al formato
-   * utilizado por CatalogList.
-   */
   const projectItems:
     CatalogListItem[] =
       projectsCatalog.projects.map(
@@ -131,10 +147,6 @@ export default function InspectionTypePage() {
         }),
       );
 
-  /*
-   * Convertimos las WI de Box al formato
-   * utilizado por CatalogList.
-   */
   const workInstructionItems:
     CatalogListItem[] =
       workInstructionsCatalog
@@ -162,13 +174,6 @@ export default function InspectionTypePage() {
           workInstruction.id === wiId,
       );
 
-  /*
-   * Componentes manuales de las WI de proceso.
-   *
-   * El hook siempre debe ejecutarse, pero solamente
-   * consulta Firebase cuando estamos dentro de una
-   * WI válida de proceso.
-   */
   const processComponentsState =
     useProcessComponents({
       projectId,
@@ -207,13 +212,63 @@ export default function InspectionTypePage() {
     );
 
   /*
-   * Esta validación debe estar después de todos
-   * los hooks para respetar las reglas de React.
+   * Crea una identidad estable para las
+   * anormalidades del elemento seleccionado.
+   */
+  const anomalyContext =
+  useMemo(
+    () =>
+      buildAnomalyContext({
+        isEntrada,
+        origin,
+        projectId,
+        projectName:
+          selectedProject?.title,
+        wiCode:
+          selectedWi?.id,
+        wiTitle:
+          selectedWi?.title,
+        processComponentId,
+        processComponentTitle:
+          selectedProcessComponent?.title,
+      }),
+    [
+      isEntrada,
+      origin,
+      projectId,
+      selectedProject?.title,
+      selectedWi?.id,
+      selectedWi?.title,
+      processComponentId,
+      selectedProcessComponent?.title,
+    ],
+  );
+  const anomaliesState =
+    useAnomalies({
+      context: anomalyContext,
+      enabled:
+        validInspectionType &&
+        findingType === "anormalidad" &&
+        Boolean(anomalyContext),
+    });
+
+  const selectedAnomaly =
+    anomaliesState.anomalies.find(
+      (anomaly) =>
+        anomaly.id === anomalyId,
+    );
+
+  /*
+   * Todos los hooks están antes de esta
+   * validación para respetar las reglas
+   * de React.
    */
   if (!validInspectionType) {
     return (
       <main className={inspectionPageClass}>
-        <section className={inspectionPanelClass}>
+        <section
+          className={inspectionPanelClass}
+        >
           <h1 className="text-2xl font-semibold">
             Tipo de inspección no válido
           </h1>
@@ -237,48 +292,124 @@ export default function InspectionTypePage() {
     );
   }
 
+  const buildCurrentQuery = ({
+    includeFinding = true,
+  }: {
+    includeFinding?: boolean;
+  } = {}) => {
+    const query =
+      new URLSearchParams();
+
+    if (origin) {
+      query.set(
+        "origen",
+        origin,
+      );
+    }
+
+    if (projectId) {
+      query.set(
+        "proyecto",
+        projectId,
+      );
+    }
+
+    if (wiId) {
+      query.set(
+        "wi",
+        wiId,
+      );
+    }
+
+    if (processComponentId) {
+      query.set(
+        "componente",
+        processComponentId,
+      );
+    }
+
+    if (
+      includeFinding &&
+      findingType
+    ) {
+      query.set(
+        "hallazgo",
+        findingType,
+      );
+    }
+
+    return query;
+  };
+
   const goBack = () => {
     /*
-     * Hallazgo seleccionado:
-     * regresar a la selección de hallazgo.
+     * Chat o detalle de una anormalidad
+     * → lista de anormalidades.
      */
-    if (findingType) {
+    if (anomalyId) {
       const query =
-        new URLSearchParams();
-
-      if (origin) {
-        query.set(
-          "origen",
-          origin,
-        );
-      }
-
-      if (projectId) {
-        query.set(
-          "proyecto",
-          projectId,
-        );
-      }
-
-      if (wiId) {
-        query.set(
-          "wi",
-          wiId,
-        );
-      }
-
-      if (processComponentId) {
-        query.set(
-          "componente",
-          processComponentId,
-        );
-      }
+        buildCurrentQuery();
 
       router.push(
         `/inspecciones/${tipo}` +
           `?${query.toString()}`,
       );
+      return;
+    }
 
+    /*
+     * Formulario o confirmación
+     * → lista de anormalidades si existen.
+     *
+     * Si todavía no hay títulos, regresa a
+     * la selección del tipo de hallazgo.
+     */
+    if (
+      findingType === "anormalidad" &&
+      (
+        anomalyAction ||
+        reportSent
+      )
+    ) {
+      if (
+        anomaliesState.hasAnomalies
+      ) {
+        const query =
+          buildCurrentQuery();
+
+        router.push(
+          `/inspecciones/${tipo}` +
+            `?${query.toString()}`,
+        );
+      } else {
+        const query =
+          buildCurrentQuery({
+            includeFinding: false,
+          });
+
+        router.push(
+          `/inspecciones/${tipo}` +
+            `?${query.toString()}`,
+        );
+      }
+
+      return;
+    }
+
+    /*
+     * Hallazgo → selección del tipo
+     * de hallazgo.
+     */
+    if (findingType) {
+      const query =
+        buildCurrentQuery({
+          includeFinding: false,
+        });
+
+      router.push(
+        `/inspecciones/${tipo}` +
+          `?${query.toString()}`,
+      );
       return;
     }
 
@@ -302,7 +433,6 @@ export default function InspectionTypePage() {
         "/inspecciones/proceso" +
           `?${query.toString()}`,
       );
-
       return;
     }
 
@@ -319,16 +449,15 @@ export default function InspectionTypePage() {
         "/inspecciones/entrada" +
           "?origen=mts",
       );
-
       return;
     }
 
     /*
      * Entrada:
-     * componente → componentes del proyecto.
+     * componente → lista del proyecto.
      *
      * Proceso:
-     * WI → lista de WI del proyecto.
+     * WI → lista de WI.
      */
     if (
       wiId &&
@@ -353,7 +482,6 @@ export default function InspectionTypePage() {
         `/inspecciones/${tipo}` +
           `?${query.toString()}`,
       );
-
       return;
     }
 
@@ -367,7 +495,6 @@ export default function InspectionTypePage() {
               "?origen=proyectos"
           : "/inspecciones/proceso",
       );
-
       return;
     }
 
@@ -378,7 +505,6 @@ export default function InspectionTypePage() {
       router.push(
         "/inspecciones/entrada",
       );
-
       return;
     }
 
@@ -484,35 +610,9 @@ export default function InspectionTypePage() {
       | "no_conformidad",
   ) => {
     const query =
-      new URLSearchParams();
-
-    if (origin) {
-      query.set(
-        "origen",
-        origin,
-      );
-    }
-
-    if (projectId) {
-      query.set(
-        "proyecto",
-        projectId,
-      );
-    }
-
-    if (wiId) {
-      query.set(
-        "wi",
-        wiId,
-      );
-    }
-
-    if (processComponentId) {
-      query.set(
-        "componente",
-        processComponentId,
-      );
-    }
+      buildCurrentQuery({
+        includeFinding: false,
+      });
 
     query.set(
       "hallazgo",
@@ -524,6 +624,88 @@ export default function InspectionTypePage() {
         `?${query.toString()}`,
     );
   };
+
+  const openNewAnomalyReport =
+    () => {
+      const query =
+        buildCurrentQuery();
+
+      query.set(
+        "accion",
+        "nueva",
+      );
+
+      router.push(
+        `/inspecciones/${tipo}` +
+          `?${query.toString()}`,
+      );
+    };
+
+  const selectAnomaly = (
+    anomaly: InspectionAnomaly,
+  ) => {
+    const query =
+      buildCurrentQuery();
+
+    query.set(
+      "anomalia",
+      anomaly.id,
+    );
+
+    router.push(
+      `/inspecciones/${tipo}` +
+        `?${query.toString()}`,
+    );
+  };
+
+  const cancelNewAnomalyReport =
+    () => {
+      if (
+        anomaliesState.hasAnomalies
+      ) {
+        const query =
+          buildCurrentQuery();
+
+        router.push(
+          `/inspecciones/${tipo}` +
+            `?${query.toString()}`,
+        );
+        return;
+      }
+
+      const query =
+        buildCurrentQuery({
+          includeFinding: false,
+        });
+
+      router.push(
+        `/inspecciones/${tipo}` +
+          `?${query.toString()}`,
+      );
+    };
+
+  const submitNewAnomalyReport =
+    async (
+      input: Parameters<
+        typeof anomaliesState.createNewReport
+      >[0],
+    ) => {
+      await anomaliesState
+        .createNewReport(input);
+
+      const query =
+        buildCurrentQuery();
+
+      query.set(
+        "enviado",
+        "1",
+      );
+
+      router.replace(
+        `/inspecciones/${tipo}` +
+          `?${query.toString()}`,
+      );
+    };
 
   const renderLoading = (
     message: string,
@@ -551,7 +733,7 @@ export default function InspectionTypePage() {
 
   const renderError = (
     message: string,
-    retry: () => void,
+    retry?: () => void,
   ) => (
     <div
       className="rounded-2xl border
@@ -581,36 +763,271 @@ export default function InspectionTypePage() {
             {message}
           </p>
 
-          <button
-            type="button"
-            onClick={retry}
-            className="mt-4 rounded-xl
-              border border-red-300/20
-              bg-red-300/10 px-4 py-2
-              text-sm text-red-100
-              transition hover:bg-red-300/15"
-          >
-            Intentar nuevamente
-          </button>
+          {retry && (
+            <button
+              type="button"
+              onClick={retry}
+              className="mt-4 rounded-xl
+                border border-red-300/20
+                bg-red-300/10 px-4 py-2
+                text-sm text-red-100
+                transition
+                hover:bg-red-300/15"
+            >
+              Intentar nuevamente
+            </button>
+          )}
         </div>
       </div>
     </div>
   );
 
-  const renderFindingSelection = () => (
-    <FindingTypeSelector
-      onSelectAnomaly={() =>
-        selectFindingType(
-          "anormalidad",
-        )
+  const renderFindingSelection =
+    () => (
+      <FindingTypeSelector
+        onSelectAnomaly={() =>
+          selectFindingType(
+            "anormalidad",
+          )
+        }
+        onSelectNonConformity={() =>
+          selectFindingType(
+            "no_conformidad",
+          )
+        }
+      />
+    );
+
+  const renderAnomalyContent =
+    () => {
+      if (!anomalyContext) {
+        return renderError(
+          "Falta información del componente inspeccionado.",
+        );
       }
-      onSelectNonConformity={() =>
-        selectFindingType(
-          "no_conformidad",
-        )
+
+      if (anomaliesState.loading) {
+        return renderLoading(
+          "Cargando anormalidades...",
+        );
       }
-    />
-  );
+
+      if (anomaliesState.error) {
+        return renderError(
+          anomaliesState.error,
+        );
+      }
+
+      /*
+       * Confirmación posterior al envío.
+       */
+      if (reportSent) {
+        return (
+          <div
+            className="rounded-2xl border
+              border-emerald-400/25
+              bg-emerald-400/[0.07]
+              p-6"
+          >
+            <div
+              className="flex items-start
+                gap-4"
+            >
+              <div
+                className="flex h-11 w-11
+                  shrink-0 items-center
+                  justify-center rounded-2xl
+                  border border-emerald-400/25
+                  bg-emerald-400/10
+                  text-emerald-300"
+              >
+                <CheckCircle2
+                  size={22}
+                />
+              </div>
+
+              <div>
+                <h2
+                  className="text-lg
+                    font-semibold text-white"
+                >
+                  Reporte guardado
+                </h2>
+
+                <p
+                  className="mt-2 text-sm
+                    leading-relaxed
+                    text-white/60"
+                >
+                  La anormalidad y sus
+                  fotografías quedaron
+                  guardadas. El reporte está
+                  pendiente de que el PM asigne
+                  un título y tome la decisión.
+                </p>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (
+                      anomaliesState
+                        .hasAnomalies
+                    ) {
+                      const query =
+                        buildCurrentQuery();
+
+                      router.replace(
+                        `/inspecciones/${tipo}` +
+                          `?${query.toString()}`,
+                      );
+                    } else {
+                      const query =
+                        buildCurrentQuery({
+                          includeFinding:
+                            false,
+                        });
+
+                      router.push(
+                        `/inspecciones/${tipo}` +
+                          `?${query.toString()}`,
+                      );
+                    }
+                  }}
+                  className="mt-5 min-h-11
+                    rounded-xl border
+                    border-emerald-400/30
+                    bg-emerald-400/10
+                    px-5 text-sm font-medium
+                    text-emerald-200
+                    transition
+                    hover:bg-emerald-400/15"
+                >
+                  Continuar
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      /*
+       * Detalle provisional de un título
+       * ya registrado.
+       */
+      if (anomalyId) {
+        if (!selectedAnomaly) {
+          return (
+            <div
+              className="rounded-2xl border
+                border-amber-400/20
+                bg-amber-400/[0.06]
+                p-5"
+            >
+              <p
+                className="font-medium
+                  text-amber-100"
+              >
+                No se encontró la anormalidad
+              </p>
+
+              <p
+                className="mt-2 text-sm
+                  text-amber-100/65"
+              >
+                El título solicitado no existe
+                o ya no está disponible.
+              </p>
+            </div>
+          );
+        }
+
+        return (
+          <div
+            className="rounded-2xl border
+              border-emerald-400/20
+              bg-emerald-400/[0.06]
+              p-6"
+          >
+            <p
+              className="text-xs font-semibold
+                uppercase tracking-wider
+                text-emerald-300"
+            >
+              Anormalidad registrada
+            </p>
+
+            <h2
+              className="mt-3 text-xl
+                font-semibold text-white"
+            >
+              {selectedAnomaly.title}
+            </h2>
+
+            <p
+              className="mt-3 text-sm
+                text-white/60"
+            >
+              En el siguiente paso
+              construiremos aquí la
+              conversación y el formulario
+              para agregar otra ocurrencia
+              utilizando la decisión anterior.
+            </p>
+          </div>
+        );
+      }
+
+      /*
+       * Si se eligió “Reportar nueva” o todavía
+       * no existen títulos, se abre el formulario.
+       */
+      if (
+        anomalyAction === "nueva" ||
+        !anomaliesState.hasAnomalies
+      ) {
+        return (
+          <AnomalyReportForm
+            responsiblePms={
+              anomaliesState
+                .responsiblePms
+            }
+            loadingPms={
+              anomaliesState.loadingPms
+            }
+            saving={
+              anomaliesState.saving
+            }
+            onSubmit={
+              submitNewAnomalyReport
+            }
+            onCancel={
+              cancelNewAnomalyReport
+            }
+          />
+        );
+      }
+
+      return (
+        <AnomalyList
+          anomalies={
+            anomaliesState
+              .titledAnomalies
+          }
+          loading={
+            anomaliesState.loading
+          }
+          error={
+            anomaliesState.error
+          }
+          onSelect={
+            selectAnomaly
+          }
+          onReportNew={
+            openNewAnomalyReport
+          }
+        />
+      );
+    };
 
   const renderContent = () => {
     /*
@@ -731,7 +1148,7 @@ export default function InspectionTypePage() {
     }
 
     /*
-     * Lista de WI del proyecto.
+     * WI del proyecto.
      */
     if (
       projectId &&
@@ -780,10 +1197,6 @@ export default function InspectionTypePage() {
       );
     }
 
-    /*
-     * Carga de una WI abierta directamente
-     * mediante su URL.
-     */
     if (
       wiId &&
       workInstructionsCatalog.loading
@@ -803,9 +1216,6 @@ export default function InspectionTypePage() {
       );
     }
 
-    /*
-     * Si la WI ya no está disponible en Box.
-     */
     if (
       wiId &&
       !selectedWi
@@ -835,10 +1245,39 @@ export default function InspectionTypePage() {
     }
 
     /*
-     * Pantalla provisional del hallazgo.
+     * Antes de abrir un hallazgo de proceso
+     * esperamos a cargar el componente.
      */
     if (
-      findingType &&
+      !isEntrada &&
+      selectedWi &&
+      processComponentId &&
+      processComponentsState.loading
+    ) {
+      return renderLoading(
+        "Cargando componente...",
+      );
+    }
+
+    /*
+     * Anormalidades.
+     */
+    if (
+      findingType === "anormalidad" &&
+      selectedWi &&
+      (
+        isEntrada ||
+        selectedProcessComponent
+      )
+    ) {
+      return renderAnomalyContent();
+    }
+
+    /*
+     * No conformidades permanecen pendientes.
+     */
+    if (
+      findingType === "no_conformidad" &&
       selectedWi
     ) {
       return (
@@ -852,31 +1291,16 @@ export default function InspectionTypePage() {
               uppercase tracking-wider
               text-emerald-300"
           >
-            {findingType ===
-            "anormalidad"
-              ? "Anormalidad"
-              : "No conformidad"}
+            No conformidad
           </p>
-
-          {!isEntrada &&
-            selectedProcessComponent && (
-              <p
-                className="mt-3 font-medium
-                  text-white"
-              >
-                {
-                  selectedProcessComponent
-                    .title
-                }
-              </p>
-            )}
 
           <p
             className="mt-3 text-sm
               text-white/65"
           >
             En el siguiente módulo
-            construiremos esta función.
+            construiremos el registro
+            de lotes.
           </p>
         </div>
       );
@@ -933,22 +1357,6 @@ export default function InspectionTypePage() {
     }
 
     /*
-     * Si se abrió directamente la URL de un
-     * componente, esperamos a que Firebase
-     * termine de cargarlo.
-     */
-    if (
-      !isEntrada &&
-      selectedWi &&
-      processComponentId &&
-      processComponentsState.loading
-    ) {
-      return renderLoading(
-        "Cargando componente...",
-      );
-    }
-
-    /*
      * Proceso:
      * componente → tipo de hallazgo.
      */
@@ -987,10 +1395,6 @@ export default function InspectionTypePage() {
       );
     }
 
-    /*
-     * El ID del componente existe en la URL,
-     * pero no existe en Firebase.
-     */
     if (
       !isEntrada &&
       selectedWi &&
@@ -1040,6 +1444,36 @@ export default function InspectionTypePage() {
   };
 
   const getTitle = () => {
+    if (
+      findingType === "anormalidad"
+    ) {
+      if (reportSent) {
+        return "Reporte enviado";
+      }
+
+      if (
+        anomalyAction === "nueva" ||
+        (
+          !anomaliesState.loading &&
+          !anomaliesState.hasAnomalies
+        )
+      ) {
+        return "Reportar anormalidad";
+      }
+
+      if (selectedAnomaly) {
+        return selectedAnomaly.title;
+      }
+
+      return "Anormalidades";
+    }
+
+    if (
+      findingType === "no_conformidad"
+    ) {
+      return "No conformidades";
+    }
+
     if (selectedProcessComponent) {
       return selectedProcessComponent.title;
     }
@@ -1075,9 +1509,36 @@ export default function InspectionTypePage() {
     if (
       findingType === "anormalidad"
     ) {
+      if (reportSent) {
+        return (
+          "El reporte quedó guardado " +
+          "correctamente."
+        );
+      }
+
+      if (
+        anomalyAction === "nueva" ||
+        (
+          !anomaliesState.loading &&
+          !anomaliesState.hasAnomalies
+        )
+      ) {
+        return (
+          "Agrega la evidencia y selecciona " +
+          "al PM responsable."
+        );
+      }
+
+      if (selectedAnomaly) {
+        return (
+          "Consulta los reportes y la decisión " +
+          "registrada para esta anormalidad."
+        );
+      }
+
       return (
-        "Registro y consulta de " +
-        "anormalidades."
+        "Selecciona un título existente o " +
+        "reporta una nueva anormalidad."
       );
     }
 
@@ -1092,8 +1553,7 @@ export default function InspectionTypePage() {
 
     if (selectedProcessComponent) {
       return (
-        "Selecciona el tipo de " +
-        "hallazgo."
+        "Selecciona el tipo de hallazgo."
       );
     }
 

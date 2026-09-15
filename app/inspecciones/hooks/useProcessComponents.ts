@@ -48,11 +48,38 @@ function normalizeTitle(value: string) {
     .toLocaleLowerCase("es-MX");
 }
 
-function normalizeProjectName(value: string) {
+function normalizeProjectName(
+  value: string,
+) {
   return value
+    .normalize("NFD")
+    .replace(
+      /[\u0300-\u036f]/g,
+      "",
+    )
     .trim()
-    .replace(/^DMR\.\d+\s*/i, "")
+    /*
+     * Elimina DMR, con o sin punto,
+     * espacio, guion o guion bajo.
+     */
+    .replace(
+      /^DMR[\s._-]*/i,
+      "",
+    )
+    /*
+     * Elimina el código numérico inicial.
+     *
+     * Ejemplos:
+     * 001. Ocumetics
+     * 001.Ocumetics
+     * 001 Ocumetics
+     */
+    .replace(
+      /^\d+(?:\.\d+)*[.\s_-]*/,
+      "",
+    )
     .replace(/\s+/g, " ")
+    .trim()
     .toLocaleLowerCase("es-MX");
 }
 

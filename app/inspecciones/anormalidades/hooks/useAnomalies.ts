@@ -58,9 +58,34 @@ function normalizeProjectName(
   value: string,
 ) {
   return value
+    .normalize("NFD")
+    .replace(
+      /[\u0300-\u036f]/g,
+      "",
+    )
     .trim()
-    .replace(/^DMR\.\d+\s*/i, "")
+    /*
+     * Elimina DMR, con o sin punto,
+     * espacio, guion o guion bajo.
+     */
+    .replace(
+      /^DMR[\s._-]*/i,
+      "",
+    )
+    /*
+     * Elimina el código numérico inicial.
+     *
+     * Ejemplos:
+     * 001. Ocumetics
+     * 001.Ocumetics
+     * 001 Ocumetics
+     */
+    .replace(
+      /^\d+(?:\.\d+)*[.\s_-]*/,
+      "",
+    )
     .replace(/\s+/g, " ")
+    .trim()
     .toLocaleLowerCase("es-MX");
 }
 
@@ -456,7 +481,7 @@ export function useAnomalies({
 
       const uploadedReferences:
         ReturnType<typeof ref>[] = [];
-
+let reportCommitted = false;
       try {
         setSaving(true);
 
@@ -490,14 +515,25 @@ export function useAnomalies({
                 );
 
                 await uploadBytes(
-                  photoReference,
-                  photo,
-                  {
-                    contentType:
-                      photo.type ||
-                      "image/jpeg",
-                  },
-                );
+  photoReference,
+  photo,
+  {
+    contentType:
+      photo.type ||
+      "image/jpeg",
+
+    customMetadata: {
+      ownerUid:
+        user.uid,
+      scopeKey:
+        context.scopeKey,
+      anomalyId:
+        anomalyReference.id,
+      occurrenceId:
+        occurrenceReference.id,
+    },
+  },
+);
 
                 const url =
                   await getDownloadURL(
@@ -516,18 +552,58 @@ export function useAnomalies({
         const batch =
           writeBatch(db);
 
-        batch.set(
-          scopeReference,
-          {
-            ...context,
-            active: true,
-            updatedAt:
-              serverTimestamp(),
-          },
-          {
-            merge: true,
-          },
-        );
+      batch.set(
+  scopeReference,
+  {
+    sourceType:
+      context.sourceType,
+    scopeKey:
+      context.scopeKey,
+    wiCode:
+      context.wiCode,
+    wiTitle:
+      context.wiTitle,
+
+    /*
+     * Los campos opcionales solamente
+     * se agregan cuando realmente existen.
+     */
+    ...(context.projectId
+      ? {
+          projectId:
+            context.projectId,
+        }
+      : {}),
+
+    ...(context.projectName
+      ? {
+          projectName:
+            context.projectName,
+        }
+      : {}),
+
+    ...(context.processComponentId
+      ? {
+          processComponentId:
+            context.processComponentId,
+        }
+      : {}),
+
+    ...(context.processComponentTitle
+      ? {
+          processComponentTitle:
+            context.processComponentTitle,
+        }
+      : {}),
+
+    active: true,
+    updatedAt:
+      serverTimestamp(),
+  },
+  {
+    merge: true,
+  },
+);
 
         /*
          * El inspector todavía no asigna el
@@ -593,28 +669,95 @@ export function useAnomalies({
           },
         );
 
-        await batch.commit();
+       await batch.commit();
+reportCommitted = true;
+/*
+ * El reporte ya está guardado.
+ * Ahora solicitamos la notificación.
+ *
+ * Si la notificación falla, no eliminamos
+ * el reporte ni las fotografías.
+ */
+let notificationSent = false;
+let notificationWarning = "";
 
-        return {
+try {
+  const currentIdToken =
+    await user.getIdToken();
+
+  const notificationResponse =
+    await fetch(
+      "/api/notifications/inspections/anomaly-created",
+      {
+        method: "POST",
+        headers: {
+          "Content-Type":
+            "application/json",
+          Authorization:
+            `Bearer ${currentIdToken}`,
+        },
+        body: JSON.stringify({
+          scopeKey:
+            context.scopeKey,
           anomalyId:
             anomalyReference.id,
           occurrenceId:
             occurrenceReference.id,
-        };
+        }),
+      },
+    );
+
+  const notificationResult =
+    await notificationResponse
+      .json()
+      .catch(() => null);
+
+  if (!notificationResponse.ok) {
+    notificationWarning =
+      notificationResult?.error ||
+      "El reporte se guardó, pero no se pudo notificar al PM.";
+
+    console.error(
+      "La anormalidad se guardó, pero la notificación falló:",
+      notificationWarning,
+    );
+  } else {
+    notificationSent = true;
+  }
+} catch (notificationError) {
+  notificationWarning =
+    "El reporte se guardó, pero no se pudo notificar al PM.";
+
+  console.error(
+    notificationWarning,
+    notificationError,
+  );
+}
+
+return {
+  anomalyId:
+    anomalyReference.id,
+  occurrenceId:
+    occurrenceReference.id,
+  notificationSent,
+  notificationWarning,
+};
       } catch (saveError) {
         /*
          * Si Firestore falla después de cargar
          * las imágenes, intentamos retirarlas
          * de Storage.
          */
-        await Promise.allSettled(
-          uploadedReferences.map(
-            (photoReference) =>
-              deleteObject(
-                photoReference,
-              ),
-          ),
-        );
+       if (!reportCommitted) {
+  await Promise.allSettled(
+    uploadedReferences.map(
+      (photoReference) =>
+        deleteObject(
+          photoReference,
+        ),
+    ),
+  );
+}
 
         console.error(
           "Error guardando anormalidad:",
