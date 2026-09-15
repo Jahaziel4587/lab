@@ -143,13 +143,13 @@ export default function OccurrenceRoutingDialog({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-4 backdrop-blur-sm"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/75 p-2 backdrop-blur-sm sm:p-4"
       role="dialog"
       aria-modal="true"
     >
       <form
         onSubmit={submit}
-        className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-emerald-400/25 bg-[#101715] p-6 shadow-2xl"
+        className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl border border-emerald-400/25 bg-[#101715] p-4 shadow-2xl sm:p-6"
       >
         <div className="flex items-start justify-between gap-4">
           <div>
