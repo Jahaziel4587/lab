@@ -1185,6 +1185,7 @@ export default function InspectionTypePage() {
       return (
         <CatalogList
           items={workInstructionItems}
+          searchPlaceholder="Buscar componente MTS..."
           emptyMessage={
             "No hay componentes MTS " +
             "disponibles en Box."
@@ -1217,6 +1218,7 @@ export default function InspectionTypePage() {
       return (
         <CatalogList
           items={projectItems}
+          searchPlaceholder="Buscar proyecto..."
           emptyMessage={
             "No hay proyectos " +
             "disponibles en el DMR."
@@ -1256,6 +1258,11 @@ export default function InspectionTypePage() {
       return (
         <CatalogList
           items={workInstructionItems}
+          searchPlaceholder={
+            isEntrada
+              ? "Buscar WI o componente..."
+              : "Buscar WI de proceso..."
+          }
           emptyMessage={
             isEntrada
               ? workInstructionsCatalog
