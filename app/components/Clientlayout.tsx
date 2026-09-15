@@ -297,7 +297,13 @@ export default function ClientLayout({
                 Quoter
               </Link>
             )}
-
+<Link
+  data-tutorial="nav-inspections"
+  href="/inspecciones"
+  className="hover:text-white transition"
+>
+  Inspections
+</Link>
             <Link
               data-tutorial="nav-analytics"
               href="/analitica"
@@ -497,7 +503,13 @@ export default function ClientLayout({
                   Quoter
                 </Link>
               )}
-
+<Link
+  href="/inspecciones"
+  onClick={cerrarMenu}
+  className={mobileLinkClass}
+>
+  Inspections
+</Link>
               <Link
                 href="/analitica"
                 onClick={cerrarMenu}
