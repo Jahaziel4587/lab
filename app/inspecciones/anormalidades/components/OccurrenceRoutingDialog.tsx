@@ -15,6 +15,9 @@ import type {
 
 type Props = {
   occurrenceId: string;
+  initialMode:
+    | "new"
+    | "existing";
   anomalies:
     InspectionAnomaly[];
   saving: boolean;
@@ -35,6 +38,7 @@ type Props = {
 
 export default function OccurrenceRoutingDialog({
   occurrenceId,
+  initialMode,
   anomalies,
   saving,
   onCancel,
@@ -45,7 +49,7 @@ export default function OccurrenceRoutingDialog({
       "new" |
       "existing" |
       ""
-    >("");
+    >(initialMode);
 
   const [
     existingAnomalyId,
