@@ -20,6 +20,7 @@ type NotiItem = {
   id: string;
   mensaje: string;
   pedidoId?: string;
+  url?: string;
   tipo?: string;
   createdAt?: any;
   leido?: boolean;
@@ -77,6 +78,7 @@ export default function ClientLayout({
             id: d.id,
             mensaje: data.mensaje || "",
             pedidoId: data.pedidoId,
+            url: data.url,
             tipo: data.tipo,
             createdAt: data.createdAt,
             leido: data.leido ?? false,
@@ -109,6 +111,7 @@ export default function ClientLayout({
             id: d.id,
             mensaje: data.mensaje || "",
             pedidoId: data.pedidoId,
+            url: data.url,
             tipo: data.tipo,
             createdAt: data.createdAt,
             leido: data.leido ?? false,
@@ -374,9 +377,11 @@ export default function ClientLayout({
                               ? n.createdAt.toDate()
                               : null;
 
-                          const href = n.pedidoId
-                            ? `/solicitudes/listado/${n.pedidoId}`
-                            : undefined;
+                          const href = n.url
+                            ? n.url
+                            : n.pedidoId
+                              ? `/solicitudes/listado/${n.pedidoId}`
+                              : undefined;
 
                           const contenido = (
                             <div
