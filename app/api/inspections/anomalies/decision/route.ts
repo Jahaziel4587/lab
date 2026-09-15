@@ -16,6 +16,23 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+function notificationOrigin(
+  request: NextRequest,
+) {
+  const configured =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
+    process.env.VERCEL_PROJECT_PRODUCTION_URL;
+
+  if (!configured) {
+    return request.nextUrl.origin;
+  }
+
+  return configured.startsWith("http")
+    ? configured
+    : `https://${configured}`;
+}
+
 function cleanString(value: unknown) {
   return String(value || "").trim();
 }
@@ -241,7 +258,7 @@ export async function POST(request: NextRequest) {
           body: notificationBody,
           url: new URL(
             relativeUrl,
-            request.nextUrl.origin,
+            notificationOrigin(request),
           ).toString(),
         }),
         adminDB.collection("notifications").add({
