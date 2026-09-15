@@ -127,6 +127,39 @@ function formatDate(value: unknown) {
   ).format(date);
 }
 
+function timestampValue(
+  value: unknown,
+) {
+  if (!value) return 0;
+
+  const candidate =
+    value as {
+      toMillis?: () => number;
+      seconds?: number;
+    };
+
+  if (
+    typeof candidate.toMillis ===
+    "function"
+  ) {
+    return candidate.toMillis();
+  }
+
+  if (
+    typeof candidate.seconds ===
+    "number"
+  ) {
+    return candidate.seconds * 1000;
+  }
+
+  const parsed =
+    new Date(String(value)).getTime();
+
+  return Number.isNaN(parsed)
+    ? 0
+    : parsed;
+}
+
 export default function AnomalyThread({
   anomaly,
   occurrences,
@@ -258,6 +291,44 @@ export default function AnomalyThread({
     anomaly.status ===
     "resolved";
 
+  const timelineOrder =
+    new Map(
+      [
+        ...occurrences.map(
+          (occurrence) => ({
+            key:
+              `occurrence:${occurrence.id}`,
+            createdAt:
+              timestampValue(
+                occurrence.createdAt,
+              ),
+          }),
+        ),
+        ...messages.map(
+          (entry) => ({
+            key:
+              `message:${entry.id}`,
+            createdAt:
+              timestampValue(
+                entry.createdAt,
+              ),
+          }),
+        ),
+      ]
+        .sort(
+          (first, second) =>
+            first.createdAt -
+            second.createdAt,
+        )
+        .map(
+          (item, index) =>
+            [
+              item.key,
+              index,
+            ] as const,
+        ),
+    );
+
   return (
     <>
       <section className="overflow-hidden rounded-2xl border border-white/10 bg-[#0c1210]/95">
@@ -276,13 +347,13 @@ export default function AnomalyThread({
             </p>
           </div>
 
-          <div className="flex flex-wrap gap-2">
+          <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap">
             <button
               type="button"
               onClick={() =>
                 setReportOpen(true)
               }
-              className="inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/[0.05] px-4 text-sm font-medium text-white/75 transition hover:bg-white/[0.09]"
+              className="inline-flex min-h-11 w-full items-center justify-center sm:min-h-10 sm:w-auto gap-2 rounded-xl border border-white/15 bg-white/[0.05] px-4 text-sm font-medium text-white/75 transition hover:bg-white/[0.09]"
             >
               <Plus size={16} />
               Reportar misma anormalidad
@@ -290,7 +361,7 @@ export default function AnomalyThread({
 
             {isResolved ? (
               <span
-                className={`inline-flex min-h-10 items-center justify-center gap-2 rounded-xl border px-4 text-sm font-medium ${
+                className={`inline-flex min-h-11 w-full items-center justify-center gap-2 sm:min-h-10 sm:w-auto rounded-xl border px-4 text-sm font-medium ${
                   anomaly.decision ===
                   "pass"
                     ? "border-emerald-400/25 bg-emerald-400/10 text-emerald-200"
@@ -314,7 +385,7 @@ export default function AnomalyThread({
                     true,
                   )
                 }
-                className="inline-flex min-h-10 items-center justify-center rounded-xl border border-emerald-400/35 bg-emerald-400/12 px-5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-400/20"
+                className="inline-flex min-h-11 w-full items-center justify-center sm:min-h-10 sm:w-auto rounded-xl border border-emerald-400/35 bg-emerald-400/12 px-5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-400/20"
               >
                 Tomar decisión
               </button>
@@ -326,7 +397,7 @@ export default function AnomalyThread({
           </div>
         </header>
 
-        <div className="max-h-[650px] space-y-5 overflow-y-auto bg-gradient-to-b from-emerald-950/10 to-black/10 px-4 py-5 sm:px-6">
+        <div className="flex max-h-[62dvh] flex-col sm:max-h-[650px] gap-5 overflow-y-auto bg-gradient-to-b from-emerald-950/10 to-black/10 px-4 py-5 sm:px-6">
           {occurrences.map(
             (
               occurrence,
@@ -343,9 +414,29 @@ export default function AnomalyThread({
                     .redirectedToAnomalyId,
                 );
 
+              const canRouteReport =
+                Boolean(
+                  user?.email &&
+                  occurrence
+                    .responsiblePmEmail &&
+                  user.email
+                    .trim()
+                    .toLowerCase() ===
+                    occurrence
+                      .responsiblePmEmail
+                      .trim()
+                      .toLowerCase(),
+                );
+
               return (
                 <div
                   key={occurrence.id}
+                  style={{
+                    order:
+                      timelineOrder.get(
+                        `occurrence:${occurrence.id}`,
+                      ),
+                  }}
                   className="flex justify-start"
                 >
                   <article
@@ -355,8 +446,7 @@ export default function AnomalyThread({
                         : "border-amber-400/20 bg-amber-400/[0.07]"
                     }`}
                   >
-                    {isFollowUp &&
-                      canDecide &&
+                    {canRouteReport &&
                       !redirected && (
                         <details className="absolute right-3 top-3 z-10">
                           <summary
@@ -371,16 +461,24 @@ export default function AnomalyThread({
                           <div className="absolute right-0 mt-2 w-64 overflow-hidden rounded-xl border border-white/10 bg-[#151b19] p-1 shadow-2xl">
                             <button
                               type="button"
-                              onClick={() =>
-                                setRoutingSelection(
-                                  {
-                                    occurrenceId:
-                                      occurrence.id,
-                                    mode:
-                                      "new",
-                                  },
-                                )
-                              }
+                              onClick={() => {
+                                if (
+                                  isFollowUp
+                                ) {
+                                  setRoutingSelection(
+                                    {
+                                      occurrenceId:
+                                        occurrence.id,
+                                      mode:
+                                        "new",
+                                    },
+                                  );
+                                } else {
+                                  setDecisionOpen(
+                                    true,
+                                  );
+                                }
+                              }}
                               className="w-full rounded-lg px-3 py-2.5 text-left text-sm text-white/75 hover:bg-white/[0.06]"
                             >
                               Hacerlo nueva anormalidad
@@ -526,6 +624,12 @@ export default function AnomalyThread({
                 return (
                   <div
                     key={entry.id}
+                    style={{
+                      order:
+                        timelineOrder.get(
+                          `message:${entry.id}`,
+                        ),
+                    }}
                     className="flex justify-center py-2"
                   >
                     <button
@@ -568,6 +672,12 @@ export default function AnomalyThread({
               return (
                 <div
                   key={entry.id}
+                  style={{
+                    order:
+                      timelineOrder.get(
+                        `message:${entry.id}`,
+                      ),
+                  }}
                   className={`flex ${
                     isOwn
                       ? "justify-end"
@@ -613,6 +723,10 @@ export default function AnomalyThread({
 
           <div
             ref={bottomReference}
+            style={{
+              order:
+                timelineOrder.size,
+            }}
           />
         </div>
 
@@ -694,8 +808,8 @@ export default function AnomalyThread({
         )}
 
       {reportOpen && (
-        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 p-4 backdrop-blur-sm">
-          <div className="mx-auto my-6 max-w-3xl rounded-2xl border border-emerald-400/20 bg-[#101715] p-5 shadow-2xl">
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 p-2 backdrop-blur-sm sm:p-4">
+          <div className="mx-auto my-2 max-w-3xl rounded-2xl border border-emerald-400/20 bg-[#101715] p-4 shadow-2xl sm:my-6 sm:p-5">
             <div className="mb-4 flex items-center justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-wider text-emerald-300">
