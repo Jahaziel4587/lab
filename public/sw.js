@@ -1,4 +1,4 @@
-const SERVICE_WORKER_VERSION = "bioana-pwa-v2";
+const SERVICE_WORKER_VERSION = "bioana-pwa-v3";
 
 self.addEventListener("install", () => {
   self.skipWaiting();
@@ -63,8 +63,10 @@ self.addEventListener(
   (event) => {
     event.notification.close();
 
-    const destination =
-      event.notification.data?.url || "/";
+    const destination = new URL(
+      event.notification.data?.url || "/",
+      self.location.origin,
+    ).href;
 
     event.waitUntil(
       self.clients
@@ -76,7 +78,13 @@ self.addEventListener(
           const existingWindow =
             windows.find(
               (windowClient) =>
-                "focus" in windowClient,
+                "focus" in windowClient &&
+                new URL(
+                  windowClient.url,
+                ).origin ===
+                  new URL(
+                    destination,
+                  ).origin,
             );
 
           if (existingWindow) {
