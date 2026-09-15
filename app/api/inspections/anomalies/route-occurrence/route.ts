@@ -16,6 +16,23 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+function notificationOrigin(
+  request: NextRequest,
+) {
+  const configured =
+    process.env.NEXT_PUBLIC_APP_URL ||
+    process.env.APP_URL ||
+    process.env.VERCEL_PROJECT_PRODUCTION_URL;
+
+  if (!configured) {
+    return request.nextUrl.origin;
+  }
+
+  return configured.startsWith("http")
+    ? configured
+    : `https://${configured}`;
+}
+
 function clean(value: unknown) {
   return String(value || "").trim();
 }
@@ -191,12 +208,24 @@ export async function POST(
       );
     }
 
-    if (occurrence.followUp !== true) {
+    const isInitialReport =
+      occurrence.followUp !== true;
+
+    /*
+     * En el reporte inicial, crear una nueva
+     * anormalidad equivale a decidir la actual.
+     * Esta ruta solamente lo traslada cuando
+     * se relaciona con una ya existente.
+     */
+    if (
+      isInitialReport &&
+      mode === "new"
+    ) {
       return NextResponse.json(
         {
           ok: false,
           error:
-            "El reporte inicial no puede reclasificarse desde esta opción.",
+            "Usa Tomar decisión para asignar el título y la decisión.",
         },
         { status: 409 },
       );
@@ -386,26 +415,40 @@ export async function POST(
         FieldValue.serverTimestamp(),
     });
 
-    batch.set(
-      sourceReference
-        .collection("messages")
-        .doc(),
-      {
-        type: "routing",
-        text:
-          `El reporte adicional fue relacionado con "${targetTitle}".`,
-        targetAnomalyId:
-          targetReference.id,
-        createdByUid:
-          decoded.uid,
-        createdByEmail:
-          email(decoded.email),
-        createdByName:
-          decidedByName,
-        createdAt:
-          FieldValue.serverTimestamp(),
-      },
-    );
+    if (
+      isInitialReport &&
+      mode === "existing"
+    ) {
+      /*
+       * El documento vacío deja de aparecer
+       * en el catálogo. La copia completa vive
+       * en la anormalidad de destino.
+       */
+      batch.delete(
+        sourceReference,
+      );
+    } else {
+      batch.set(
+        sourceReference
+          .collection("messages")
+          .doc(),
+        {
+          type: "routing",
+          text:
+            `El reporte adicional fue relacionado con "${targetTitle}".`,
+          targetAnomalyId:
+            targetReference.id,
+          createdByUid:
+            decoded.uid,
+          createdByEmail:
+            email(decoded.email),
+          createdByName:
+            decidedByName,
+          createdAt:
+            FieldValue.serverTimestamp(),
+        },
+      );
+    }
 
     batch.set(
       targetReference
@@ -470,7 +513,7 @@ export async function POST(
           body: notificationBody,
           url: new URL(
             relativeUrl,
-            request.nextUrl.origin,
+            notificationOrigin(request),
           ).toString(),
         }),
         adminDB
