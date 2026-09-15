@@ -8,6 +8,7 @@ import {
   CheckCircle2,
   FolderKanban,
   LoaderCircle,
+  Plus,
 } from "lucide-react";
 import {
   useParams,
@@ -1049,9 +1050,6 @@ export default function InspectionTypePage() {
           onSelect={
             selectAnomaly
           }
-          onReportNew={
-            openNewAnomalyReport
-          }
         />
       );
     };
@@ -1653,12 +1651,31 @@ export default function InspectionTypePage() {
             : "Proceso"}
         </p>
 
-        <h1
-          className="mt-3 text-2xl
-            font-semibold sm:text-3xl"
-        >
-          {getTitle()}
-        </h1>
+        <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+          <h1
+            className="text-2xl font-semibold sm:text-3xl"
+          >
+            {getTitle()}
+          </h1>
+
+          {findingType ===
+            "anormalidad" &&
+            anomaliesState.hasAnomalies &&
+            !anomalyId &&
+            anomalyAction !== "nueva" &&
+            !reportSent && (
+              <button
+                type="button"
+                onClick={
+                  openNewAnomalyReport
+                }
+                className="inline-flex min-h-11 shrink-0 items-center justify-center gap-2 self-start rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-5 py-2 text-sm font-medium text-emerald-200 transition hover:bg-emerald-400/15 sm:self-auto"
+              >
+                <Plus size={17} />
+                Reportar nueva anormalidad
+              </button>
+            )}
+        </div>
 
         <p
           className="mt-3 max-w-2xl
