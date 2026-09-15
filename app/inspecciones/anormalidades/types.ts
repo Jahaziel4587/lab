@@ -15,22 +15,18 @@ export type AnomalyDecision =
 
 export type InspectionAnomaly = {
   id: string;
-
-  /*
-   * El PM asigna este título.
-   * Mientras no lo haga permanecerá vacío.
-   */
   title: string;
   normalizedTitle: string;
-
   status: AnomalyStatus;
   decision: AnomalyDecision;
-
   decisionComment?: string;
   decidedByUid?: string;
   decidedByEmail?: string;
+  decidedByName?: string;
   decidedAt?: unknown;
-
+  responsiblePmUid?: string;
+  responsiblePmEmail?: string;
+  responsiblePmName?: string;
   createdByUid: string;
   createdByEmail: string;
   createdAt?: unknown;
@@ -46,48 +42,40 @@ export type AnomalyOccurrencePhoto = {
 export type AnomalyOccurrence = {
   id: string;
   anomalyId: string;
-
   description: string;
   lot: string;
-
-  /*
-   * Ejemplo:
-   * 3 piezas afectadas de una muestra de 20.
-   */
   affectedQuantity: number;
   sampleQuantity: number;
-
   photos: AnomalyOccurrencePhoto[];
-
   responsiblePmUid: string;
   responsiblePmEmail: string;
   responsiblePmName: string;
-
   createdByUid: string;
   createdByEmail: string;
   createdByName: string;
   createdAt?: unknown;
-
-  /*
-   * Se usarán cuando el PM redirija el reporte
-   * a un título de anomalía existente.
-   */
   redirectedFromAnomalyId?: string;
   redirectedByUid?: string;
   redirectedByEmail?: string;
   redirectedAt?: unknown;
 };
 
+export type AnomalyMessage = {
+  id: string;
+  text: string;
+  createdByUid: string;
+  createdByEmail: string;
+  createdByName: string;
+  createdAt?: unknown;
+};
+
 export type AnomalyContext = {
   sourceType: AnomalySourceType;
   scopeKey: string;
-
   projectId?: string;
   projectName?: string;
-
   wiCode: string;
   wiTitle: string;
-
   processComponentId?: string;
   processComponentTitle?: string;
 };
