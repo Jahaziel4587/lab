@@ -63,6 +63,7 @@ export type AnomalyOccurrence = {
 export type AnomalyMessage = {
   id: string;
   text: string;
+  type?: "message" | "decision";
   createdByUid: string;
   createdByEmail: string;
   createdByName: string;
