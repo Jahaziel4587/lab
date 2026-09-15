@@ -19,8 +19,12 @@ import AnomalyList from
   "../anormalidades/components/AnomalyList";
 import AnomalyReportForm from
   "../anormalidades/components/AnomalyReportForm";
+import AnomalyThread from
+  "../anormalidades/components/AnomalyThread";
 import { useAnomalies } from
   "../anormalidades/hooks/useAnomalies";
+import { useAnomalyThread } from
+  "../anormalidades/hooks/useAnomalyThread";
 import type { InspectionAnomaly } from
   "../anormalidades/types";
 import { buildAnomalyContext } from
@@ -257,6 +261,21 @@ export default function InspectionTypePage() {
       (anomaly) =>
         anomaly.id === anomalyId,
     );
+
+  const anomalyThreadState =
+    useAnomalyThread({
+      scopeKey:
+        anomalyContext?.scopeKey,
+      anomalyId,
+      enabled:
+        validInspectionType &&
+        findingType ===
+          "anormalidad" &&
+        Boolean(
+          anomalyContext &&
+          anomalyId,
+        ),
+    });
 
   /*
    * Todos los hooks están antes de esta
@@ -911,11 +930,25 @@ export default function InspectionTypePage() {
       }
 
       /*
-       * Detalle provisional de un título
-       * ya registrado.
+       * Detalle, historial y conversación
+       * de la anormalidad seleccionada.
        */
       if (anomalyId) {
-        if (!selectedAnomaly) {
+        if (
+          anomalyThreadState.loading
+        ) {
+          return renderLoading(
+            "Cargando conversación...",
+          );
+        }
+
+        if (anomalyThreadState.error) {
+          return renderError(
+            anomalyThreadState.error,
+          );
+        }
+
+        if (!anomalyThreadState.anomaly) {
           return (
             <div
               className="rounded-2xl border
@@ -934,7 +967,7 @@ export default function InspectionTypePage() {
                 className="mt-2 text-sm
                   text-amber-100/65"
               >
-                El título solicitado no existe
+                El reporte solicitado no existe
                 o ya no está disponible.
               </p>
             </div>
@@ -942,38 +975,33 @@ export default function InspectionTypePage() {
         }
 
         return (
-          <div
-            className="rounded-2xl border
-              border-emerald-400/20
-              bg-emerald-400/[0.06]
-              p-6"
-          >
-            <p
-              className="text-xs font-semibold
-                uppercase tracking-wider
-                text-emerald-300"
-            >
-              Anormalidad registrada
-            </p>
-
-            <h2
-              className="mt-3 text-xl
-                font-semibold text-white"
-            >
-              {selectedAnomaly.title}
-            </h2>
-
-            <p
-              className="mt-3 text-sm
-                text-white/60"
-            >
-              En el siguiente paso
-              construiremos aquí la
-              conversación y el formulario
-              para agregar otra ocurrencia
-              utilizando la decisión anterior.
-            </p>
-          </div>
+          <AnomalyThread
+            anomaly={
+              anomalyThreadState.anomaly
+            }
+            occurrences={
+              anomalyThreadState.occurrences
+            }
+            messages={
+              anomalyThreadState.messages
+            }
+            canDecide={
+              anomalyThreadState.canDecide
+            }
+            sending={
+              anomalyThreadState.sending
+            }
+            savingDecision={
+              anomalyThreadState
+                .savingDecision
+            }
+            onSendMessage={
+              anomalyThreadState.sendMessage
+            }
+            onSaveDecision={
+              anomalyThreadState.saveDecision
+            }
+          />
         );
       }
 
@@ -1010,8 +1038,7 @@ export default function InspectionTypePage() {
       return (
         <AnomalyList
           anomalies={
-            anomaliesState
-              .titledAnomalies
+            anomaliesState.anomalies
           }
           loading={
             anomaliesState.loading
@@ -1462,7 +1489,10 @@ export default function InspectionTypePage() {
       }
 
       if (selectedAnomaly) {
-        return selectedAnomaly.title;
+        return (
+          selectedAnomaly.title ||
+          "Reporte pendiente de título"
+        );
       }
 
       return "Anormalidades";
