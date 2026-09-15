@@ -127,6 +127,39 @@ function formatDate(value: unknown) {
   ).format(date);
 }
 
+function timestampValue(
+  value: unknown,
+) {
+  if (!value) return 0;
+
+  const candidate =
+    value as {
+      toMillis?: () => number;
+      seconds?: number;
+    };
+
+  if (
+    typeof candidate.toMillis ===
+    "function"
+  ) {
+    return candidate.toMillis();
+  }
+
+  if (
+    typeof candidate.seconds ===
+    "number"
+  ) {
+    return candidate.seconds * 1000;
+  }
+
+  const parsed =
+    new Date(String(value)).getTime();
+
+  return Number.isNaN(parsed)
+    ? 0
+    : parsed;
+}
+
 export default function AnomalyThread({
   anomaly,
   occurrences,
@@ -258,6 +291,44 @@ export default function AnomalyThread({
     anomaly.status ===
     "resolved";
 
+  const timelineOrder =
+    new Map(
+      [
+        ...occurrences.map(
+          (occurrence) => ({
+            key:
+              `occurrence:${occurrence.id}`,
+            createdAt:
+              timestampValue(
+                occurrence.createdAt,
+              ),
+          }),
+        ),
+        ...messages.map(
+          (entry) => ({
+            key:
+              `message:${entry.id}`,
+            createdAt:
+              timestampValue(
+                entry.createdAt,
+              ),
+          }),
+        ),
+      ]
+        .sort(
+          (first, second) =>
+            first.createdAt -
+            second.createdAt,
+        )
+        .map(
+          (item, index) =>
+            [
+              item.key,
+              index,
+            ] as const,
+        ),
+    );
+
   return (
     <>
       <section className="overflow-hidden rounded-2xl border border-white/10 bg-[#0c1210]/95">
@@ -326,7 +397,7 @@ export default function AnomalyThread({
           </div>
         </header>
 
-        <div className="max-h-[650px] space-y-5 overflow-y-auto bg-gradient-to-b from-emerald-950/10 to-black/10 px-4 py-5 sm:px-6">
+        <div className="flex max-h-[650px] flex-col gap-5 overflow-y-auto bg-gradient-to-b from-emerald-950/10 to-black/10 px-4 py-5 sm:px-6">
           {occurrences.map(
             (
               occurrence,
@@ -343,9 +414,29 @@ export default function AnomalyThread({
                     .redirectedToAnomalyId,
                 );
 
+              const canRouteReport =
+                Boolean(
+                  user?.email &&
+                  occurrence
+                    .responsiblePmEmail &&
+                  user.email
+                    .trim()
+                    .toLowerCase() ===
+                    occurrence
+                      .responsiblePmEmail
+                      .trim()
+                      .toLowerCase(),
+                );
+
               return (
                 <div
                   key={occurrence.id}
+                  style={{
+                    order:
+                      timelineOrder.get(
+                        `occurrence:${occurrence.id}`,
+                      ),
+                  }}
                   className="flex justify-start"
                 >
                   <article
@@ -356,7 +447,7 @@ export default function AnomalyThread({
                     }`}
                   >
                     {isFollowUp &&
-                      canDecide &&
+                      canRouteReport &&
                       !redirected && (
                         <details className="absolute right-3 top-3 z-10">
                           <summary
@@ -526,6 +617,12 @@ export default function AnomalyThread({
                 return (
                   <div
                     key={entry.id}
+                    style={{
+                      order:
+                        timelineOrder.get(
+                          `message:${entry.id}`,
+                        ),
+                    }}
                     className="flex justify-center py-2"
                   >
                     <button
@@ -568,6 +665,12 @@ export default function AnomalyThread({
               return (
                 <div
                   key={entry.id}
+                  style={{
+                    order:
+                      timelineOrder.get(
+                        `message:${entry.id}`,
+                      ),
+                  }}
                   className={`flex ${
                     isOwn
                       ? "justify-end"
@@ -613,6 +716,10 @@ export default function AnomalyThread({
 
           <div
             ref={bottomReference}
+            style={{
+              order:
+                timelineOrder.size,
+            }}
           />
         </div>
 
