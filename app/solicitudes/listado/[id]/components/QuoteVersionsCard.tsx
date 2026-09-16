@@ -16,7 +16,7 @@ type Props = {
 
 export default function QuoteVersionsCard({ versions }: Props) {
   return (
-    <div className={`mt-6 ${cardClass} ${cardPad}`}>
+    <div className={`${cardClass} ${cardPad}`}>
       <div>
         <h2 className="text-lg font-semibold text-white/90">
           Versiones generadas
