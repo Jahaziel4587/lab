@@ -45,6 +45,8 @@ import {
   loadPdfMake,
 } from "./utils";
 
+type DetailSection = "pedido" | "cotizacion" | "comunicacion";
+
 export default function DetallePedidoPage() {
   const { id } = useParams();
   const router = useRouter();
@@ -52,6 +54,9 @@ export default function DetallePedidoPage() {
   const pedidoId = id as string;
 
   const { isAdmin, user } = useAuth() as any;
+
+  const [activeSection, setActiveSection] =
+    useState<DetailSection>("pedido");
 
   /*
    * null representa la ejecución original.
@@ -788,240 +793,204 @@ export default function DetallePedidoPage() {
     );
   }
 
+  const sections: Array<{
+    key: DetailSection;
+    label: string;
+    description: string;
+  }> = [
+    {
+      key: "pedido",
+      label: "Pedido y especificaciones",
+      description: "Información, archivos y cambios",
+    },
+    {
+      key: "cotizacion",
+      label: "Ejecución y cotización",
+      description: "Ejecuciones, importes y PDFs",
+    },
+    {
+      key: "comunicacion",
+      label: "Comunicación",
+      description: `${chat.chatMessages.length} mensaje${
+        chat.chatMessages.length === 1 ? "" : "s"
+      }`,
+    },
+  ];
+
+  const renderSpecUpdates = () => (
+    <SpecUpdatesCard
+      specUpdates={specs.specUpdates}
+      showSpecForm={specs.showSpecForm}
+      setShowSpecForm={specs.setShowSpecForm}
+      specDesc={specs.specDesc}
+      setSpecDesc={specs.setSpecDesc}
+      specFiles={specs.specFiles}
+      savingSpec={specs.savingSpec}
+      specInputRef={specs.specInputRef}
+      addSpecFiles={specs.addSpecFiles}
+      removeSpecFile={specs.removeSpecFile}
+      moveSpecFile={specs.moveSpecFile}
+      handleSpecSubmit={specs.handleSpecSubmit}
+    />
+  );
+
   return (
-    <div className="mx-auto max-w-7xl px-4 sm:px-8 py-10 text-white">
-      <div className="flex items-center justify-between gap-4">
-        <DetalleHeader
-          id={pedidoId}
-          onBack={() =>
-            router.back()
-          }
-        />
+    <div className="mx-auto max-w-7xl px-3 py-5 text-white sm:px-8 sm:py-10">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <DetalleHeader id={pedidoId} onBack={() => router.back()} />
 
         <button
           type="button"
-          onClick={
-            ejecuciones.abrirModal
-          }
-          className="rounded-xl bg-emerald-500/15 border border-emerald-400/30 px-4 py-2 text-sm text-emerald-100 hover:bg-emerald-500/20 transition"
+          onClick={ejecuciones.abrirModal}
+          className="inline-flex min-h-11 w-full items-center justify-center rounded-xl border border-emerald-400/30 bg-emerald-500/15 px-4 py-2.5 text-sm font-medium text-emerald-100 transition hover:bg-emerald-500/20 sm:w-auto"
         >
           Repetir pedido
         </button>
       </div>
 
-      <div className="mt-8 grid grid-cols-1 lg:grid-cols-5 gap-6 items-stretch">
-        <PedidoResumenCard
-          pedido={pedido}
-          files={files}
-          filesLoading={
-            filesLoading
-          }
-          isAdmin={isAdmin}
-          onCotizar={handleCotizar}
-        />
+      <div className="mt-6 flex flex-col gap-4 lg:flex-row lg:gap-5">
+        <aside className="h-max overflow-hidden rounded-2xl border border-white/10 bg-white/[0.035] backdrop-blur-xl lg:sticky lg:top-24 lg:w-72 lg:shrink-0 lg:rounded-3xl">
+          <div className="border-b border-white/10 px-4 py-3 lg:px-5 lg:py-4">
+            <h2 className="text-sm font-semibold text-white/90">Secciones</h2>
+            <p className="mt-0.5 text-xs text-white/45">
+              Abre solamente lo que necesitas consultar.
+            </p>
+          </div>
 
-        <PedidoChatCard
-          chatMessages={
-            chat.chatMessages
-          }
-          newMessage={
-            chat.newMessage
-          }
-          setNewMessage={
-            chat.setNewMessage
-          }
-          handleSendMessage={
-            chat.handleSendMessage
-          }
-          chatEndRef={
-            chat.chatEndRef
-          }
-          nameByEmail={
-            chat.nameByEmail
-          }
-          user={user}
-        />
+          <nav className="grid grid-cols-3 gap-2 p-2 lg:grid-cols-1 lg:p-3">
+            {sections.map((section) => {
+              const active = activeSection === section.key;
+
+              return (
+                <button
+                  key={section.key}
+                  type="button"
+                  onClick={() => setActiveSection(section.key)}
+                  className={[
+                    "min-h-14 rounded-xl border px-2.5 py-2.5 text-left transition lg:min-h-0 lg:rounded-2xl lg:px-4 lg:py-3",
+                    active
+                      ? "border-emerald-300/40 bg-emerald-400 text-black"
+                      : "border-white/10 bg-white/[0.035] text-white/70 hover:bg-white/[0.075] hover:text-white",
+                  ].join(" ")}
+                >
+                  <span className="block text-[11px] font-semibold leading-tight sm:text-xs lg:text-sm">
+                    {section.label}
+                  </span>
+                  <span
+                    className={`mt-1 hidden text-[11px] leading-snug lg:block ${
+                      active ? "text-black/65" : "text-white/40"
+                    }`}
+                  >
+                    {section.description}
+                  </span>
+                </button>
+              );
+            })}
+          </nav>
+        </aside>
+
+        <section className="min-w-0 flex-1 rounded-2xl border border-white/10 bg-white/[0.025] p-3 backdrop-blur-xl sm:p-5 lg:rounded-3xl lg:p-6">
+          {activeSection === "pedido" && (
+            <div className="space-y-5 sm:space-y-6">
+              <PedidoResumenCard
+                pedido={pedido}
+                files={files}
+                filesLoading={filesLoading}
+                isAdmin={isAdmin}
+                onCotizar={() => {
+                  setActiveSection("cotizacion");
+                  handleCotizar();
+                }}
+              />
+
+              {renderSpecUpdates()}
+            </div>
+          )}
+
+          {activeSection === "cotizacion" && (
+            <div id="cotizacion-pedido" className="scroll-mt-24 space-y-5 sm:space-y-6">
+              <EjecucionesCard
+                pedido={pedido}
+                ejecuciones={ejecuciones.ejecuciones}
+                loading={ejecuciones.loadingEjecuciones}
+                ejecucionSeleccionadaId={ejecucionSeleccionada?.id ?? null}
+                onCotizarEjecucion={handleSeleccionarEjecucion}
+              />
+
+              <div className="rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.06] px-4 py-4 sm:px-5">
+                <div className="text-xs uppercase tracking-wide text-emerald-300/70">
+                  Cotización seleccionada
+                </div>
+                <div className="mt-1 font-semibold text-white">
+                  {etiquetaCotizacion}
+                </div>
+                <div className="mt-1 text-sm text-white/60">
+                  {tituloCotizacion}
+                </div>
+
+                {!esCotizacionOriginal && (
+                  <button
+                    type="button"
+                    onClick={() => setEjecucionSeleccionada(null)}
+                    className="mt-3 min-h-11 rounded-xl border border-white/10 bg-white/[0.05] px-4 py-2 text-xs text-white/80 transition hover:bg-white/[0.09]"
+                  >
+                    Volver a la cotización original
+                  </button>
+                )}
+              </div>
+
+              <CotizacionCard
+                pedido={pedido}
+                quoteMeta={cotizacion.quoteMeta}
+                quoteLines={cotizacion.quoteLines}
+                loadingQuote={cotizacion.loadingQuote}
+                draft={cotizacion.draft}
+                isGen={cotizacion.isGen}
+                setIsGen={cotizacion.setIsGen}
+                cargarCotizacionViva={cotizacion.cargarCotizacionViva}
+                handleGenerarPDF={handleGenerarPDF}
+                buildDetailsForLine={cotizacion.buildDetailsForLine}
+                subtotalBaseMXN={cotizacion.subtotalBaseMXN}
+                gananciaMonto={cotizacion.gananciaMonto}
+                subtotalConGananciaMXN={cotizacion.subtotalConGananciaMXN}
+                ivaMonto={cotizacion.ivaMonto}
+                totalFinal={cotizacion.totalFinal}
+              />
+
+              <QuoteDraftCard
+                draft={cotizacion.draft}
+                scheduleSave={cotizacion.scheduleSave}
+              />
+
+              <QuoteVersionsCard versions={cotizacion.versions} />
+            </div>
+          )}
+
+          {activeSection === "comunicacion" && (
+            <PedidoChatCard
+              chatMessages={chat.chatMessages}
+              newMessage={chat.newMessage}
+              setNewMessage={chat.setNewMessage}
+              handleSendMessage={chat.handleSendMessage}
+              chatEndRef={chat.chatEndRef}
+              nameByEmail={chat.nameByEmail}
+              user={user}
+            />
+          )}
+        </section>
       </div>
-
-      <SpecUpdatesCard
-        specUpdates={
-          specs.specUpdates
-        }
-        showSpecForm={
-          specs.showSpecForm
-        }
-        setShowSpecForm={
-          specs.setShowSpecForm
-        }
-        specDesc={
-          specs.specDesc
-        }
-        setSpecDesc={
-          specs.setSpecDesc
-        }
-        specFiles={
-          specs.specFiles
-        }
-        savingSpec={
-          specs.savingSpec
-        }
-        specInputRef={
-          specs.specInputRef
-        }
-        addSpecFiles={
-          specs.addSpecFiles
-        }
-        removeSpecFile={
-          specs.removeSpecFile
-        }
-        moveSpecFile={
-          specs.moveSpecFile
-        }
-        handleSpecSubmit={
-          specs.handleSpecSubmit
-        }
-      />
-
-      <EjecucionesCard
-        pedido={pedido}
-        ejecuciones={
-          ejecuciones.ejecuciones
-        }
-        loading={
-          ejecuciones.loadingEjecuciones
-        }
-        ejecucionSeleccionadaId={
-          ejecucionSeleccionada?.id ??
-          null
-        }
-        onCotizarEjecucion={
-          handleSeleccionarEjecucion
-        }
-      />
 
       <RepetirPedidoModal
-        open={
-          ejecuciones.showRepetirModal
-        }
+        open={ejecuciones.showRepetirModal}
         pedido={pedido}
-        nuevaFecha={
-          ejecuciones.nuevaFecha
-        }
-        setNuevaFecha={
-          ejecuciones.setNuevaFecha
-        }
-        notas={
-          ejecuciones.notas
-        }
-        setNotas={
-          ejecuciones.setNotas
-        }
-        creando={
-          ejecuciones.creandoEjecucion
-        }
-        onClose={
-          ejecuciones.cerrarModal
-        }
-        onConfirm={
-          ejecuciones.crearEjecucion
-        }
+        nuevaFecha={ejecuciones.nuevaFecha}
+        setNuevaFecha={ejecuciones.setNuevaFecha}
+        notas={ejecuciones.notas}
+        setNotas={ejecuciones.setNotas}
+        creando={ejecuciones.creandoEjecucion}
+        onClose={ejecuciones.cerrarModal}
+        onConfirm={ejecuciones.crearEjecucion}
       />
-
-      <div
-        id="cotizacion-pedido"
-        className="scroll-mt-24"
-      >
-        <div className="mt-6 rounded-2xl border border-emerald-400/20 bg-emerald-500/[0.06] px-5 py-4">
-          <div className="text-xs uppercase tracking-wide text-emerald-300/70">
-            Cotización seleccionada
-          </div>
-
-          <div className="mt-1 font-semibold text-white">
-            {etiquetaCotizacion}
-          </div>
-
-          <div className="mt-1 text-sm text-white/60">
-            {tituloCotizacion}
-          </div>
-
-          {!esCotizacionOriginal && (
-            <button
-              type="button"
-              onClick={() =>
-                setEjecucionSeleccionada(
-                  null
-                )
-              }
-              className="mt-3 rounded-xl border border-white/10 bg-white/[0.05] px-4 py-2 text-xs text-white/80 hover:bg-white/[0.09] transition"
-            >
-              Volver a la cotización original
-            </button>
-          )}
-        </div>
-
-        <CotizacionCard
-          pedido={pedido}
-          quoteMeta={
-            cotizacion.quoteMeta
-          }
-          quoteLines={
-            cotizacion.quoteLines
-          }
-          loadingQuote={
-            cotizacion.loadingQuote
-          }
-          draft={
-            cotizacion.draft
-          }
-          isGen={
-            cotizacion.isGen
-          }
-          setIsGen={
-            cotizacion.setIsGen
-          }
-          cargarCotizacionViva={
-            cotizacion.cargarCotizacionViva
-          }
-          handleGenerarPDF={
-            handleGenerarPDF
-          }
-          buildDetailsForLine={
-            cotizacion.buildDetailsForLine
-          }
-          subtotalBaseMXN={
-            cotizacion
-              .subtotalBaseMXN
-          }
-          gananciaMonto={
-            cotizacion.gananciaMonto
-          }
-          subtotalConGananciaMXN={
-            cotizacion
-              .subtotalConGananciaMXN
-          }
-          ivaMonto={
-            cotizacion.ivaMonto
-          }
-          totalFinal={
-            cotizacion.totalFinal
-          }
-        />
-
-        <QuoteDraftCard
-          draft={
-            cotizacion.draft
-          }
-          scheduleSave={
-            cotizacion.scheduleSave
-          }
-        />
-
-        <QuoteVersionsCard
-          versions={
-            cotizacion.versions
-          }
-        />
-      </div>
     </div>
   );
 }

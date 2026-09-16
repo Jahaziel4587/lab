@@ -10,7 +10,7 @@ type Props = {
 
 export default function QuoteDraftCard({ draft, scheduleSave }: Props) {
   return (
-    <div className={`mt-6 ${cardClass} ${cardPad}`}>
+    <div className={`${cardClass} ${cardPad}`}>
       <div>
         <h2 className="text-lg font-semibold text-white/90">
           Datos de cotización (draft)

@@ -24,7 +24,7 @@ export default function PedidoChatCard({
   user,
 }: Props) {
   return (
-    <div className={`${cardClass} ${cardPad} lg:col-span-3 flex min-w-0 flex-col`}>
+    <div className={`${cardClass} ${cardPad} flex min-w-0 flex-col`}>
       <div>
         <h2 className="text-lg font-semibold text-white/90">
           Canal de comunicación
@@ -34,7 +34,7 @@ export default function PedidoChatCard({
         </p>
       </div>
 
-      <div className="mt-4 flex min-h-[420px] max-h-[70dvh] flex-1 flex-col overflow-hidden rounded-2xl border border-white/10 bg-black/20 sm:min-h-[480px]">
+      <div className="mt-4 flex min-h-[300px] max-h-[58dvh] flex-1 flex-col overflow-hidden rounded-2xl border border-white/10 bg-black/20 sm:min-h-[360px]">
         <div className="flex-1 overflow-y-auto overscroll-contain p-3 sm:p-4 space-y-3">
           {chatMessages.length === 0 ? (
             <div className="flex min-h-48 items-center justify-center px-4">

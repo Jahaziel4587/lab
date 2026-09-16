@@ -31,7 +31,7 @@ export default function PedidoResumenCard({
   onCotizar,
 }: Props) {
   return (
-    <div className={`${cardClass} ${cardPad} lg:col-span-2 min-w-0`}>
+    <div className={`${cardClass} ${cardPad} min-w-0`}>
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
         <div className="min-w-0">
           <h2 className="text-lg font-semibold text-white/90">Resumen</h2>

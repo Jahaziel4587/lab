@@ -40,7 +40,7 @@ export default function CotizacionCard({
   totalFinal,
 }: Props) {
   return (
-    <div id="cotizacion-viva" className={`mt-6 ${cardClass} ${cardPad}`}>
+    <div id="cotizacion-viva" className={`${cardClass} ${cardPad}`}>
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-white/90">Cotización</h2>
