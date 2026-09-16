@@ -41,7 +41,7 @@ export default function SpecUpdatesCard({
   handleSpecSubmit,
 }: Props) {
   return (
-    <div className={`mt-6 ${cardClass} ${cardPad}`}>
+    <div className={`${cardClass} ${cardPad}`}>
       <div className="flex items-center justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold text-white/90">
