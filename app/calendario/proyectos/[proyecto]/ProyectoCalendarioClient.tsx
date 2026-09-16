@@ -11,6 +11,32 @@ import ProyectoPedidosTable from "./components/ProyectoPedidosTable";
 import ProyectoPagination from "./components/ProyectoPagination";
 import CompartirProyectoModal from "./components/CompartirProyectoModal";
 
+function monthKeyFromValue(value: any): string | null {
+  if (!value) return null;
+
+  if (typeof value === "string" && /^\d{4}-\d{2}/.test(value)) {
+    return value.slice(0, 7);
+  }
+
+  const date = value?.toDate?.() instanceof Date
+    ? value.toDate()
+    : new Date(value);
+
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function formatMonthLabel(key: string) {
+  const [year, month] = key.split("-").map(Number);
+  const label = new Date(year, month - 1, 1).toLocaleDateString("es-MX", {
+    month: "long",
+    year: "numeric",
+  });
+
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 export default function ProyectoCalendarioClient({
   proyecto,
 }: {
@@ -30,7 +56,6 @@ export default function ProyectoCalendarioClient({
     cargandoShare,
     guardandoShare,
     error,
-    totalProyectoMXN,
     actualizarCampo,
     toggleSeleccion,
     guardarCompartir,
@@ -41,16 +66,34 @@ export default function ProyectoCalendarioClient({
 );
 
   const [busqueda, setBusqueda] = useState("");
+  const [selectedMonth, setSelectedMonth] = useState("all");
   const [page, setPage] = useState(1);
   const [abiertoCompartir, setAbiertoCompartir] =
     useState(false);
 
-  const pedidosFiltrados = useMemo(() => {
-    const query = busqueda.trim().toLowerCase();
+  const availableMonths = useMemo(() => {
+    return Array.from(
+      new Set(
+        pedidos
+          .map((pedido) => monthKeyFromValue(pedido.fechaEntregaReal))
+          .filter((month): month is string => Boolean(month))
+      )
+    ).sort((a, b) => b.localeCompare(a));
+  }, [pedidos]);
 
-    if (!query) return pedidos;
+  const pedidosFiltrados = useMemo(() => {
+    const searchQuery = busqueda.trim().toLowerCase();
 
     return pedidos.filter((pedido) => {
+      if (
+        selectedMonth !== "all" &&
+        monthKeyFromValue(pedido.fechaEntregaReal) !== selectedMonth
+      ) {
+        return false;
+      }
+
+      if (!searchQuery) return true;
+
       const titulo = String(pedido.titulo || "").toLowerCase();
       const id = String(pedido.id || "").toLowerCase();
 
@@ -59,16 +102,25 @@ export default function ProyectoCalendarioClient({
       ).toLowerCase();
 
       return (
-        titulo.includes(query) ||
-        id.includes(query) ||
-        solicitante.includes(query)
+        titulo.includes(searchQuery) ||
+        id.includes(searchQuery) ||
+        solicitante.includes(searchQuery)
       );
     });
-  }, [pedidos, busqueda]);
+  }, [pedidos, busqueda, selectedMonth]);
+
+  const totalFiltradoMXN = useMemo(
+    () =>
+      pedidosFiltrados.reduce(
+        (sum, pedido) => sum + Number(pedido.subtotalBaseMXN || 0),
+        0
+      ),
+    [pedidosFiltrados]
+  );
 
   useEffect(() => {
     setPage(1);
-  }, [busqueda, proyecto]);
+  }, [busqueda, selectedMonth, proyecto]);
 
   const totalPages = Math.max(
     1,
@@ -146,19 +198,37 @@ if (!user) {
     <div className="mx-auto max-w-7xl px-4 sm:px-8 py-10 text-white">
      <ProyectoHeader
   proyecto={proyecto}
-  totalProyectoMXN={totalProyectoMXN}
+  totalProyectoMXN={totalFiltradoMXN}
   isAdmin={Boolean(isAdmin)}
   onCompartir={() => setAbiertoCompartir(true)}
 />
 
       <div className="mt-6 rounded-3xl border border-white/10 bg-white/[0.05] backdrop-blur-2xl ring-1 ring-white/5 shadow-[0_20px_90px_-70px_rgba(0,0,0,0.95)] p-4 sm:p-5">
-        <div className="flex flex-col md:flex-row gap-3 md:items-center md:justify-between">
-          <SearchInput
-            value={busqueda}
-            onChange={setBusqueda}
-            placeholder="Buscar por título, solicitante o ID..."
-            className="w-full md:max-w-lg"
-          />
+        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+          <div className="flex w-full flex-col gap-3 sm:flex-row md:max-w-3xl">
+            <SearchInput
+              value={busqueda}
+              onChange={setBusqueda}
+              placeholder="Buscar por título, solicitante o ID..."
+              className="w-full sm:flex-1"
+            />
+
+            <label className="flex shrink-0 flex-col gap-1.5 text-xs font-medium text-white/60">
+              Filtrar por mes de entrega real
+              <select
+                value={selectedMonth}
+                onChange={(event) => setSelectedMonth(event.target.value)}
+                className="min-h-12 w-full rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm font-semibold text-white outline-none transition hover:bg-white/[0.08] focus:border-emerald-400/40 sm:w-[220px] [&>option]:bg-zinc-950"
+              >
+                <option value="all">Todos los meses</option>
+                {availableMonths.map((month) => (
+                  <option key={month} value={month}>
+                    {formatMonthLabel(month)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
 
           <div className="text-sm text-white/60">
             Mostrando{" "}
@@ -177,7 +247,7 @@ if (!user) {
           </p>
         ) : pedidosFiltrados.length === 0 ? (
           <p className="text-white/70">
-            No hay resultados para esa búsqueda.
+            No hay pedidos para la búsqueda y el mes seleccionados.
           </p>
         ) : (
           <>
@@ -185,7 +255,7 @@ if (!user) {
             pedidos={pedidosPaginados}
             page={pageSafe}
             totalPages={totalPages}
-            totalProyectoMXN={totalProyectoMXN}
+            totalProyectoMXN={totalFiltradoMXN}
             isAdmin={Boolean(isAdmin)}
             onActualizarCampo={actualizarCampo}
             />
