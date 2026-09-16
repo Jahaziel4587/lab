@@ -54,7 +54,7 @@ export default function EjecucionesCard({
   };
 
   return (
-    <div className={`mt-6 ${cardClass} ${cardPad}`}>
+    <div className={`${cardClass} ${cardPad}`}>
       <div>
         <h2 className="text-lg font-semibold text-white/90">
           Ejecuciones del pedido
