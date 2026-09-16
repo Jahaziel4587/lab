@@ -32,7 +32,7 @@ export default function ClientLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, logout, isAdmin, displayName } = useAuth();
+  const { user, isAdmin, displayName } = useAuth();
   const nombreUsuario = displayName || user?.email || "";
 
   const [userNotis, setUserNotis] = useState<NotiItem[]>([]);
@@ -199,27 +199,7 @@ export default function ClientLayout({
 
   const cerrarMenu = () => setMenuAbierto(false);
 
-  const handleIconClick = async () => {
-    if (!user) {
-      window.location.href = "/login";
-      return;
-    }
 
-    const confirmarCierre = window.confirm(
-      "¿Estás seguro de que quieres cerrar sesión?",
-    );
-
-    if (!confirmarCierre) return;
-
-    try {
-      await logout();
-    } catch (error) {
-      console.error("No fue posible cerrar la sesión:", error);
-      window.alert(
-        "No fue posible cerrar la sesión. Inténtalo nuevamente.",
-      );
-    }
-  };
 
   const mobileLinkClass =
     "min-h-12 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-white/75 transition hover:bg-white/[0.07] hover:text-white active:bg-white/[0.10] flex items-center";
@@ -435,23 +415,26 @@ export default function ClientLayout({
               </span>
             )}
 
-            <div className="relative group">
-              <button
-                type="button"
-                onClick={handleIconClick}
-                aria-label={user ? "Cerrar sesión" : "Iniciar sesión"}
-                title={user ? "Cerrar sesión" : "Iniciar sesión"}
-                className="w-11 h-11 sm:w-9 sm:h-9 rounded-2xl border border-white/10 bg-white/[0.04] text-white flex items-center justify-center hover:bg-white/[0.07] active:bg-white/[0.10] transition"
-              >
-                <FiUser />
-              </button>
+           <div className="relative group">
+  <Link
+    href={user ? "/cuenta" : "/login"}
+    aria-label={user ? "Mi cuenta" : "Iniciar sesión"}
+    title={user ? "Mi cuenta" : "Iniciar sesión"}
+    onClick={() => {
+      setPanelAbierto(false);
+      setMenuAbierto(false);
+    }}
+    className="w-11 h-11 sm:w-9 sm:h-9 rounded-2xl border border-white/10 bg-white/[0.04] text-white flex items-center justify-center hover:bg-white/[0.07] active:bg-white/[0.10] transition"
+  >
+    <FiUser />
+  </Link>
 
-              <div className="absolute right-0 mt-2 hidden group-hover:flex flex-col z-50">
-                <div className="bg-black/80 backdrop-blur-xl border border-white/10 text-white text-xs px-3 py-2 rounded-xl shadow-lg pointer-events-none whitespace-nowrap">
-                  {user ? "Cerrar sesión" : "Iniciar sesión"}
-                </div>
-              </div>
-            </div>
+  <div className="absolute right-0 mt-2 hidden group-hover:flex flex-col z-50">
+    <div className="bg-black/80 backdrop-blur-xl border border-white/10 text-white text-xs px-3 py-2 rounded-xl shadow-lg pointer-events-none whitespace-nowrap">
+      {user ? "Mi cuenta" : "Iniciar sesión"}
+    </div>
+  </div>
+</div>
 
             <button
               type="button"
