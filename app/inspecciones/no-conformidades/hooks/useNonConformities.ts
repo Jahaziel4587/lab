@@ -965,14 +965,6 @@ const [
           );
         }
 
-        if (
-          input.photos.length === 0
-        ) {
-          throw new Error(
-            "Agrega al menos una fotografía.",
-          );
-        }
-
         const duplicatedSample =
           reports.some(
             (report) =>
