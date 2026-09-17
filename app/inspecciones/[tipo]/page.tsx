@@ -1247,9 +1247,15 @@ export default function InspectionTypePage() {
 
         return (
           <AnomalyThread
-            anomaly={
-              anomalyThreadState.anomaly
-            }
+  anomaly={
+    anomalyThreadState.anomaly
+  }
+  componentName={
+    selectedProcessComponent
+      ?.title ||
+    selectedWi?.title ||
+    ""
+  }
             occurrences={
               anomalyThreadState.occurrences
             }

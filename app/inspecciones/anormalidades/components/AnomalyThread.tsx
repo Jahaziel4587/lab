@@ -12,6 +12,7 @@ import {
   Image as ImageIcon,
   LoaderCircle,
   MessageCircle,
+  FileDown,
   Plus,
   Send,
   X,
@@ -35,6 +36,9 @@ import type {
   AnomalyOccurrence,
   InspectionAnomaly,
 } from "../types";
+
+import AnomalyPdfDialog from
+  "./AnomalyPdfDialog";
 
 type RoutingSelection = {
   occurrenceId: string;
@@ -60,6 +64,7 @@ type Props = {
   addingOccurrencePhotos: boolean;
   routingOccurrence: boolean;
   savingDecision: boolean;
+    componentName: string;
   onSendMessage: (
     text: string,
   ) => Promise<void>;
@@ -173,6 +178,7 @@ export default function AnomalyThread({
   responsiblePms,
   loadingPms,
   canDecide,
+  componentName,
   sending,
   savingOccurrence,
   addingOccurrencePhotos,
@@ -212,7 +218,10 @@ export default function AnomalyThread({
     reportOpen,
     setReportOpen,
   ] = useState(false);
-
+  const [
+    pdfDialogOpen,
+    setPdfDialogOpen,
+  ] = useState(false);
   const [
     routingSelection,
     setRoutingSelection,
@@ -365,6 +374,36 @@ export default function AnomalyThread({
           </div>
 
           <div className="grid w-full grid-cols-1 gap-2 sm:flex sm:w-auto sm:flex-wrap">
+                        <button
+              type="button"
+              onClick={() =>
+                setPdfDialogOpen(
+                  true,
+                )
+              }
+              disabled={
+                occurrences.length ===
+                0
+              }
+              className="inline-flex
+                min-h-11 w-full
+                items-center
+                justify-center gap-2
+                rounded-xl border
+                border-emerald-400/30
+                bg-emerald-400/10
+                px-4 text-sm
+                font-medium
+                text-emerald-200
+                transition
+                hover:bg-emerald-400/15
+                disabled:cursor-not-allowed
+                disabled:opacity-40
+                sm:min-h-10 sm:w-auto"
+            >
+              <FileDown size={16} />
+              Generar PDF
+            </button>
             <button
               type="button"
               onClick={() =>
@@ -898,7 +937,22 @@ export default function AnomalyThread({
           }
         }}
       />
-
+      {pdfDialogOpen && (
+        <AnomalyPdfDialog
+          anomaly={anomaly}
+          occurrences={
+            occurrences
+          }
+          componentName={
+            componentName
+          }
+          onClose={() =>
+            setPdfDialogOpen(
+              false,
+            )
+          }
+        />
+      )}
       {decisionOpen &&
         canDecide &&
         !isResolved && (
