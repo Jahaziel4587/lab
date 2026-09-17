@@ -521,7 +521,7 @@ export async function generateNonConformityPdf({
   };
 
   page.drawText(
-    "REPORTE DE NO CONFORMIDADES",
+    "REPORTE OPERACIONAL DE NO CONFORMIDADES",
     {
       x: MARGIN_X,
       y,
