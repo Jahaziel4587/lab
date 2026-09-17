@@ -53,6 +53,8 @@ import FindingTypeSelector from
   "../components/FindingTypeSelector";
 import InspectionOptionCard from
   "../components/InspectionOptionCard";
+import InspectionFlowProgress from
+  "../components/InspectionFlowProgress";
 import ProcessComponentList from
   "../components/ProcessComponentList";
 
@@ -2142,6 +2144,70 @@ export default function InspectionTypePage() {
     );
   };
 
+  const getFlowProgress = () => {
+    if (isEntrada && origin === "mts") {
+      return {
+        steps: [
+          "Origen",
+          "Componente MTS",
+          "Tipo de hallazgo",
+          "Registro",
+        ],
+        currentStep:
+          findingType
+            ? 4
+            : wiId
+              ? 3
+              : 2,
+      };
+    }
+
+    if (isEntrada) {
+      return {
+        steps: [
+          "Origen",
+          "Proyecto",
+          "Componente",
+          "Tipo de hallazgo",
+          "Registro",
+        ],
+        currentStep:
+          findingType
+            ? 5
+            : wiId
+              ? 4
+              : projectId
+                ? 3
+                : origin === "proyectos"
+                  ? 2
+                  : 1,
+      };
+    }
+
+    return {
+      steps: [
+        "Proyecto",
+        "Work instruction",
+        "Componente",
+        "Tipo de hallazgo",
+        "Registro",
+      ],
+      currentStep:
+        findingType
+          ? 5
+          : processComponentId
+            ? 4
+            : wiId
+              ? 3
+              : projectId
+                ? 2
+                : 1,
+    };
+  };
+
+  const flowProgress =
+    getFlowProgress();
+
   return (
     <main className={inspectionPageClass}>
       <button
@@ -2160,6 +2226,13 @@ export default function InspectionTypePage() {
           `${inspectionPanelClass} mt-5`
         }
       >
+        <InspectionFlowProgress
+          steps={flowProgress.steps}
+          currentStep={
+            flowProgress.currentStep
+          }
+        />
+
         <p
           className="text-xs font-semibold
             uppercase tracking-[0.22em]
