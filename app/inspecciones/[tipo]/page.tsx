@@ -31,6 +31,21 @@ import type { InspectionAnomaly } from
 import { buildAnomalyContext } from
   "../anormalidades/utils";
 
+import NonConformityList from
+  "../no-conformidades/components/NonConformityList";
+import NonConformityLotDetail from
+  "../no-conformidades/components/NonConformityLotDetail";
+import NonConformityLotForm from
+  "../no-conformidades/components/NonConformityLotForm";
+import NonConformityReportForm from
+  "../no-conformidades/components/NonConformityReportForm";
+import { useNonConformities } from
+  "../no-conformidades/hooks/useNonConformities";
+import type { NonConformityLot } from
+  "../no-conformidades/types";
+import { buildNonConformityContext } from
+  "../no-conformidades/utils";
+
 import CatalogList, {
   type CatalogListItem,
 } from "../components/CatalogList";
@@ -82,6 +97,8 @@ export default function InspectionTypePage() {
     searchParams.get("anomalia");
   const reportSent =
     searchParams.get("enviado") === "1";
+  const nonConformityLotId =
+    searchParams.get("lote");
 
   const validInspectionType =
     isInspectionType(tipo);
@@ -278,6 +295,50 @@ export default function InspectionTypePage() {
         ),
     });
 
+  const nonConformityContext =
+    useMemo(
+      () =>
+        buildNonConformityContext({
+          isEntrada,
+          origin,
+          projectId,
+          projectName:
+            selectedProject?.title,
+          wiCode:
+            selectedWi?.id,
+          wiTitle:
+            selectedWi?.title,
+          processComponentId,
+          processComponentTitle:
+            selectedProcessComponent?.title,
+        }),
+      [
+        isEntrada,
+        origin,
+        projectId,
+        selectedProject?.title,
+        selectedWi?.id,
+        selectedWi?.title,
+        processComponentId,
+        selectedProcessComponent?.title,
+      ],
+    );
+
+  const nonConformitiesState =
+    useNonConformities({
+      context:
+        nonConformityContext,
+      selectedLotId:
+        nonConformityLotId,
+      enabled:
+        validInspectionType &&
+        findingType ===
+          "no_conformidad" &&
+        Boolean(
+          nonConformityContext,
+        ),
+    });
+
   /*
    * Todos los hooks están antes de esta
    * validación para respetar las reglas
@@ -362,6 +423,59 @@ export default function InspectionTypePage() {
   };
 
   const goBack = () => {
+    if (
+      findingType ===
+        "no_conformidad" &&
+      anomalyAction ===
+        "nueva_muestra" &&
+      nonConformityLotId
+    ) {
+      const query =
+        buildCurrentQuery();
+
+      query.set(
+        "lote",
+        nonConformityLotId,
+      );
+
+      router.push(
+        `/inspecciones/${tipo}` +
+          `?${query.toString()}`,
+      );
+      return;
+    }
+
+    if (
+      findingType ===
+        "no_conformidad" &&
+      nonConformityLotId
+    ) {
+      const query =
+        buildCurrentQuery();
+
+      router.push(
+        `/inspecciones/${tipo}` +
+          `?${query.toString()}`,
+      );
+      return;
+    }
+
+    if (
+      findingType ===
+        "no_conformidad" &&
+      anomalyAction ===
+        "nuevo_lote"
+    ) {
+      const query =
+        buildCurrentQuery();
+
+      router.push(
+        `/inspecciones/${tipo}` +
+          `?${query.toString()}`,
+      );
+      return;
+    }
+
     /*
      * Chat o detalle de una anormalidad
      * → lista de anormalidades.
@@ -744,6 +858,143 @@ export default function InspectionTypePage() {
       );
     };
 
+  const openNewNonConformityLot =
+    () => {
+      const query =
+        buildCurrentQuery();
+
+      query.set(
+        "accion",
+        "nuevo_lote",
+      );
+      query.delete("lote");
+
+      router.push(
+        `/inspecciones/${tipo}` +
+          `?${query.toString()}`,
+      );
+    };
+
+  const cancelNewNonConformityLot =
+    () => {
+      const query =
+        buildCurrentQuery();
+
+      router.push(
+        `/inspecciones/${tipo}` +
+          `?${query.toString()}`,
+      );
+    };
+
+  const submitNewNonConformityLot =
+    async (
+      input: Parameters<
+        typeof nonConformitiesState.createLot
+      >[0],
+    ) => {
+      const result =
+        await nonConformitiesState
+          .createLot(input);
+
+      const query =
+        buildCurrentQuery();
+
+      query.set(
+        "lote",
+        result.lotId,
+      );
+
+      router.replace(
+        `/inspecciones/${tipo}` +
+          `?${query.toString()}`,
+      );
+    };
+
+  const selectNonConformityLot = (
+    lot: NonConformityLot,
+  ) => {
+    const query =
+      buildCurrentQuery();
+
+    query.set("lote", lot.id);
+
+    router.push(
+      `/inspecciones/${tipo}` +
+        `?${query.toString()}`,
+    );
+  };
+
+  const openNewNonConformityReport =
+    () => {
+      if (!nonConformityLotId) {
+        return;
+      }
+
+      const query =
+        buildCurrentQuery();
+
+      query.set(
+        "lote",
+        nonConformityLotId,
+      );
+      query.set(
+        "accion",
+        "nueva_muestra",
+      );
+
+      router.push(
+        `/inspecciones/${tipo}` +
+          `?${query.toString()}`,
+      );
+    };
+
+  const cancelNewNonConformityReport =
+    () => {
+      if (!nonConformityLotId) {
+        return;
+      }
+
+      const query =
+        buildCurrentQuery();
+
+      query.set(
+        "lote",
+        nonConformityLotId,
+      );
+
+      router.push(
+        `/inspecciones/${tipo}` +
+          `?${query.toString()}`,
+      );
+    };
+
+  const submitNewNonConformityReport =
+    async (
+      input: Parameters<
+        typeof nonConformitiesState.addReport
+      >[0],
+    ) => {
+      await nonConformitiesState
+        .addReport(input);
+
+      if (!nonConformityLotId) {
+        return;
+      }
+
+      const query =
+        buildCurrentQuery();
+
+      query.set(
+        "lote",
+        nonConformityLotId,
+      );
+
+      router.replace(
+        `/inspecciones/${tipo}` +
+          `?${query.toString()}`,
+      );
+    };
+
   const renderLoading = (
     message: string,
   ) => (
@@ -1108,6 +1359,171 @@ export default function InspectionTypePage() {
       );
     };
 
+  const renderNonConformityContent =
+    () => {
+      if (!nonConformityContext) {
+        return renderError(
+          "Falta información del componente inspeccionado.",
+        );
+      }
+
+      if (
+        nonConformitiesState.loading
+      ) {
+        return renderLoading(
+          "Cargando lotes...",
+        );
+      }
+
+      if (
+        nonConformitiesState.error &&
+        !nonConformityLotId
+      ) {
+        return renderError(
+          nonConformitiesState.error,
+        );
+      }
+
+      if (
+        anomalyAction ===
+        "nuevo_lote"
+      ) {
+        return (
+          <NonConformityLotForm
+            sourceType={
+              nonConformityContext
+                .sourceType
+            }
+            responsiblePms={
+              nonConformitiesState
+                .responsiblePms
+            }
+            loadingPms={
+              nonConformitiesState
+                .loadingPms
+            }
+            saving={
+              nonConformitiesState
+                .creatingLot
+            }
+            onSubmit={
+              submitNewNonConformityLot
+            }
+            onCancel={
+              cancelNewNonConformityLot
+            }
+          />
+        );
+      }
+
+      if (nonConformityLotId) {
+        const selectedLot =
+          nonConformitiesState
+            .selectedLot;
+
+        if (!selectedLot) {
+          return renderError(
+            "El lote solicitado no existe o ya no está disponible.",
+          );
+        }
+
+        if (
+          anomalyAction ===
+          "nueva_muestra"
+        ) {
+          if (
+            selectedLot.status ===
+            "finalized"
+          ) {
+            return renderError(
+              "Este lote ya fue finalizado y no admite nuevos reportes.",
+            );
+          }
+
+          return (
+            <NonConformityReportForm
+              lotName={
+                selectedLot.lotName
+              }
+              sampleQuantity={
+                selectedLot
+                  .sampleQuantity
+              }
+              existingSampleNumbers={
+                nonConformitiesState
+                  .reports
+                  .map(
+                    (report) =>
+                      report.sampleNumber,
+                  )
+              }
+              saving={
+                nonConformitiesState
+                  .savingReport
+              }
+              onSubmit={
+                submitNewNonConformityReport
+              }
+              onCancel={
+                cancelNewNonConformityReport
+              }
+            />
+          );
+        }
+
+        return (
+          <NonConformityLotDetail
+            lot={selectedLot}
+            reports={
+              nonConformitiesState
+                .reports
+            }
+            loading={
+              nonConformitiesState
+                .loadingReports
+            }
+            finalizing={
+              nonConformitiesState
+                .finalizing
+            }
+            canEdit={
+              nonConformitiesState
+                .canEditSelectedLot
+            }
+            onAddReport={
+              openNewNonConformityReport
+            }
+            onFinalize={
+              async () => {
+                await nonConformitiesState
+                  .finalizeLot();
+              }
+            }
+          />
+        );
+      }
+
+      return (
+        <NonConformityList
+          lots={
+            nonConformitiesState.lots
+          }
+          loading={
+            nonConformitiesState.loading
+          }
+          error={
+            nonConformitiesState.error
+          }
+          onSelect={
+            selectNonConformityLot
+          }
+          onAdd={
+            openNewNonConformityLot
+          }
+        />
+      );
+    };
+
   const renderContent = () => {
     /*
      * Inicio de Entrada.
@@ -1359,37 +1775,15 @@ export default function InspectionTypePage() {
       return renderAnomalyContent();
     }
 
-    /*
-     * No conformidades permanecen pendientes.
-     */
     if (
       findingType === "no_conformidad" &&
-      selectedWi
+      selectedWi &&
+      (
+        isEntrada ||
+        selectedProcessComponent
+      )
     ) {
-      return (
-        <div
-          className="rounded-2xl border
-            border-emerald-400/20
-            bg-emerald-400/[0.06] p-6"
-        >
-          <p
-            className="text-xs font-semibold
-              uppercase tracking-wider
-              text-emerald-300"
-          >
-            No conformidad
-          </p>
-
-          <p
-            className="mt-3 text-sm
-              text-white/65"
-          >
-            En el siguiente módulo
-            construiremos el registro
-            de lotes.
-          </p>
-        </div>
-      );
+      return renderNonConformityContent();
     }
 
     /*
@@ -1560,6 +1954,30 @@ export default function InspectionTypePage() {
     if (
       findingType === "no_conformidad"
     ) {
+      if (
+        anomalyAction ===
+        "nuevo_lote"
+      ) {
+        return "Agregar lote";
+      }
+
+      if (
+        anomalyAction ===
+          "nueva_muestra" &&
+        nonConformitiesState
+          .selectedLot
+      ) {
+        return "Registrar muestra rechazada";
+      }
+
+      if (
+        nonConformitiesState
+          .selectedLot
+      ) {
+        return nonConformitiesState
+          .selectedLot.lotName;
+      }
+
       return "No conformidades";
     }
 
@@ -1634,9 +2052,41 @@ export default function InspectionTypePage() {
     if (
       findingType === "no_conformidad"
     ) {
+      if (
+        anomalyAction ===
+        "nuevo_lote"
+      ) {
+        return (
+          "Agrega el nombre del lote, la " +
+          "cantidad de muestras y el responsable."
+        );
+      }
+
+      if (
+        anomalyAction ===
+          "nueva_muestra" &&
+        nonConformitiesState
+          .selectedLot
+      ) {
+        return (
+          "Registra el número de muestra, " +
+          "la descripción y la evidencia fotográfica."
+        );
+      }
+
+      if (
+        nonConformitiesState
+          .selectedLot
+      ) {
+        return (
+          "Consulta las muestras rechazadas " +
+          "o continúa registrando el lote."
+        );
+      }
+
       return (
-        "Registro y consulta de " +
-        "no conformidades."
+        "Selecciona un lote existente o " +
+        "crea uno nuevo para comenzar."
       );
     }
 
