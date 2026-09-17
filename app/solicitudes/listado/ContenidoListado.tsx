@@ -16,6 +16,32 @@ import { useAuth } from "../../../src/Context/AuthContext";
 import Link from "next/link";
 import { FiArrowLeft, FiSearch, FiX } from "react-icons/fi";
 
+function monthKeyFromValue(value: any): string | null {
+  if (!value) return null;
+
+  if (typeof value === "string" && /^\d{4}-\d{2}/.test(value)) {
+    return value.slice(0, 7);
+  }
+
+  const date = value?.toDate?.() instanceof Date
+    ? value.toDate()
+    : new Date(value);
+
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return null;
+
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+}
+
+function formatMonthLabel(key: string) {
+  const [year, month] = key.split("-").map(Number);
+  const label = new Date(year, month - 1, 1).toLocaleDateString("es-MX", {
+    month: "long",
+    year: "numeric",
+  });
+
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 export default function ListadoPedidosPage() {
   const searchParams = useSearchParams();
   const proyectoSeleccionado = searchParams.get("proyecto");
@@ -26,6 +52,7 @@ export default function ListadoPedidosPage() {
   const [esCompartidoConmigo, setEsCompartidoConmigo] = useState(false);
   const [nameByEmail, setNameByEmail] = useState<Record<string, string>>({});
   const [busqueda, setBusqueda] = useState("");
+  const [selectedMonth, setSelectedMonth] = useState("all");
 
   const PAGE_SIZE = 7;
   const [page, setPage] = useState(1);
@@ -304,28 +331,46 @@ export default function ListadoPedidosPage() {
     );
   };
 
+  const availableMonths = useMemo(() => {
+    return Array.from(
+      new Set(
+        pedidos
+          .map((pedido: any) => monthKeyFromValue(pedido.fechaEntregaReal))
+          .filter((month): month is string => Boolean(month))
+      )
+    ).sort((a, b) => b.localeCompare(a));
+  }, [pedidos]);
+
   const pedidosFiltrados = useMemo(() => {
     const q = busqueda.trim().toLowerCase();
-    if (!q) return pedidos;
 
     return pedidos.filter((p: any) => {
+      if (
+        selectedMonth !== "all" &&
+        monthKeyFromValue(p.fechaEntregaReal) !== selectedMonth
+      ) {
+        return false;
+      }
+
+      if (!q) return true;
+
       const titulo = String(p?.titulo || "").toLowerCase();
       const id = String(p?.id || "").toLowerCase();
       return titulo.includes(q) || id.includes(q);
     });
-  }, [pedidos, busqueda]);
+  }, [pedidos, busqueda, selectedMonth]);
 
   useEffect(() => {
     setPage(1);
-  }, [busqueda, proyectoSeleccionado]);
+  }, [busqueda, selectedMonth, proyectoSeleccionado]);
 
   const totalGastadoProyecto = useMemo(
     () =>
-      pedidos.reduce(
+      pedidosFiltrados.reduce(
         (acc, p: any) => acc + (Number(p?.costoBaseProyecto) || 0),
         0,
       ),
-    [pedidos],
+    [pedidosFiltrados],
   );
 
   const totalPages = Math.max(
@@ -396,26 +441,47 @@ export default function ListadoPedidosPage() {
         </div>
 
         <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.05] p-3 backdrop-blur-sm ring-1 ring-white/5 sm:mt-6 sm:rounded-3xl sm:p-5 sm:backdrop-blur-2xl sm:shadow-[0_20px_90px_-70px_rgba(0,0,0,0.95)]">
-          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            <div className="relative w-full md:max-w-lg">
-              <FiSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
-              <input
-                type="text"
-                value={busqueda}
-                onChange={(e) => setBusqueda(e.target.value)}
-                placeholder="Buscar por título o ID..."
-                className="min-h-12 w-full rounded-xl border border-white/10 bg-white/[0.05] py-3 pl-10 pr-10 text-base text-white placeholder:text-white/35 focus:outline-none focus:ring-2 focus:ring-emerald-400/25 sm:rounded-2xl sm:text-sm"
-              />
-              {busqueda.trim() !== "" && (
-                <button
-                  type="button"
-                  onClick={() => setBusqueda("")}
-                  className="absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center text-white/60 hover:text-white"
-                  title="Limpiar búsqueda"
+          <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+            <div className="flex w-full flex-col gap-3 sm:flex-row md:max-w-3xl">
+              <label className="flex min-w-0 flex-1 flex-col gap-1.5 text-xs font-medium text-white/60">
+                Buscar pedidos
+                <div className="relative w-full">
+                  <FiSearch className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-white/40" />
+                  <input
+                    type="text"
+                    value={busqueda}
+                    onChange={(e) => setBusqueda(e.target.value)}
+                    placeholder="Buscar por título o ID..."
+                    className="min-h-12 w-full rounded-xl border border-white/10 bg-white/[0.05] py-3 pl-10 pr-10 text-base text-white placeholder:text-white/35 focus:outline-none focus:ring-2 focus:ring-emerald-400/25 sm:rounded-2xl sm:text-sm"
+                  />
+                  {busqueda.trim() !== "" && (
+                    <button
+                      type="button"
+                      onClick={() => setBusqueda("")}
+                      className="absolute right-2 top-1/2 flex h-10 w-10 -translate-y-1/2 items-center justify-center text-white/60 hover:text-white"
+                      title="Limpiar búsqueda"
+                    >
+                      <FiX />
+                    </button>
+                  )}
+                </div>
+              </label>
+
+              <label className="flex shrink-0 flex-col gap-1.5 text-xs font-medium text-white/60">
+                Filtrar por mes de entrega real
+                <select
+                  value={selectedMonth}
+                  onChange={(event) => setSelectedMonth(event.target.value)}
+                  className="min-h-12 w-full rounded-xl border border-white/10 bg-white/[0.05] px-4 py-3 text-sm font-semibold text-white outline-none transition hover:bg-white/[0.08] focus:border-emerald-400/40 sm:w-[220px] [&>option]:bg-zinc-950"
                 >
-                  <FiX />
-                </button>
-              )}
+                  <option value="all">Todos los meses</option>
+                  {availableMonths.map((month) => (
+                    <option key={month} value={month}>
+                      {formatMonthLabel(month)}
+                    </option>
+                  ))}
+                </select>
+              </label>
             </div>
 
             <div className="text-sm text-white/60">
@@ -435,7 +501,7 @@ export default function ListadoPedidosPage() {
             </p>
           ) : pedidosFiltrados.length === 0 ? (
             <p className="text-white/70">
-              No hay resultados para esa búsqueda.
+              No hay pedidos para la búsqueda y el mes seleccionados.
             </p>
           ) : (
             <>
