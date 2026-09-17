@@ -24,6 +24,34 @@ const AuthContext = createContext<AuthContextType>({
   displayName: "",
 });
 
+const PUSH_TOKEN_STORAGE_KEY = "bioana_fcm_token";
+
+async function updatePushDevice(
+  currentUser: User,
+  method: "POST" | "DELETE",
+) {
+  const pushToken = localStorage.getItem(PUSH_TOKEN_STORAGE_KEY);
+  if (!pushToken) return;
+
+  const idToken = await currentUser.getIdToken();
+  const response = await fetch("/api/notifications/register-device", {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${idToken}`,
+    },
+    body: JSON.stringify({ token: pushToken }),
+  });
+
+  if (!response.ok) {
+    throw new Error(
+      method === "POST"
+        ? "No se pudo asociar el dispositivo a la sesión actual"
+        : "No se pudo desvincular el dispositivo de la sesión",
+    );
+  }
+}
+
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -39,6 +67,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         setLoading(false);
         return;
       }
+
+      // El token pertenece al dispositivo, por lo que hay que reasignarlo
+      // cada vez que cambia la cuenta autenticada en este navegador.
+      updatePushDevice(u, "POST").catch((error) => {
+        console.error("Error sincronizando notificaciones push:", error);
+      });
 
       try {
         // 1) Claims (admin true/false)
@@ -76,8 +110,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   const logout = async () => {
-    await signOut(auth);
-    window.location.href = "/login";
+    const currentUser = auth.currentUser;
+
+    try {
+      if (currentUser) {
+        await updatePushDevice(currentUser, "DELETE");
+      }
+    } catch (error) {
+      console.error("Error desvinculando notificaciones push:", error);
+    } finally {
+      await signOut(auth);
+      window.location.href = "/login";
+    }
   };
 
   return (
