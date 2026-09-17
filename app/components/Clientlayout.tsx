@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "../../src/Context/AuthContext";
 import { FiUser, FiBell, FiMenu, FiX } from "react-icons/fi";
 import {
@@ -32,7 +33,10 @@ export default function ClientLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, isAdmin, displayName } = useAuth();
+  const pathname = usePathname();
+  const router = useRouter();
+  const { user, isAdmin, displayName, loading: authLoading } = useAuth();
+  const isLoginPage = pathname === "/login";
   const nombreUsuario = displayName || user?.email || "";
 
   const [userNotis, setUserNotis] = useState<NotiItem[]>([]);
@@ -57,6 +61,12 @@ export default function ClientLayout({
   }, [userNotis, adminNotis, isAdmin]);
 
   const unreadCount = notificaciones.filter((n) => !n.leido).length;
+
+  useEffect(() => {
+    if (!authLoading && !user && !isLoginPage) {
+      router.replace("/login");
+    }
+  }, [authLoading, isLoginPage, router, user]);
 
   useEffect(() => {
     if (!user?.email) {
@@ -203,6 +213,26 @@ export default function ClientLayout({
 
   const mobileLinkClass =
     "min-h-12 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-white/75 transition hover:bg-white/[0.07] hover:text-white active:bg-white/[0.10] flex items-center";
+
+  if (authLoading || (!user && !isLoginPage)) {
+    return (
+      <div className="min-h-screen bg-neutral-950 text-white flex items-center justify-center px-6">
+        <div className="flex flex-col items-center gap-4 text-center">
+          <div
+            className="h-10 w-10 animate-spin rounded-full border-2 border-white/15 border-t-emerald-400"
+            aria-hidden="true"
+          />
+          <p className="text-sm text-white/60">
+            {authLoading ? "Verificando sesión..." : "Redirigiendo al inicio de sesión..."}
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  if (isLoginPage) {
+    return <>{children}</>;
+  }
 
   return (
     <div className="min-h-screen text-white relative bg-neutral-950 overflow-x-hidden">
