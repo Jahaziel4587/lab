@@ -57,6 +57,7 @@ type Props = {
   canDecide: boolean;
   sending: boolean;
   savingOccurrence: boolean;
+  addingOccurrencePhotos: boolean;
   routingOccurrence: boolean;
   savingDecision: boolean;
   onSendMessage: (
@@ -66,6 +67,10 @@ type Props = {
     input:
       NewAnomalyReportInput,
   ) => Promise<unknown>;
+  onAddOccurrencePhotos: (
+    occurrenceId: string,
+    photos: File[],
+  ) => Promise<void>;
   onSaveDecision: (input: {
     title: string;
     decision:
@@ -170,10 +175,12 @@ export default function AnomalyThread({
   canDecide,
   sending,
   savingOccurrence,
+  addingOccurrencePhotos,
   routingOccurrence,
   savingDecision,
   onSendMessage,
   onReportOccurrence,
+  onAddOccurrencePhotos,
   onSaveDecision,
   onRouteOccurrence,
   onOpenAnomaly,
@@ -185,6 +192,16 @@ export default function AnomalyThread({
 
   const [error, setError] =
     useState("");
+
+  const [
+    photoOccurrenceId,
+    setPhotoOccurrenceId,
+  ] = useState<string | null>(null);
+
+  const photoInputReference =
+    useRef<HTMLInputElement | null>(
+      null,
+    );
 
   const [
     decisionOpen,
@@ -374,8 +391,8 @@ export default function AnomalyThread({
                 Decisión:{" "}
                 {anomaly.decision ===
                 "pass"
-                  ? "Pass"
-                  : "Fail"}
+                  ? "Pasó"
+                  : "No pasó"}
               </span>
             ) : canDecide ? (
               <button
@@ -428,6 +445,16 @@ export default function AnomalyThread({
                       .toLowerCase(),
                 );
 
+              const canAddPhotos =
+                Boolean(
+                  user?.uid &&
+                  (
+                    occurrence.createdByUid ===
+                      user.uid ||
+                    canRouteReport
+                  ),
+                );
+
               return (
                 <div
                   key={occurrence.id}
@@ -446,7 +473,7 @@ export default function AnomalyThread({
                         : "border-amber-400/20 bg-amber-400/[0.07]"
                     }`}
                   >
-                    {canRouteReport &&
+                    {canAddPhotos &&
                       !redirected && (
                         <details className="absolute right-3 top-3 z-10">
                           <summary
@@ -459,6 +486,24 @@ export default function AnomalyThread({
                           </summary>
 
                           <div className="absolute right-0 mt-2 w-64 overflow-hidden rounded-xl border border-white/10 bg-[#151b19] p-1 shadow-2xl">
+                            <button
+                              type="button"
+                              disabled={
+                                addingOccurrencePhotos
+                              }
+                              onClick={() => {
+                                setPhotoOccurrenceId(
+                                  occurrence.id,
+                                );
+                                photoInputReference.current?.click();
+                              }}
+                              className="w-full rounded-lg px-3 py-2.5 text-left text-sm text-white/75 hover:bg-white/[0.06] disabled:opacity-50"
+                            >
+                              Agregar más fotos
+                            </button>
+
+                            {canRouteReport && (
+                              <>
                             <button
                               type="button"
                               onClick={() => {
@@ -500,6 +545,8 @@ export default function AnomalyThread({
                             >
                               Relacionar a anormalidad existente
                             </button>
+                              </>
+                            )}
                           </div>
                         </details>
                       )}
@@ -535,10 +582,10 @@ export default function AnomalyThread({
                     </p>
 
                     <p className="mt-3 text-sm text-white/55">
-                      Resultado de la muestra:{" "}
+                      Muestra reportada:{" "}
                       <span className="text-white/85">
                         {occurrence.affectedQuantity}{" "}
-                        afectadas de{" "}
+                        de{" "}
                         {occurrence.sampleQuantity}
                       </span>
                     </p>
@@ -621,6 +668,24 @@ export default function AnomalyThread({
                 );
 
               if (isSystem) {
+                const isRejectedDecision =
+                  entry.type ===
+                    "decision" &&
+                  /fail|no pas[oó]/i.test(
+                    entry.text,
+                  );
+
+                const translatedText =
+                  entry.text
+                    .replace(
+                      /Decisión (final|inicial): Pass/gi,
+                      "Decisión $1: Pasó",
+                    )
+                    .replace(
+                      /Decisión (final|inicial): Fail/gi,
+                      "Decisión $1: No pasó",
+                    );
+
                 return (
                   <div
                     key={entry.id}
@@ -643,9 +708,17 @@ export default function AnomalyThread({
                           entry.targetAnomalyId,
                         )
                       }
-                      className="max-w-xl rounded-2xl border border-emerald-400/25 bg-emerald-400/[0.09] px-5 py-4 text-center disabled:cursor-default"
+                      className={`max-w-xl rounded-2xl border px-5 py-4 text-center disabled:cursor-default ${
+                        isRejectedDecision
+                          ? "border-red-400/30 bg-red-400/[0.10]"
+                          : "border-emerald-400/25 bg-emerald-400/[0.09]"
+                      }`}
                     >
-                      <p className="text-xs font-semibold uppercase tracking-wider text-emerald-300">
+                      <p className={`text-xs font-semibold uppercase tracking-wider ${
+                        isRejectedDecision
+                          ? "text-red-300"
+                          : "text-emerald-300"
+                      }`}>
                         {entry.type ===
                         "decision"
                           ? "Decisión registrada"
@@ -653,7 +726,7 @@ export default function AnomalyThread({
                       </p>
 
                       <p className="mt-2 whitespace-pre-wrap text-sm text-white/80">
-                        {entry.text}
+                        {translatedText}
                       </p>
 
                       <p className="mt-2 text-xs text-white/35">
@@ -788,6 +861,44 @@ export default function AnomalyThread({
         </form>
       </section>
 
+      <input
+        ref={photoInputReference}
+        type="file"
+        accept="image/*"
+        multiple
+        className="hidden"
+        onChange={async (event) => {
+          const files = Array.from(
+            event.target.files || [],
+          );
+
+          if (
+            !photoOccurrenceId ||
+            files.length === 0
+          ) {
+            event.target.value = "";
+            return;
+          }
+
+          try {
+            setError("");
+            await onAddOccurrencePhotos(
+              photoOccurrenceId,
+              files,
+            );
+          } catch (cause) {
+            setError(
+              cause instanceof Error
+                ? cause.message
+                : "No fue posible agregar las fotografías.",
+            );
+          } finally {
+            event.target.value = "";
+            setPhotoOccurrenceId(null);
+          }
+        }}
+      />
+
       {decisionOpen &&
         canDecide &&
         !isResolved && (
@@ -850,8 +961,8 @@ export default function AnomalyThread({
                 >
                   {anomaly.decision ===
                   "pass"
-                    ? "Pass"
-                    : "Fail"}
+                    ? "Pasó"
+                    : "No pasó"}
                 </strong>
                 {anomaly.decisionComment
                   ? ` — ${anomaly.decisionComment}`

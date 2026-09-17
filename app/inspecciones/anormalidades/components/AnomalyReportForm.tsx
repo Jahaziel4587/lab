@@ -162,7 +162,7 @@ export default function AnomalyReportForm({
       affected < 1
     ) {
       setFormError(
-        "La cantidad afectada debe ser mayor a cero.",
+        "El número de muestra debe ser mayor a cero.",
       );
       return;
     }
@@ -179,7 +179,7 @@ export default function AnomalyReportForm({
 
     if (affected > sample) {
       setFormError(
-        "La cantidad afectada no puede superar la muestra.",
+        "El número de muestra no puede superar el tamaño de la muestra.",
       );
       return;
     }
@@ -273,7 +273,7 @@ export default function AnomalyReportForm({
             className="text-sm font-medium
               text-white/75"
           >
-            Piezas afectadas
+            # de muestra
           </label>
 
           <input
@@ -289,7 +289,7 @@ export default function AnomalyReportForm({
               setFormError("");
             }}
             disabled={saving}
-            placeholder="Ej. 3"
+              placeholder="Ej. 15"
             className="mt-2 min-h-12
               w-full rounded-xl border
               border-white/15 bg-black/25

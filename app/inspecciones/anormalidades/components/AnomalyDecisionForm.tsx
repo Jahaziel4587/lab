@@ -80,7 +80,7 @@ export default function AnomalyDecisionForm({
 
     if (!decision) {
       setError(
-        "Selecciona Pass o Fail.",
+        "Selecciona Pasó o No pasó.",
       );
       return;
     }
@@ -174,7 +174,7 @@ export default function AnomalyDecisionForm({
                   : "border-white/10 bg-white/[0.03] text-white/60 hover:bg-white/[0.06]"
               }`}
             >
-              Pass
+              Pasó
             </button>
 
             <button
@@ -189,7 +189,7 @@ export default function AnomalyDecisionForm({
                   : "border-white/10 bg-white/[0.03] text-white/60 hover:bg-white/[0.06]"
               }`}
             >
-              Fail
+              No pasó
             </button>
           </div>
         </fieldset>

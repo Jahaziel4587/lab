@@ -264,8 +264,8 @@ export async function POST(
 
     const notificationBody =
       `${inspectorName} reportó ` +
-      `${affectedQuantity} de ` +
-      `${sampleQuantity} piezas ` +
+      `la muestra ${affectedQuantity} de ` +
+      `${sampleQuantity} ` +
       `en ${inspectedItem}` +
       `${lot ? `, lote ${lot}` : ""}.`;
 

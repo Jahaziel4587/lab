@@ -143,7 +143,7 @@ export async function POST(
         {
           ok: false,
           error:
-            "Asigna un título y selecciona Pass o Fail.",
+            "Asigna un título y selecciona Pasó o No pasó.",
         },
         { status: 400 },
       );
@@ -461,7 +461,7 @@ export async function POST(
             : "routing",
         text:
           mode === "new"
-            ? `Decisión inicial: ${decision === "pass" ? "Pass" : "Fail"}` +
+            ? `Decisión inicial: ${decision === "pass" ? "Pasó" : "No pasó"}` +
               (comment ? `. ${comment}` : "")
             : `Se relacionó un reporte desde "${clean(source.title) || "otro reporte"}".`,
         sourceAnomalyId,

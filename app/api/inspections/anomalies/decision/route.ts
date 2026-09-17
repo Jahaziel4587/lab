@@ -118,7 +118,7 @@ export async function POST(request: NextRequest) {
         {
           ok: false,
           error:
-            "Completa el título y selecciona Pass o Fail.",
+            "Completa el título y selecciona Pasó o No pasó.",
         },
         { status: 400 },
       );
@@ -224,7 +224,7 @@ export async function POST(request: NextRequest) {
 
     batch.set(messageReference, {
       text:
-        `Decisión final: ${decision === "pass" ? "Pass" : "Fail"}` +
+        `Decisión final: ${decision === "pass" ? "Pasó" : "No pasó"}` +
         (comment ? `. ${comment}` : ""),
       type: "decision",
       createdByUid: decoded.uid,

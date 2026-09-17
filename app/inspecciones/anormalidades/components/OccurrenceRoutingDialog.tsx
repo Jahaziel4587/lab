@@ -242,7 +242,7 @@ export default function OccurrenceRoutingDialog({
                   >
                     {anomaly.title}
                     {anomaly.decision
-                      ? ` — ${anomaly.decision === "pass" ? "Pass" : "Fail"}`
+                      ? ` — ${anomaly.decision === "pass" ? "Pasó" : "No pasó"}`
                       : ""}
                   </option>
                 ),
@@ -284,11 +284,11 @@ export default function OccurrenceRoutingDialog({
                   [
                     [
                       "pass",
-                      "Pass",
+                      "Pasó",
                     ],
                     [
                       "fail",
-                      "Fail",
+                      "No pasó",
                     ],
                   ] as const
                 ).map(

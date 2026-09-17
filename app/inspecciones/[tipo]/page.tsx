@@ -1282,6 +1282,10 @@ export default function InspectionTypePage() {
               anomalyThreadState
                 .savingOccurrence
             }
+            addingOccurrencePhotos={
+              anomalyThreadState
+                .addingOccurrencePhotos
+            }
             routingOccurrence={
               anomalyThreadState
                 .routingOccurrence
@@ -1296,6 +1300,10 @@ export default function InspectionTypePage() {
             onReportOccurrence={
               anomalyThreadState
                 .reportOccurrence
+            }
+            onAddOccurrencePhotos={
+              anomalyThreadState
+                .addOccurrencePhotos
             }
             onSaveDecision={
               anomalyThreadState.saveDecision

@@ -443,7 +443,7 @@ export function useAnomalies({
         input.affectedQuantity < 1
       ) {
         throw new Error(
-          "La cantidad afectada debe ser mayor a cero.",
+          "El número de muestra debe ser mayor a cero.",
         );
       }
 
@@ -463,7 +463,7 @@ export function useAnomalies({
         input.sampleQuantity
       ) {
         throw new Error(
-          "La cantidad afectada no puede ser mayor que la muestra.",
+          "El número de muestra no puede ser mayor que el tamaño de la muestra.",
         );
       }
 

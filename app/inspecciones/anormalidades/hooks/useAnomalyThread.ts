@@ -2,12 +2,14 @@
 
 import {
   addDoc,
+  arrayUnion,
   collection,
   doc,
   onSnapshot,
   orderBy,
   query,
   serverTimestamp,
+  updateDoc,
   writeBatch,
 } from "firebase/firestore";
 import {
@@ -89,6 +91,11 @@ export function useAnomalyThread({
   const [
     routingOccurrence,
     setRoutingOccurrence,
+  ] = useState(false);
+
+  const [
+    addingOccurrencePhotos,
+    setAddingOccurrencePhotos,
   ] = useState(false);
 
   const [
@@ -525,7 +532,7 @@ export function useAnomalyThread({
             input.sampleQuantity
         ) {
           throw new Error(
-            "Revisa las cantidades de la muestra.",
+            "Revisa el número y el tamaño de la muestra.",
           );
         }
 
@@ -721,6 +728,163 @@ export function useAnomalyThread({
       ],
     );
 
+  const addOccurrencePhotos =
+    useCallback(
+      async (
+        occurrenceId: string,
+        files: File[],
+      ) => {
+        if (
+          !user ||
+          !scopeKey ||
+          !anomalyId
+        ) {
+          throw new Error(
+            "No hay una sesión activa.",
+          );
+        }
+
+        if (files.length === 0) {
+          throw new Error(
+            "Selecciona al menos una fotografía.",
+          );
+        }
+
+        const occurrence =
+          occurrences.find(
+            (item) =>
+              item.id === occurrenceId,
+          );
+
+        const currentEmail = String(
+          user.email || "",
+        ).trim().toLowerCase();
+
+        const canAdd = Boolean(
+          occurrence &&
+          (
+            occurrence.createdByUid ===
+              user.uid ||
+            (
+              currentEmail &&
+              currentEmail === String(
+                occurrence.responsiblePmEmail ||
+                  "",
+              ).trim().toLowerCase()
+            )
+          ),
+        );
+
+        if (!canAdd) {
+          throw new Error(
+            "No tienes permiso para agregar fotografías a este reporte.",
+          );
+        }
+
+        const uploaded: ReturnType<
+          typeof storageRef
+        >[] = [];
+
+        let committed = false;
+
+        try {
+          setAddingOccurrencePhotos(true);
+
+          const photos =
+            await Promise.all(
+              files.map(
+                async (file, index) => {
+                  const path =
+                    "inspection-anomalies/" +
+                    `${scopeKey}/` +
+                    `${anomalyId}/` +
+                    `${occurrenceId}/` +
+                    `${Date.now()}-extra-${index}-` +
+                    safeFileName(file.name);
+
+                  const reference =
+                    storageRef(
+                      storage,
+                      path,
+                    );
+
+                  uploaded.push(reference);
+
+                  await uploadBytes(
+                    reference,
+                    file,
+                    {
+                      contentType:
+                        file.type ||
+                        "image/jpeg",
+                      customMetadata: {
+                        ownerUid: user.uid,
+                        scopeKey,
+                        anomalyId,
+                        occurrenceId,
+                      },
+                    },
+                  );
+
+                  return {
+                    name: file.name,
+                    url:
+                      await getDownloadURL(
+                        reference,
+                      ),
+                    storagePath: path,
+                  };
+                },
+              ),
+            );
+
+          await updateDoc(
+            doc(
+              db,
+              "inspection_anomalies",
+              scopeKey,
+              "anomalies",
+              anomalyId,
+              "occurrences",
+              occurrenceId,
+            ),
+            {
+              photos: arrayUnion(
+                ...photos,
+              ),
+              updatedAt:
+                serverTimestamp(),
+            },
+          );
+
+          committed = true;
+        } catch (cause) {
+          if (!committed) {
+            await Promise.allSettled(
+              uploaded.map(
+                (reference) =>
+                  deleteObject(reference),
+              ),
+            );
+          }
+
+          throw cause instanceof Error
+            ? cause
+            : new Error(
+                "No fue posible agregar las fotografías.",
+              );
+        } finally {
+          setAddingOccurrencePhotos(false);
+        }
+      },
+      [
+        user,
+        scopeKey,
+        anomalyId,
+        occurrences,
+      ],
+    );
+
   const saveDecision =
     useCallback(
       async (
@@ -884,11 +1048,13 @@ export function useAnomalyThread({
     sending,
     savingOccurrence,
     routingOccurrence,
+    addingOccurrencePhotos,
     savingDecision,
     error,
     canDecide,
     sendMessage,
     reportOccurrence,
+    addOccurrencePhotos,
     saveDecision,
     routeOccurrence,
   };
