@@ -36,6 +36,7 @@ import {
 
 type NonConformityLotDetailProps = {
   lot: NonConformityLot;
+  componentName?: string;
 
   reports:
     NonConformityReport[];
@@ -85,6 +86,7 @@ function formatDate(
 
 export default function NonConformityLotDetail({
   lot,
+  componentName,
   reports,
   loading = false,
   finalizing = false,
@@ -161,6 +163,7 @@ const handleDownloadPdf =
         reports:
           orderedReports,
         idToken,
+        componentName,
       });
     } catch (downloadError) {
       console.error(
