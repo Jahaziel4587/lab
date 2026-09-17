@@ -23,8 +23,16 @@ import {
   sortReportsBySequence,
 } from "../utils";
 
+import {
+  generateNonConformityPdf,
+} from "../pdf/generateNonConformityPdf";
+
 import NonConformityFinalizeDialog from
   "./NonConformityFinalizeDialog";
+
+import {
+  useAuth,
+} from "@/src/Context/AuthContext";
 
 type NonConformityLotDetailProps = {
   lot: NonConformityLot;
@@ -40,13 +48,7 @@ type NonConformityLotDetailProps = {
   onAddReport: () => void;
   onFinalize: () => Promise<void>;
 
-  /*
-   * Aparecerá cuando conectemos
-   * el endpoint del PDF.
-   */
-  onDownloadPdf?: () => void;
-};
-
+}
 function formatDate(
   value: unknown,
 ) {
@@ -89,13 +91,25 @@ export default function NonConformityLotDetail({
   canEdit,
   onAddReport,
   onFinalize,
-  onDownloadPdf,
+ 
 }: NonConformityLotDetailProps) {
   const [
     showFinalizeDialog,
     setShowFinalizeDialog,
   ] = useState(false);
+const [
+  generatingPdf,
+  setGeneratingPdf,
+] = useState(false);
 
+const {
+  user,
+} = useAuth();
+
+const [
+  pdfError,
+  setPdfError,
+] = useState("");
   const orderedReports =
     sortReportsBySequence(
       reports,
@@ -127,7 +141,43 @@ export default function NonConformityLotDetail({
         false,
       );
     };
+const handleDownloadPdf =
+  async () => {
+    try {
+      setPdfError("");
+      setGeneratingPdf(true);
 
+      if (!user) {
+        throw new Error(
+          "No hay una sesión activa.",
+        );
+      }
+
+      const idToken =
+        await user.getIdToken();
+
+      await generateNonConformityPdf({
+        lot,
+        reports:
+          orderedReports,
+        idToken,
+      });
+    } catch (downloadError) {
+      console.error(
+        "Error generando PDF:",
+        downloadError,
+      );
+
+      setPdfError(
+        downloadError instanceof
+          Error
+          ? downloadError.message
+          : "No fue posible generar el PDF.",
+      );
+    } finally {
+      setGeneratingPdf(false);
+    }
+  };
   return (
     <div className="space-y-6">
       <section
@@ -271,33 +321,47 @@ export default function NonConformityLotDetail({
               )}
 
             {isFinalized &&
-              onDownloadPdf && (
-                <button
-                  type="button"
-                  onClick={
-                    onDownloadPdf
-                  }
-                  className="inline-flex
-                    min-h-11 w-full
-                    items-center
-                    justify-center
-                    gap-2 rounded-xl
-                    border
-                    border-emerald-400/30
-                    bg-emerald-400/10
-                    px-4 text-sm
-                    font-medium
-                    text-emerald-200
-                    transition
-                    hover:bg-emerald-400/15
-                    sm:w-auto"
-                >
-                  <Download
-                    size={17}
-                  />
-                  Descargar PDF
-                </button>
-              )}
+  reports.length > 0 && (
+    <button
+      type="button"
+      onClick={
+        handleDownloadPdf
+      }
+      disabled={
+        generatingPdf
+      }
+      className="inline-flex
+        min-h-11 w-full
+        items-center
+        justify-center
+        gap-2 rounded-xl
+        border
+        border-emerald-400/30
+        bg-emerald-400/10
+        px-4 text-sm
+        font-medium
+        text-emerald-200
+        transition
+        hover:bg-emerald-400/15
+        disabled:cursor-not-allowed
+        disabled:opacity-50
+        sm:w-auto"
+    >
+      {generatingPdf ? (
+        <LoaderCircle
+          size={17}
+          className="animate-spin"
+        />
+      ) : (
+        <Download size={17} />
+      )}
+
+      {generatingPdf
+        ? "Generando PDF..."
+        : "Descargar PDF"}
+    </button>
+  )}
+            
           </div>
         </div>
 
@@ -355,6 +419,19 @@ export default function NonConformityLotDetail({
           </div>
         </div>
       </section>
+
+{pdfError && (
+  <div
+    role="alert"
+    className="rounded-xl
+      border border-red-400/25
+      bg-red-400/[0.08]
+      px-4 py-3 text-sm
+      text-red-100"
+  >
+    {pdfError}
+  </div>
+)}
 
       {loading ? (
         <div
