@@ -20,6 +20,7 @@ type GenerateNonConformityPdfParams = {
   lot: NonConformityLot;
   reports: NonConformityReport[];
   idToken: string;
+  componentName?: string;
 };
 
 const PAGE_WIDTH = 595.28;
@@ -454,6 +455,7 @@ export async function generateNonConformityPdf({
   lot,
   reports,
   idToken,
+  componentName,
 }: GenerateNonConformityPdfParams) {
   if (reports.length === 0) {
     throw new Error(
@@ -553,6 +555,31 @@ export async function generateNonConformityPdf({
   );
 
   y -= 28;
+
+  const normalizedComponentName =
+    cleanText(componentName);
+
+  if (normalizedComponentName) {
+    y = drawWrappedText({
+      page,
+      text:
+        `Componente: ${normalizedComponentName}`,
+      x: MARGIN_X,
+      y,
+      font: boldFont,
+      fontSize: 11,
+      color: rgb(
+        0.2,
+        0.22,
+        0.22,
+      ),
+      maxWidth:
+        CONTENT_WIDTH,
+      lineHeight: 15,
+    });
+
+    y -= 10;
+  }
 
   page.drawText(
     `Muestras planeadas: ${lot.sampleQuantity}`,
