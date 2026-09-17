@@ -1484,6 +1484,12 @@ export default function InspectionTypePage() {
         return (
           <NonConformityLotDetail
             lot={selectedLot}
+            componentName={
+              selectedProcessComponent
+                ?.title ||
+              selectedWi?.title ||
+              ""
+            }
             reports={
               nonConformitiesState
                 .reports
