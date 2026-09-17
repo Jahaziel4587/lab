@@ -206,12 +206,15 @@ if (!user) {
       <div className="mt-6 rounded-3xl border border-white/10 bg-white/[0.05] backdrop-blur-2xl ring-1 ring-white/5 shadow-[0_20px_90px_-70px_rgba(0,0,0,0.95)] p-4 sm:p-5">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div className="flex w-full flex-col gap-3 sm:flex-row md:max-w-3xl">
-            <SearchInput
-              value={busqueda}
-              onChange={setBusqueda}
-              placeholder="Buscar por título, solicitante o ID..."
-              className="w-full sm:flex-1"
-            />
+            <label className="flex min-w-0 flex-1 flex-col gap-1.5 text-xs font-medium text-white/60">
+              Buscar pedidos
+              <SearchInput
+                value={busqueda}
+                onChange={setBusqueda}
+                placeholder="Buscar por título, solicitante o ID..."
+                className="w-full"
+              />
+            </label>
 
             <label className="flex shrink-0 flex-col gap-1.5 text-xs font-medium text-white/60">
               Filtrar por mes de entrega real
