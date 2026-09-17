@@ -10,9 +10,61 @@ import {
 import {
   updatePedidoAndSubitemsToListo,
 } from "@/lib/monday/updatePedidoStatus";
+import { sendPushToEmails } from "@/lib/pushNotifications";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+function normalizeEmail(value: unknown) {
+  return String(value || "").trim().toLowerCase();
+}
+
+async function notifyOrderReady(args: {
+  request: NextRequest;
+  pedidoId: string;
+  pedido: Record<string, any>;
+}) {
+  const recipientEmail = normalizeEmail(
+    args.pedido.correoUsuario ||
+      args.pedido.correoSolicitante ||
+      args.pedido.usuario ||
+      args.pedido.email
+  );
+
+  if (!recipientEmail) {
+    console.warn(
+      `[pedido-listo] El pedido ${args.pedidoId} no tiene correo de solicitante`
+    );
+    return;
+  }
+
+  const title = String(
+    args.pedido.titulo || "Tu pedido"
+  ).trim();
+  const message = `Tu pedido \"${title}\" ya está listo.`;
+  const relativeUrl = `/solicitudes/listado/${args.pedidoId}`;
+  const absoluteUrl = new URL(
+    relativeUrl,
+    args.request.nextUrl.origin
+  ).toString();
+
+  await adminDB.collection("notifications").add({
+    userEmail: recipientEmail,
+    pedidoId: args.pedidoId,
+    tipo: "pedido_listo",
+    mensaje: message,
+    url: relativeUrl,
+    createdAt: FieldValue.serverTimestamp(),
+    leido: false,
+  });
+
+  await sendPushToEmails({
+    emails: [recipientEmail],
+    title: "Pedido listo",
+    body: message,
+    url: absoluteUrl,
+  });
+}
 
 export async function PATCH(
   request: NextRequest
@@ -113,6 +165,22 @@ export async function PATCH(
     const pedido =
       pedidoSnapshot.data();
 
+    const wasAlreadyReady =
+      String(pedido?.status || "")
+        .trim()
+        .toLowerCase() === "listo";
+
+    const readyAlreadyNotified =
+      pedido?.pushNotifications?.orderReady === true;
+
+    const previousNotificationFailed = Boolean(
+      pedido?.pushNotifications?.orderReadyError
+    );
+
+    const shouldNotifyReady =
+      !readyAlreadyNotified &&
+      (!wasAlreadyReady || previousNotificationFailed);
+
     const mondayItemId = String(
       pedido?.monday?.itemId || ""
     ).trim();
@@ -120,12 +188,47 @@ export async function PATCH(
     /*
      * Guardamos primero el estado en Firebase.
      */
-    await pedidoRef.update({
+    const firebaseUpdate: Record<string, unknown> = {
       status: "listo",
       "monday.statusSyncStatus": "pending",
       "monday.statusSyncUpdatedAt":
         FieldValue.serverTimestamp(),
-    });
+    };
+
+    if (shouldNotifyReady) {
+      firebaseUpdate["pushNotifications.orderReady"] = true;
+      firebaseUpdate["pushNotifications.orderReadyAt"] =
+        FieldValue.serverTimestamp();
+      firebaseUpdate["pushNotifications.orderReadyError"] =
+        FieldValue.delete();
+    }
+
+    await pedidoRef.update(firebaseUpdate);
+
+    if (shouldNotifyReady) {
+      try {
+        await notifyOrderReady({
+          request,
+          pedidoId,
+          pedido: pedido || {},
+        });
+      } catch (notificationError) {
+        console.error(
+          `[pedido-listo] No se pudo notificar el pedido ${pedidoId}:`,
+          notificationError
+        );
+
+        // Permite reintentar la notificación si el envío falló sin revertir
+        // el status del pedido, que ya quedó guardado correctamente.
+        await pedidoRef.update({
+          "pushNotifications.orderReady": false,
+          "pushNotifications.orderReadyError":
+            notificationError instanceof Error
+              ? notificationError.message
+              : "Error desconocido",
+        });
+      }
+    }
 
     /*
      * Un pedido antiguo podría no tener vínculo
