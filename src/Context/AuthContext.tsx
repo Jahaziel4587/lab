@@ -1,7 +1,8 @@
 "use client";
 import { createContext, useContext, useEffect, useState } from "react";
 import { onAuthStateChanged, signOut, User } from "firebase/auth";
-import { auth } from "../firebase/firebaseConfig";
+import { app, auth } from "../firebase/firebaseConfig";
+import { getMessaging, getToken, isSupported } from "firebase/messaging";
 import { doc, getDoc } from "firebase/firestore";
 import { db } from "../firebase/firebaseConfig"; // asegúrate de exportar db en tu config
 
@@ -30,7 +31,24 @@ async function updatePushDevice(
   currentUser: User,
   method: "POST" | "DELETE",
 ) {
-  const pushToken = localStorage.getItem(PUSH_TOKEN_STORAGE_KEY);
+  let pushToken = localStorage.getItem(PUSH_TOKEN_STORAGE_KEY);
+  if (method === "POST") {
+    // El permiso puede existir aunque este navegador no tenga un token local
+    // (dispositivo nuevo, almacenamiento borrado o registro previo fallido).
+    if (!(await isSupported()) || Notification.permission !== "granted") return;
+    const vapidKey = process.env.NEXT_PUBLIC_FIREBASE_VAPID_KEY;
+    if (!vapidKey) throw new Error("Falta la configuración VAPID");
+    const serviceWorkerRegistration = await navigator.serviceWorker.register(
+      "/sw.js", { scope: "/" },
+    );
+    await navigator.serviceWorker.ready;
+    pushToken = await getToken(getMessaging(app), {
+      vapidKey,
+      serviceWorkerRegistration,
+    });
+    if (!pushToken) throw new Error("Firebase no devolvió un token");
+    if (auth.currentUser?.uid !== currentUser.uid) return;
+  }
   if (!pushToken) return;
 
   const idToken = await currentUser.getIdToken();
@@ -49,6 +67,9 @@ async function updatePushDevice(
         ? "No se pudo asociar el dispositivo a la sesión actual"
         : "No se pudo desvincular el dispositivo de la sesión",
     );
+  }
+  if (method === "POST" && auth.currentUser?.uid === currentUser.uid) {
+    localStorage.setItem(PUSH_TOKEN_STORAGE_KEY, pushToken);
   }
 }
 
