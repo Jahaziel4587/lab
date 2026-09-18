@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { useAuth } from "@/src/Context/AuthContext";
 import {
   getMessaging,
   getToken,
@@ -21,41 +22,12 @@ type PushState =
   | "error";
 
 export default function PushNotificationSetup() {
+  const { user } = useAuth();
   const [status, setStatus] =
     useState<PushState>("checking");
   const [message, setMessage] = useState("");
 
-  useEffect(() => {
-    const checkSupport = async () => {
-      const supported = await isSupported();
-
-      if (!supported) {
-        setStatus("unsupported");
-        return;
-      }
-
-      if (Notification.permission === "denied") {
-        setStatus("blocked");
-        return;
-      }
-
-      if (
-        Notification.permission === "granted" &&
-        localStorage.getItem("bioana_fcm_token")
-      ) {
-        setStatus("active");
-        return;
-      }
-
-      setStatus("available");
-    };
-
-    checkSupport().catch(() => {
-      setStatus("error");
-    });
-  }, []);
-
-  const activateNotifications = async () => {
+  const activateNotifications = useCallback(async () => {
     try {
       setStatus("activating");
       setMessage("");
@@ -90,7 +62,8 @@ export default function PushNotificationSetup() {
       }
 
       const serviceWorkerRegistration =
-        await navigator.serviceWorker.ready;
+        await navigator.serviceWorker.register("/sw.js", { scope: "/" });
+      await navigator.serviceWorker.ready;
 
       const messaging = getMessaging(app);
 
@@ -103,6 +76,10 @@ export default function PushNotificationSetup() {
         throw new Error(
           "Firebase no devolvió un token",
         );
+      }
+
+      if (auth.currentUser?.uid !== currentUser.uid) {
+        throw new Error("La sesión cambió. Intenta activar las notificaciones nuevamente.");
       }
 
       const idToken =
@@ -138,7 +115,9 @@ export default function PushNotificationSetup() {
         token,
       );
 
-      setStatus("active");
+      if (auth.currentUser?.uid === currentUser.uid) {
+        setStatus("active");
+      }
     } catch (error) {
       console.error(
         "Error activando notificaciones:",
@@ -153,7 +132,33 @@ export default function PushNotificationSetup() {
 
       setStatus("error");
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    const checkSupport = async () => {
+      setStatus("checking");
+      setMessage("");
+      const supported = await isSupported();
+      if (cancelled) return;
+      if (!supported) {
+        setStatus("unsupported");
+      } else if (Notification.permission === "denied") {
+        setStatus("blocked");
+      } else if (Notification.permission === "granted" && user) {
+        // No basta con el token local: confirma el registro en el servidor.
+        await activateNotifications();
+      } else {
+        setStatus("available");
+      }
+    };
+    checkSupport().catch((error) => {
+      if (cancelled) return;
+      setMessage(error instanceof Error ? error.message : "No se pudo comprobar el registro");
+      setStatus("error");
+    });
+    return () => { cancelled = true; };
+  }, [user, activateNotifications]);
 
 
    
