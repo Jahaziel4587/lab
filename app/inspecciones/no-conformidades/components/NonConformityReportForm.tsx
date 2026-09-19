@@ -265,13 +265,6 @@ export default function NonConformityReportForm({
       return;
     }
 
-    if (photos.length === 0) {
-      setFormError(
-        "Agrega al menos una fotografía.",
-      );
-      return;
-    }
-
     try {
       setFormError("");
 
@@ -432,6 +425,9 @@ export default function NonConformityReportForm({
             font-medium text-white/75"
         >
           Evidencia fotográfica
+          <span className="ml-2 text-xs font-normal text-white/35">
+            (opcional)
+          </span>
         </p>
 
         <p
@@ -439,9 +435,10 @@ export default function NonConformityReportForm({
             leading-relaxed
             text-white/40"
         >
-          Puedes tomar fotografías con
-          la cámara o seleccionar varias
-          desde el dispositivo.
+          Si cuentas con evidencia, puedes
+          tomar fotografías con la cámara
+          o seleccionar varias desde el
+          dispositivo.
         </p>
 
         <input

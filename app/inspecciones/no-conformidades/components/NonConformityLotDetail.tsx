@@ -477,8 +477,9 @@ const handleDownloadPdf =
           >
             Cuando una muestra no cumpla
             con la especificación,
-            registra su número,
-            descripción y fotografías.
+            registra su número y una
+            descripción. Las fotografías
+            son opcionales.
           </p>
 
           {!isFinalized &&
