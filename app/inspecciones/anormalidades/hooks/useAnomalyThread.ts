@@ -34,6 +34,8 @@ import {
 import type {
   NewAnomalyReportInput,
 } from "./useAnomalies";
+import type { NewAnomalyLotReportInput } from
+  "../components/AnomalyLotReportForm";
 import type {
   AnomalyDecision,
   AnomalyMessage,
@@ -86,6 +88,11 @@ export function useAnomalyThread({
   const [
     savingOccurrence,
     setSavingOccurrence,
+  ] = useState(false);
+
+  const [
+    savingLotReport,
+    setSavingLotReport,
   ] = useState(false);
 
   const [
@@ -885,6 +892,114 @@ export function useAnomalyThread({
       ],
     );
 
+  const reportLot = useCallback(
+    async (input: NewAnomalyLotReportInput) => {
+      if (!user || !scopeKey || !anomalyId) {
+        throw new Error("No hay una sesión activa.");
+      }
+
+      const description = input.description.trim();
+      const lot = input.lot.trim();
+
+      if (!description || !lot) {
+        throw new Error("Agrega el lote y una descripción.");
+      }
+
+      if (
+        !Number.isInteger(input.affectedQuantity) || input.affectedQuantity < 1 ||
+        !Number.isInteger(input.inspectedQuantity) || input.inspectedQuantity < 1 ||
+        !Number.isInteger(input.lotQuantity) || input.lotQuantity < 1 ||
+        input.affectedQuantity > input.inspectedQuantity ||
+        input.inspectedQuantity > input.lotQuantity
+      ) {
+        throw new Error("Revisa las cantidades del reporte por lote.");
+      }
+
+      const occurrenceReference = doc(
+        collection(
+          db,
+          "inspection_anomalies",
+          scopeKey,
+          "anomalies",
+          anomalyId,
+          "occurrences",
+        ),
+      );
+
+      const uploaded: ReturnType<typeof storageRef>[] = [];
+      let committed = false;
+
+      try {
+        setSavingLotReport(true);
+
+        const photos = await Promise.all(
+          input.photos.map(async (photo, index) => {
+            const path =
+              "inspection-anomalies/" +
+              `${scopeKey}/${anomalyId}/${occurrenceReference.id}/` +
+              `${Date.now()}-lot-${index}-${safeFileName(photo.name)}`;
+            const reference = storageRef(storage, path);
+            uploaded.push(reference);
+            await uploadBytes(reference, photo, {
+              contentType: photo.type || "image/jpeg",
+              customMetadata: {
+                ownerUid: user.uid,
+                scopeKey,
+                anomalyId,
+                occurrenceId: occurrenceReference.id,
+                reportType: "lot_summary",
+              },
+            });
+            return {
+              name: photo.name,
+              url: await getDownloadURL(reference),
+              storagePath: path,
+            };
+          }),
+        );
+
+        await writeBatch(db)
+          .set(occurrenceReference, {
+            anomalyId,
+            reportType: "lot_summary",
+            followUp: true,
+            description,
+            lot,
+            affectedQuantity: input.affectedQuantity,
+            inspectedQuantity: input.inspectedQuantity,
+            lotQuantity: input.lotQuantity,
+            // Se conserva para compatibilidad con PDFs y consultas anteriores.
+            sampleQuantity: input.inspectedQuantity,
+            photos,
+            responsiblePmUid: anomaly?.responsiblePmUid || "",
+            responsiblePmEmail: anomaly?.responsiblePmEmail || "",
+            responsiblePmName: anomaly?.responsiblePmName || "",
+            createdByUid: user.uid,
+            createdByEmail: user.email || "",
+            createdByName: displayName || user.displayName || user.email || "Usuario",
+            createdAt: serverTimestamp(),
+          })
+          .update(
+            doc(db, "inspection_anomalies", scopeKey, "anomalies", anomalyId),
+            { updatedAt: serverTimestamp() },
+          )
+          .commit();
+
+        committed = true;
+        await notifyActivity("occurrence", occurrenceReference.id);
+        return { occurrenceId: occurrenceReference.id };
+      } catch (cause) {
+        if (!committed) {
+          await Promise.allSettled(uploaded.map((reference) => deleteObject(reference)));
+        }
+        throw cause instanceof Error ? cause : new Error("No fue posible guardar el reporte por lote.");
+      } finally {
+        setSavingLotReport(false);
+      }
+    },
+    [user, displayName, scopeKey, anomalyId, anomaly, notifyActivity],
+  );
+
   const saveDecision =
     useCallback(
       async (
@@ -1047,6 +1162,7 @@ export function useAnomalyThread({
     loading,
     sending,
     savingOccurrence,
+    savingLotReport,
     routingOccurrence,
     addingOccurrencePhotos,
     savingDecision,
@@ -1054,6 +1170,7 @@ export function useAnomalyThread({
     canDecide,
     sendMessage,
     reportOccurrence,
+    reportLot,
     addOccurrencePhotos,
     saveDecision,
     routeOccurrence,

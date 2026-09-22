@@ -46,6 +46,9 @@ export type AnomalyOccurrence = {
   lot: string;
   affectedQuantity: number;
   sampleQuantity: number;
+  reportType?: "occurrence" | "lot_summary";
+  inspectedQuantity?: number;
+  lotQuantity?: number;
   photos: AnomalyOccurrencePhoto[];
   responsiblePmUid: string;
   responsiblePmEmail: string;

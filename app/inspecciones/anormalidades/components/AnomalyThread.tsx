@@ -24,6 +24,9 @@ import AnomalyDecisionForm from
   "./AnomalyDecisionForm";
 import AnomalyReportForm from
   "./AnomalyReportForm";
+import AnomalyLotReportForm, {
+  type NewAnomalyLotReportInput,
+} from "./AnomalyLotReportForm";
 import OccurrenceRoutingDialog from
   "./OccurrenceRoutingDialog";
 import type {
@@ -39,6 +42,8 @@ import type {
 
 import AnomalyPdfDialog from
   "./AnomalyPdfDialog";
+import { generateAnomalyPdf } from
+  "../pdf/generateAnomalyPdf";
 
 type RoutingSelection = {
   occurrenceId: string;
@@ -61,6 +66,7 @@ type Props = {
   canDecide: boolean;
   sending: boolean;
   savingOccurrence: boolean;
+  savingLotReport: boolean;
   addingOccurrencePhotos: boolean;
   routingOccurrence: boolean;
   savingDecision: boolean;
@@ -71,6 +77,9 @@ type Props = {
   onReportOccurrence: (
     input:
       NewAnomalyReportInput,
+  ) => Promise<unknown>;
+  onReportLot: (
+    input: NewAnomalyLotReportInput,
   ) => Promise<unknown>;
   onAddOccurrencePhotos: (
     occurrenceId: string,
@@ -181,11 +190,13 @@ export default function AnomalyThread({
   componentName,
   sending,
   savingOccurrence,
+  savingLotReport,
   addingOccurrencePhotos,
   routingOccurrence,
   savingDecision,
   onSendMessage,
   onReportOccurrence,
+  onReportLot,
   onAddOccurrencePhotos,
   onSaveDecision,
   onRouteOccurrence,
@@ -218,6 +229,8 @@ export default function AnomalyThread({
     reportOpen,
     setReportOpen,
   ] = useState(false);
+  const [lotReportOpen, setLotReportOpen] = useState(false);
+  const [generatingLotPdfId, setGeneratingLotPdfId] = useState<string | null>(null);
   const [
     pdfDialogOpen,
     setPdfDialogOpen,
@@ -278,6 +291,29 @@ export default function AnomalyThread({
 
       setReportOpen(false);
     };
+
+  const submitLotReport = async (input: NewAnomalyLotReportInput) => {
+    await onReportLot(input);
+    setLotReportOpen(false);
+  };
+
+  const downloadLotPdf = async (occurrence: AnomalyOccurrence) => {
+    if (!user) return;
+    try {
+      setError("");
+      setGeneratingLotPdfId(occurrence.id);
+      await generateAnomalyPdf({
+        anomaly,
+        occurrences: [occurrence],
+        componentName,
+        idToken: await user.getIdToken(),
+      });
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No fue posible generar el PDF del lote.");
+    } finally {
+      setGeneratingLotPdfId(null);
+    }
+  };
 
   const submitRouting =
     async (
@@ -414,6 +450,14 @@ export default function AnomalyThread({
               <Plus size={16} />
               Reportar misma anormalidad
             </button>
+            <button
+              type="button"
+              onClick={() => setLotReportOpen(true)}
+              className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl border border-sky-400/30 bg-sky-400/10 px-4 text-sm font-medium text-sky-100 transition hover:bg-sky-400/15 sm:min-h-10 sm:w-auto"
+            >
+              <Plus size={16} />
+              Agregar reporte por lote
+            </button>
 
             {isResolved ? (
               <span
@@ -469,6 +513,7 @@ export default function AnomalyThread({
                   occurrence
                     .redirectedToAnomalyId,
                 );
+              const isLotReport = occurrence.reportType === "lot_summary";
 
               const canRouteReport =
                 Boolean(
@@ -509,7 +554,9 @@ export default function AnomalyThread({
                     className={`relative w-full max-w-2xl rounded-2xl rounded-tl-md border p-5 shadow-sm ${
                       redirected
                         ? "border-white/10 bg-white/[0.035] opacity-70"
-                        : "border-amber-400/20 bg-amber-400/[0.07]"
+                        : isLotReport
+                          ? "border-sky-400/20 bg-sky-400/[0.07]"
+                          : "border-amber-400/20 bg-amber-400/[0.07]"
                     }`}
                   >
                     {canAddPhotos &&
@@ -592,8 +639,10 @@ export default function AnomalyThread({
 
                     <div className="flex flex-wrap items-start justify-between gap-3 pr-10">
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wider text-amber-200">
-                          {index === 0
+                        <p className={`text-xs font-semibold uppercase tracking-wider ${isLotReport ? "text-sky-200" : "text-amber-200"}`}>
+                          {isLotReport
+                            ? "Reporte por lote"
+                            : index === 0
                             ? "Reporte inicial del inspector"
                             : "Reporte adicional de la misma anormalidad"}
                         </p>
@@ -620,14 +669,17 @@ export default function AnomalyThread({
                       {occurrence.description}
                     </p>
 
-                    <p className="mt-3 text-sm text-white/55">
-                      Muestra reportada:{" "}
-                      <span className="text-white/85">
-                        {occurrence.affectedQuantity}{" "}
-                        de{" "}
-                        {occurrence.sampleQuantity}
-                      </span>
-                    </p>
+                    {isLotReport ? (
+                      <div className="mt-3 grid grid-cols-1 gap-2 text-sm sm:grid-cols-3">
+                        <p className="rounded-lg bg-black/20 px-3 py-2 text-white/55">Con anormalidad: <span className="font-medium text-white/85">{occurrence.affectedQuantity}</span></p>
+                        <p className="rounded-lg bg-black/20 px-3 py-2 text-white/55">Inspeccionadas: <span className="font-medium text-white/85">{occurrence.inspectedQuantity ?? occurrence.sampleQuantity}</span></p>
+                        <p className="rounded-lg bg-black/20 px-3 py-2 text-white/55">Total del lote: <span className="font-medium text-white/85">{occurrence.lotQuantity ?? "N/D"}</span></p>
+                      </div>
+                    ) : (
+                      <p className="mt-3 text-sm text-white/55">
+                        Muestra reportada: <span className="text-white/85">{occurrence.affectedQuantity} de {occurrence.sampleQuantity}</span>
+                      </p>
+                    )}
 
                     {occurrence.photos
                       ?.length > 0 && (
@@ -683,6 +735,18 @@ export default function AnomalyThread({
                         className="mt-4 text-sm font-medium text-emerald-300 hover:underline"
                       >
                         Este reporte fue relacionado con otra anormalidad. Abrir chat →
+                      </button>
+                    )}
+
+                    {isLotReport && !redirected && (
+                      <button
+                        type="button"
+                        onClick={() => downloadLotPdf(occurrence)}
+                        disabled={generatingLotPdfId === occurrence.id}
+                        className="mt-4 inline-flex min-h-10 items-center gap-2 rounded-xl border border-sky-400/30 bg-sky-400/10 px-4 text-sm font-medium text-sky-100 hover:bg-sky-400/15 disabled:opacity-50"
+                      >
+                        {generatingLotPdfId === occurrence.id ? <LoaderCircle size={16} className="animate-spin" /> : <FileDown size={16} />}
+                        {generatingLotPdfId === occurrence.id ? "Generando PDF..." : "Generar PDF de este lote"}
                       </button>
                     )}
                   </article>
@@ -1043,6 +1107,22 @@ export default function AnomalyThread({
                 )
               }
             />
+          </div>
+        </div>
+      )}
+
+      {lotReportOpen && (
+        <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 p-2 backdrop-blur-sm sm:p-4">
+          <div className="mx-auto my-2 max-w-3xl rounded-2xl border border-sky-400/20 bg-[#101715] p-4 shadow-2xl sm:my-6 sm:p-5">
+            <div className="mb-4 flex items-center justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-wider text-sky-300">Resultado conocido</p>
+                <h2 className="mt-1 text-xl font-semibold text-white">Agregar reporte por lote</h2>
+                <p className="mt-1 text-sm text-white/45">Se agregará al chat sin abrir una nueva decisión.</p>
+              </div>
+              <button type="button" onClick={() => setLotReportOpen(false)} disabled={savingLotReport} className="flex h-10 w-10 items-center justify-center rounded-xl border border-white/10 text-white/55" aria-label="Cerrar"><X size={18} /></button>
+            </div>
+            <AnomalyLotReportForm saving={savingLotReport} onSubmit={submitLotReport} onCancel={() => setLotReportOpen(false)} />
           </div>
         </div>
       )}
