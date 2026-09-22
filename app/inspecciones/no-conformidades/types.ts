@@ -75,6 +75,9 @@ export type NonConformityLot = {
    */
   sampleQuantity: number;
 
+  /* Cantidad completa de piezas que contiene el lote. */
+  lotQuantity: number;
+
   status: NonConformityLotStatus;
 
   /*
@@ -118,6 +121,7 @@ export type ResponsibleNonConformityPm = {
 export type CreateNonConformityLotInput = {
   lotName: string;
   sampleQuantity: number;
+  lotQuantity: number;
   responsiblePm:
     ResponsibleNonConformityPm;
 };

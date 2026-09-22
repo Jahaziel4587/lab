@@ -370,8 +370,8 @@ const handleDownloadPdf =
 
         <div
           className="mt-5 grid
-            grid-cols-2 gap-3
-            sm:max-w-md"
+            grid-cols-1 gap-3
+            sm:max-w-2xl sm:grid-cols-3"
         >
           <div
             className="rounded-2xl
@@ -385,7 +385,7 @@ const handleDownloadPdf =
                 tracking-wider
                 text-white/40"
             >
-              Muestras planeadas
+              Cantidad inspeccionada
             </p>
 
             <p
@@ -394,6 +394,15 @@ const handleDownloadPdf =
                 text-white"
             >
               {lot.sampleQuantity}
+            </p>
+          </div>
+
+          <div className="rounded-2xl border border-white/10 bg-white/[0.03] p-4">
+            <p className="text-xs uppercase tracking-wider text-white/40">
+              Total del lote
+            </p>
+            <p className="mt-2 text-2xl font-semibold text-white">
+              {lot.lotQuantity}
             </p>
           </div>
 

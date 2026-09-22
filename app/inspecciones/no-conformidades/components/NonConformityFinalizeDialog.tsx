@@ -160,7 +160,7 @@ export default function NonConformityFinalizeDialog({
                   tracking-wider
                   text-white/40"
               >
-                Muestras planeadas
+                Cantidad inspeccionada
               </p>
 
               <p

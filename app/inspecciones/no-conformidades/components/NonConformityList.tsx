@@ -388,9 +388,10 @@ export default function NonConformityList({
                     >
                       {lot.sampleQuantity}
                       {" "}
-                      muestras por
-                      inspeccionar
+                      piezas inspeccionadas
                       {" · "}
+                      {lot.lotQuantity}
+                      {" piezas totales · "}
                       {rejectedCount}
                       {" "}
                       {rejectedCount === 1

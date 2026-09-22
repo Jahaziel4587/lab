@@ -2008,7 +2008,7 @@ export default function InspectionTypePage() {
           .selectedLot.lotName;
       }
 
-      return "No conformidades";
+      return "Rechazos por SPEC";
     }
 
     if (selectedProcessComponent) {

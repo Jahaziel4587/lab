@@ -718,7 +718,7 @@ export async function generateAnomalyPdf({
     page.drawText(
       occurrence.reportType === "lot_summary"
         ? `${occurrence.affectedQuantity} piezas con la anormalidad de ${occurrence.inspectedQuantity ?? occurrence.sampleQuantity} inspeccionadas · Lote completo: ${occurrence.lotQuantity ?? "N/D"}`
-        : `Muestra ${occurrence.affectedQuantity} de ${occurrence.sampleQuantity}`,
+        : `Muestra ${occurrence.affectedQuantity} de ${occurrence.sampleQuantity} inspeccionadas · Lote completo: ${occurrence.lotQuantity ?? "No registrado"}`,
       {
         x: MARGIN_X,
         y,

@@ -45,6 +45,7 @@ export type NewAnomalyReportInput = {
   lot: string;
   affectedQuantity: number;
   sampleQuantity: number;
+  lotQuantity: number;
   photos: File[];
   responsiblePm: ResponsiblePm;
 };
@@ -468,6 +469,16 @@ export function useAnomalies({
       }
 
       if (
+        !Number.isInteger(input.lotQuantity) ||
+        input.lotQuantity < 1 ||
+        input.sampleQuantity > input.lotQuantity
+      ) {
+        throw new Error(
+          "La cantidad total del lote debe ser igual o mayor a la cantidad inspeccionada.",
+        );
+      }
+
+      if (
         input.photos.length === 0
       ) {
         throw new Error(
@@ -671,6 +682,8 @@ let reportCommitted = false;
               input.affectedQuantity,
             sampleQuantity:
               input.sampleQuantity,
+            lotQuantity:
+              input.lotQuantity,
             photos:
               uploadedPhotos,
             responsiblePmUid:

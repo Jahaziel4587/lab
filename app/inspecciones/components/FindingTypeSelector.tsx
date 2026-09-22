@@ -23,10 +23,10 @@ export default function FindingTypeSelector({
       />
 
       <InspectionOptionCard
-        title="No conformidad"
+        title="Rechazo por SPEC"
         description={
-          "Incumplimiento de un requisito establecido " +
-          "en la especificación."
+          "Registro para trazabilidad de las muestras " +
+          "rechazadas por especificación."
         }
         icon={BadgeX}
         onClick={onSelectNonConformity}

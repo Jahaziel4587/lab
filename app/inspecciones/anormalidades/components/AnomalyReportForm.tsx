@@ -57,6 +57,9 @@ export default function AnomalyReportForm({
     setSampleQuantity,
   ] = useState("");
 
+  const [lotQuantity, setLotQuantity] =
+    useState("");
+
   const [
     responsiblePmEmail,
     setResponsiblePmEmail,
@@ -157,6 +160,9 @@ export default function AnomalyReportForm({
     const sample =
       Number(sampleQuantity);
 
+    const lotTotal =
+      Number(lotQuantity);
+
     if (
       !Number.isInteger(affected) ||
       affected < 1
@@ -181,6 +187,16 @@ export default function AnomalyReportForm({
       setFormError(
         "El número de muestra no puede superar el tamaño de la muestra.",
       );
+      return;
+    }
+
+    if (!Number.isInteger(lotTotal) || lotTotal < 1) {
+      setFormError("La cantidad total del lote debe ser mayor a cero.");
+      return;
+    }
+
+    if (sample > lotTotal) {
+      setFormError("La cantidad inspeccionada no puede superar la cantidad total del lote.");
       return;
     }
 
@@ -210,6 +226,8 @@ export default function AnomalyReportForm({
           affected,
         sampleQuantity:
           sample,
+        lotQuantity:
+          lotTotal,
         photos,
         responsiblePm,
       });
@@ -265,7 +283,7 @@ export default function AnomalyReportForm({
 
       <div
         className="grid grid-cols-1
-          gap-4 sm:grid-cols-3"
+          gap-4 sm:grid-cols-2 lg:grid-cols-4"
       >
         <div>
           <label
@@ -299,6 +317,26 @@ export default function AnomalyReportForm({
               focus:ring-2
               focus:ring-emerald-400/10
               disabled:opacity-50"
+          />
+        </div>
+
+        <div>
+          <label htmlFor="anomaly-lot-quantity" className="text-sm font-medium text-white/75">
+            Cantidad total del lote
+          </label>
+          <input
+            id="anomaly-lot-quantity"
+            type="number"
+            min="1"
+            step="1"
+            value={lotQuantity}
+            onChange={(event) => {
+              setLotQuantity(event.target.value);
+              setFormError("");
+            }}
+            disabled={saving}
+            placeholder="Ej. 100"
+            className="mt-2 min-h-12 w-full rounded-xl border border-white/15 bg-black/25 px-4 text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/45 focus:ring-2 focus:ring-emerald-400/10 disabled:opacity-50"
           />
         </div>
 

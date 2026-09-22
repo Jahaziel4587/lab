@@ -28,6 +28,7 @@ export default function NonConformityLotForm({
 }: Props) {
   const [lotName, setLotName] = useState("");
   const [sampleQuantity, setSampleQuantity] = useState("");
+  const [lotQuantity, setLotQuantity] = useState("");
   const [responsiblePmEmail, setResponsiblePmEmail] = useState("");
   const [formError, setFormError] = useState("");
   const isMts = sourceType === "entrada_mts";
@@ -42,6 +43,7 @@ export default function NonConformityLotForm({
     event.preventDefault();
     const cleanLotName = lotName.trim();
     const totalSamples = Number(sampleQuantity);
+    const totalLot = Number(lotQuantity);
 
     if (!cleanLotName) {
       setFormError("Agrega el nombre del lote.");
@@ -52,6 +54,16 @@ export default function NonConformityLotForm({
       setFormError(
         "La cantidad de muestras debe ser un número entero mayor a cero.",
       );
+      return;
+    }
+
+    if (!Number.isInteger(totalLot) || totalLot < 1) {
+      setFormError("La cantidad total del lote debe ser un número entero mayor a cero.");
+      return;
+    }
+
+    if (totalSamples > totalLot) {
+      setFormError("La cantidad inspeccionada no puede superar la cantidad total del lote.");
       return;
     }
 
@@ -73,6 +85,7 @@ export default function NonConformityLotForm({
       await onSubmit({
         lotName: cleanLotName,
         sampleQuantity: totalSamples,
+        lotQuantity: totalLot,
         responsiblePm,
       });
     } catch (error) {
@@ -98,7 +111,7 @@ export default function NonConformityLotForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
         <div>
           <label htmlFor="nonconformity-lot-name" className="text-sm font-medium text-white/75">
             Nombre del lote
@@ -119,7 +132,7 @@ export default function NonConformityLotForm({
 
         <div>
           <label htmlFor="nonconformity-sample-quantity" className="text-sm font-medium text-white/75">
-            Muestras por inspeccionar
+            Cantidad inspeccionada
           </label>
           <input
             id="nonconformity-sample-quantity"
@@ -137,7 +150,31 @@ export default function NonConformityLotForm({
             className="mt-2 min-h-12 w-full rounded-xl border border-white/15 bg-black/25 px-4 text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/45 focus:ring-2 focus:ring-emerald-400/10 disabled:opacity-50"
           />
           <p className="mt-2 text-xs leading-relaxed text-white/40">
-            Cantidad total de piezas que serán revisadas.
+            Cantidad de piezas que forman parte de la inspección.
+          </p>
+        </div>
+
+        <div>
+          <label htmlFor="nonconformity-lot-quantity" className="text-sm font-medium text-white/75">
+            Cantidad total del lote
+          </label>
+          <input
+            id="nonconformity-lot-quantity"
+            type="number"
+            min="1"
+            step="1"
+            inputMode="numeric"
+            value={lotQuantity}
+            onChange={(event) => {
+              setLotQuantity(event.target.value);
+              setFormError("");
+            }}
+            disabled={saving}
+            placeholder="Ej. 500"
+            className="mt-2 min-h-12 w-full rounded-xl border border-white/15 bg-black/25 px-4 text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/45 focus:ring-2 focus:ring-emerald-400/10 disabled:opacity-50"
+          />
+          <p className="mt-2 text-xs leading-relaxed text-white/40">
+            Cantidad completa de piezas que contiene el lote.
           </p>
         </div>
       </div>

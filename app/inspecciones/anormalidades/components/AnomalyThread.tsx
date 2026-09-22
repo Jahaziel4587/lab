@@ -676,9 +676,10 @@ export default function AnomalyThread({
                         <p className="rounded-lg bg-black/20 px-3 py-2 text-white/55">Total del lote: <span className="font-medium text-white/85">{occurrence.lotQuantity ?? "N/D"}</span></p>
                       </div>
                     ) : (
-                      <p className="mt-3 text-sm text-white/55">
-                        Muestra reportada: <span className="text-white/85">{occurrence.affectedQuantity} de {occurrence.sampleQuantity}</span>
-                      </p>
+                      <div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm text-white/55">
+                        <p>Muestra reportada: <span className="text-white/85">{occurrence.affectedQuantity} de {occurrence.sampleQuantity}</span></p>
+                        <p>Total del lote: <span className="text-white/85">{occurrence.lotQuantity ?? "No registrado"}</span></p>
+                      </div>
                     )}
 
                     {occurrence.photos

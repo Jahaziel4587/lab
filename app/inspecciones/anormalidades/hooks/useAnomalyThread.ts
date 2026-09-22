@@ -536,7 +536,9 @@ export function useAnomalyThread({
           ) ||
           input.sampleQuantity < 1 ||
           input.affectedQuantity >
-            input.sampleQuantity
+            input.sampleQuantity ||
+          !Number.isInteger(input.lotQuantity) ||
+          input.lotQuantity < input.sampleQuantity
         ) {
           throw new Error(
             "Revisa el número y el tamaño de la muestra.",
@@ -658,6 +660,8 @@ export function useAnomalyThread({
                 input.affectedQuantity,
               sampleQuantity:
                 input.sampleQuantity,
+              lotQuantity:
+                input.lotQuantity,
               photos,
               responsiblePmUid:
                 input.responsiblePm.uid,

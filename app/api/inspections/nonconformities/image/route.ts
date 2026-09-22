@@ -79,7 +79,7 @@ export async function GET(
     /*
      * El endpoint solamente permite
      * descargar evidencia de las
-     * no conformidades.
+     * rechazos por SPEC.
      */
     if (
       !storagePath.startsWith(
@@ -156,7 +156,7 @@ export async function GET(
     );
   } catch (error) {
     console.error(
-      "Error descargando fotografía de no conformidad:",
+      "Error descargando fotografía de rechazo por SPEC:",
       error,
     );
 
