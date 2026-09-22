@@ -430,6 +430,18 @@ const handleDownloadPdf =
             </p>
           </div>
         </div>
+
+        <div className="mt-3 flex flex-wrap gap-2 text-xs text-white/60">
+          <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1.5">
+            Inspección: {lot.inspectionType === "special" ? "Especial" : "Normal"}
+          </span>
+          <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1.5">
+            Nivel: {lot.inspectionLevel || "No registrado"}
+          </span>
+          <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1.5">
+            AQL: {lot.aql || "No registrado"}
+          </span>
+        </div>
       </section>
 
 {pdfError && (

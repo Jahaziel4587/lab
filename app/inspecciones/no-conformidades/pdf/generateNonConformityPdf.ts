@@ -611,6 +611,20 @@ export async function generateNonConformityPdf({
 
   y -= 18;
 
+  y = drawWrappedText({
+    page,
+    text: `Tipo de inspección: ${lot.inspectionType === "special" ? "Especial" : "Normal"}   |   Nivel: ${lot.inspectionLevel || "No registrado"}   |   AQL: ${lot.aql || "No registrado"}`,
+    x: MARGIN_X,
+    y,
+    font: regularFont,
+    fontSize: 10.5,
+    color: rgb(0.25, 0.3, 0.29),
+    maxWidth: CONTENT_WIDTH,
+    lineHeight: 15,
+  });
+
+  y -= 8;
+
   page.drawText(
     `Muestras rechazadas: ${rejectedSampleCount}`,
     {

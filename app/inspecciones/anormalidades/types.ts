@@ -44,6 +44,9 @@ export type AnomalyOccurrence = {
   anomalyId: string;
   description: string;
   lot: string;
+  inspectionType: "normal" | "special";
+  inspectionLevel: "I" | "II" | "III" | "S1" | "S2" | "S3" | "S4";
+  aql: string;
   affectedQuantity: number;
   sampleQuantity: number;
   reportType?: "occurrence" | "lot_summary";

@@ -9,6 +9,9 @@ export type NewAnomalyLotReportInput = {
   affectedQuantity: number;
   inspectedQuantity: number;
   lotQuantity: number;
+  inspectionType: "normal" | "special";
+  inspectionLevel: "I" | "II" | "III" | "S1" | "S2" | "S3" | "S4";
+  aql: string;
   photos: File[];
 };
 
@@ -25,6 +28,9 @@ export default function AnomalyLotReportForm({ saving = false, onSubmit, onCance
   const [affected, setAffected] = useState("");
   const [inspected, setInspected] = useState("");
   const [lotQuantity, setLotQuantity] = useState("");
+  const [inspectionType, setInspectionType] = useState<"normal" | "special" | "">("");
+  const [inspectionLevel, setInspectionLevel] = useState("");
+  const [aql, setAql] = useState("");
   const [photos, setPhotos] = useState<File[]>([]);
   const [error, setError] = useState("");
 
@@ -51,6 +57,7 @@ export default function AnomalyLotReportForm({ saving = false, onSubmit, onCance
 
     if (!lot.trim()) return setError("Agrega el nombre del lote.");
     if (!description.trim()) return setError("Agrega una descripción.");
+    if (!inspectionType || !inspectionLevel || !aql.trim()) return setError("Completa el tipo, nivel de inspección y AQL.");
     if (!Number.isInteger(affectedValue) || affectedValue < 1) return setError("La cantidad con anormalidad debe ser mayor a cero.");
     if (!Number.isInteger(inspectedValue) || inspectedValue < 1) return setError("La cantidad inspeccionada debe ser mayor a cero.");
     if (!Number.isInteger(lotValue) || lotValue < 1) return setError("La cantidad total del lote debe ser mayor a cero.");
@@ -65,6 +72,9 @@ export default function AnomalyLotReportForm({ saving = false, onSubmit, onCance
         affectedQuantity: affectedValue,
         inspectedQuantity: inspectedValue,
         lotQuantity: lotValue,
+        inspectionType,
+        inspectionLevel: inspectionLevel as NewAnomalyLotReportInput["inspectionLevel"],
+        aql: aql.trim(),
         photos,
       });
     } catch (cause) {
@@ -89,6 +99,25 @@ export default function AnomalyLotReportForm({ saving = false, onSubmit, onCance
         {numberField("lot-report-affected", "Piezas con esta anormalidad", affected, setAffected, "Ej. 4")}
         {numberField("lot-report-inspected", "Piezas inspeccionadas", inspected, setInspected, "Ej. 20")}
         {numberField("lot-report-total", "Cantidad total del lote", lotQuantity, setLotQuantity, "Ej. 100")}
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div>
+          <label htmlFor="lot-report-inspection-type" className="text-sm font-medium text-white/75">Tipo de inspección</label>
+          <select id="lot-report-inspection-type" value={inspectionType} onChange={(event) => { setInspectionType(event.target.value as "normal" | "special" | ""); setError(""); }} disabled={saving} className="mt-2 min-h-12 w-full rounded-xl border border-white/15 bg-[#111816] px-4 text-white outline-none focus:border-emerald-400/45 disabled:opacity-50">
+            <option value="">Selecciona una opción</option><option value="normal">Normal</option><option value="special">Especial</option>
+          </select>
+        </div>
+        <div>
+          <label htmlFor="lot-report-inspection-level" className="text-sm font-medium text-white/75">Nivel de inspección</label>
+          <select id="lot-report-inspection-level" value={inspectionLevel} onChange={(event) => { setInspectionLevel(event.target.value); setError(""); }} disabled={saving} className="mt-2 min-h-12 w-full rounded-xl border border-white/15 bg-[#111816] px-4 text-white outline-none focus:border-emerald-400/45 disabled:opacity-50">
+            <option value="">Selecciona un nivel</option>{["I", "II", "III", "S1", "S2", "S3", "S4"].map((level) => <option key={level} value={level}>{level}</option>)}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="lot-report-aql" className="text-sm font-medium text-white/75">AQL</label>
+          <input id="lot-report-aql" value={aql} onChange={(event) => { setAql(event.target.value); setError(""); }} disabled={saving} placeholder="Ej. 1.0" className="mt-2 min-h-12 w-full rounded-xl border border-white/15 bg-black/25 px-4 text-white outline-none placeholder:text-white/30 focus:border-emerald-400/45 disabled:opacity-50" />
+        </div>
       </div>
 
       <div>

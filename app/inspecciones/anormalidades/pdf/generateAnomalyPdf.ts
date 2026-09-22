@@ -736,6 +736,20 @@ export async function generateAnomalyPdf({
 
     y = drawWrappedText({
       page,
+      text: `Tipo de inspección: ${occurrence.inspectionType === "special" ? "Especial" : occurrence.inspectionType === "normal" ? "Normal" : "No registrado"}   |   Nivel: ${occurrence.inspectionLevel || "No registrado"}   |   AQL: ${occurrence.aql || "No registrado"}`,
+      x: MARGIN_X,
+      y,
+      font: regularFont,
+      fontSize: 10,
+      color: rgb(0.35, 0.38, 0.38),
+      maxWidth: CONTENT_WIDTH,
+      lineHeight: 14,
+    });
+
+    y -= 8;
+
+    y = drawWrappedText({
+      page,
       text:
         occurrence.description,
       x: MARGIN_X,

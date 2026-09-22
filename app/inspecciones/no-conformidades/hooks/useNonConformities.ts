@@ -90,6 +90,14 @@ function mapLot(
         data.lotQuantity || data.sampleQuantity || 0,
       ),
 
+    inspectionType:
+      data.inspectionType === "special" ? "special" : "normal",
+
+    inspectionLevel:
+      String(data.inspectionLevel || "") as NonConformityLot["inspectionLevel"],
+
+    aql: String(data.aql || ""),
+
     status:
       data.status === "finalized"
         ? "finalized"
@@ -748,6 +756,10 @@ const [
           );
         }
 
+        if (!input.inspectionType || !input.inspectionLevel || !input.aql.trim()) {
+          throw new Error("Completa el tipo, nivel de inspección y AQL.");
+        }
+
         if (
           !input.responsiblePm ||
           !input.responsiblePm.email
@@ -860,6 +872,14 @@ const [
 
               lotQuantity:
                 input.lotQuantity,
+
+              inspectionType:
+                input.inspectionType,
+
+              inspectionLevel:
+                input.inspectionLevel,
+
+              aql: input.aql.trim(),
 
               status: "draft",
 

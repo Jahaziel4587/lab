@@ -29,6 +29,9 @@ export default function NonConformityLotForm({
   const [lotName, setLotName] = useState("");
   const [sampleQuantity, setSampleQuantity] = useState("");
   const [lotQuantity, setLotQuantity] = useState("");
+  const [inspectionType, setInspectionType] = useState<"normal" | "special" | "">("");
+  const [inspectionLevel, setInspectionLevel] = useState("");
+  const [aql, setAql] = useState("");
   const [responsiblePmEmail, setResponsiblePmEmail] = useState("");
   const [formError, setFormError] = useState("");
   const isMts = sourceType === "entrada_mts";
@@ -67,6 +70,11 @@ export default function NonConformityLotForm({
       return;
     }
 
+    if (!inspectionType || !inspectionLevel || !aql.trim()) {
+      setFormError("Completa el tipo, nivel de inspección y AQL.");
+      return;
+    }
+
     const responsiblePm = responsiblePms.find(
       (pm) => pm.email === responsiblePmEmail,
     );
@@ -86,6 +94,9 @@ export default function NonConformityLotForm({
         lotName: cleanLotName,
         sampleQuantity: totalSamples,
         lotQuantity: totalLot,
+        inspectionType,
+        inspectionLevel: inspectionLevel as CreateNonConformityLotInput["inspectionLevel"],
+        aql: aql.trim(),
         responsiblePm,
       });
     } catch (error) {
@@ -108,6 +119,25 @@ export default function NonConformityLotForm({
           <p className="mt-1 text-sm leading-relaxed text-white/55">
             Crea el lote antes de registrar las muestras que no cumplan con la especificación.
           </p>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+        <div>
+          <label htmlFor="spec-inspection-type" className="text-sm font-medium text-white/75">Tipo de inspección</label>
+          <select id="spec-inspection-type" value={inspectionType} onChange={(event) => { setInspectionType(event.target.value as "normal" | "special" | ""); setFormError(""); }} disabled={saving} className="mt-2 min-h-12 w-full rounded-xl border border-white/15 bg-[#111916] px-4 text-white outline-none focus:border-emerald-400/45 disabled:opacity-50">
+            <option value="">Selecciona una opción</option><option value="normal">Normal</option><option value="special">Especial</option>
+          </select>
+        </div>
+        <div>
+          <label htmlFor="spec-inspection-level" className="text-sm font-medium text-white/75">Nivel de inspección</label>
+          <select id="spec-inspection-level" value={inspectionLevel} onChange={(event) => { setInspectionLevel(event.target.value); setFormError(""); }} disabled={saving} className="mt-2 min-h-12 w-full rounded-xl border border-white/15 bg-[#111916] px-4 text-white outline-none focus:border-emerald-400/45 disabled:opacity-50">
+            <option value="">Selecciona un nivel</option>{["I", "II", "III", "S1", "S2", "S3", "S4"].map((level) => <option key={level} value={level}>{level}</option>)}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="spec-aql" className="text-sm font-medium text-white/75">AQL</label>
+          <input id="spec-aql" value={aql} onChange={(event) => { setAql(event.target.value); setFormError(""); }} disabled={saving} placeholder="Ej. 1.0" className="mt-2 min-h-12 w-full rounded-xl border border-white/15 bg-black/25 px-4 text-white outline-none placeholder:text-white/30 focus:border-emerald-400/45 disabled:opacity-50" />
         </div>
       </div>
 

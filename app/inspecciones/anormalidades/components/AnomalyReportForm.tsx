@@ -59,6 +59,11 @@ export default function AnomalyReportForm({
 
   const [lotQuantity, setLotQuantity] =
     useState("");
+  const [inspectionType, setInspectionType] =
+    useState<"normal" | "special" | "">("");
+  const [inspectionLevel, setInspectionLevel] =
+    useState("");
+  const [aql, setAql] = useState("");
 
   const [
     responsiblePmEmail,
@@ -154,6 +159,11 @@ export default function AnomalyReportForm({
       return;
     }
 
+    if (!inspectionType || !inspectionLevel || !aql.trim()) {
+      setFormError("Completa el tipo, nivel de inspección y AQL.");
+      return;
+    }
+
     const affected =
       Number(affectedQuantity);
 
@@ -228,6 +238,10 @@ export default function AnomalyReportForm({
           sample,
         lotQuantity:
           lotTotal,
+        inspectionType,
+        inspectionLevel:
+          inspectionLevel as NewAnomalyReportInput["inspectionLevel"],
+        aql: aql.trim(),
         photos,
         responsiblePm,
       });
@@ -405,6 +419,28 @@ export default function AnomalyReportForm({
               focus:ring-emerald-400/10
               disabled:opacity-50"
           />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <div>
+          <label htmlFor="anomaly-inspection-type" className="text-sm font-medium text-white/75">Tipo de inspección</label>
+          <select id="anomaly-inspection-type" value={inspectionType} onChange={(event) => { setInspectionType(event.target.value as "normal" | "special" | ""); setFormError(""); }} disabled={saving} className="mt-2 min-h-12 w-full rounded-xl border border-white/15 bg-[#111816] px-4 text-white outline-none focus:border-emerald-400/45 disabled:opacity-50">
+            <option value="">Selecciona una opción</option>
+            <option value="normal">Normal</option>
+            <option value="special">Especial</option>
+          </select>
+        </div>
+        <div>
+          <label htmlFor="anomaly-inspection-level" className="text-sm font-medium text-white/75">Nivel de inspección</label>
+          <select id="anomaly-inspection-level" value={inspectionLevel} onChange={(event) => { setInspectionLevel(event.target.value); setFormError(""); }} disabled={saving} className="mt-2 min-h-12 w-full rounded-xl border border-white/15 bg-[#111816] px-4 text-white outline-none focus:border-emerald-400/45 disabled:opacity-50">
+            <option value="">Selecciona un nivel</option>
+            {["I", "II", "III", "S1", "S2", "S3", "S4"].map((level) => <option key={level} value={level}>{level}</option>)}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="anomaly-aql" className="text-sm font-medium text-white/75">AQL</label>
+          <input id="anomaly-aql" value={aql} onChange={(event) => { setAql(event.target.value); setFormError(""); }} disabled={saving} placeholder="Ej. 1.0" className="mt-2 min-h-12 w-full rounded-xl border border-white/15 bg-black/25 px-4 text-white outline-none placeholder:text-white/30 focus:border-emerald-400/45 disabled:opacity-50" />
         </div>
       </div>
 

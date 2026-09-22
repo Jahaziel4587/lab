@@ -682,6 +682,18 @@ export default function AnomalyThread({
                       </div>
                     )}
 
+                    <div className="mt-3 flex flex-wrap gap-2 text-xs text-white/60">
+                      <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1.5">
+                        Inspección: {occurrence.inspectionType === "special" ? "Especial" : occurrence.inspectionType === "normal" ? "Normal" : "No registrada"}
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1.5">
+                        Nivel: {occurrence.inspectionLevel || "No registrado"}
+                      </span>
+                      <span className="rounded-full border border-white/10 bg-black/20 px-3 py-1.5">
+                        AQL: {occurrence.aql || "No registrado"}
+                      </span>
+                    </div>
+
                     {occurrence.photos
                       ?.length > 0 && (
                       <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3">

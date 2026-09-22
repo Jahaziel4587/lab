@@ -526,6 +526,10 @@ export function useAnomalyThread({
           );
         }
 
+        if (!input.inspectionType || !input.inspectionLevel || !input.aql.trim()) {
+          throw new Error("Completa el tipo, nivel de inspección y AQL.");
+        }
+
         if (
           !Number.isInteger(
             input.affectedQuantity,
@@ -656,6 +660,9 @@ export function useAnomalyThread({
               followUp: true,
               description,
               lot,
+              inspectionType: input.inspectionType,
+              inspectionLevel: input.inspectionLevel,
+              aql: input.aql.trim(),
               affectedQuantity:
                 input.affectedQuantity,
               sampleQuantity:
@@ -909,6 +916,10 @@ export function useAnomalyThread({
         throw new Error("Agrega el lote y una descripción.");
       }
 
+      if (!input.inspectionType || !input.inspectionLevel || !input.aql.trim()) {
+        throw new Error("Completa el tipo, nivel de inspección y AQL.");
+      }
+
       if (
         !Number.isInteger(input.affectedQuantity) || input.affectedQuantity < 1 ||
         !Number.isInteger(input.inspectedQuantity) || input.inspectedQuantity < 1 ||
@@ -969,6 +980,9 @@ export function useAnomalyThread({
             followUp: true,
             description,
             lot,
+            inspectionType: input.inspectionType,
+            inspectionLevel: input.inspectionLevel,
+            aql: input.aql.trim(),
             affectedQuantity: input.affectedQuantity,
             inspectedQuantity: input.inspectedQuantity,
             lotQuantity: input.lotQuantity,

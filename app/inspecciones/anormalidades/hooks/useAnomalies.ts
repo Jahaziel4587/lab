@@ -46,6 +46,9 @@ export type NewAnomalyReportInput = {
   affectedQuantity: number;
   sampleQuantity: number;
   lotQuantity: number;
+  inspectionType: "normal" | "special";
+  inspectionLevel: "I" | "II" | "III" | "S1" | "S2" | "S3" | "S4";
+  aql: string;
   photos: File[];
   responsiblePm: ResponsiblePm;
 };
@@ -437,6 +440,10 @@ export function useAnomalies({
         );
       }
 
+      if (!input.inspectionType || !input.inspectionLevel || !input.aql.trim()) {
+        throw new Error("Completa el tipo, nivel de inspección y AQL.");
+      }
+
       if (
         !Number.isInteger(
           input.affectedQuantity,
@@ -678,6 +685,9 @@ let reportCommitted = false;
               anomalyReference.id,
             description,
             lot,
+            inspectionType: input.inspectionType,
+            inspectionLevel: input.inspectionLevel,
+            aql: input.aql.trim(),
             affectedQuantity:
               input.affectedQuantity,
             sampleQuantity:
