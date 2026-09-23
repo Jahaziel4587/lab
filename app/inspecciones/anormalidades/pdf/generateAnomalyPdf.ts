@@ -677,7 +677,9 @@ export async function generateAnomalyPdf({
     ensureSpace(135);
 
     page.drawText(
-      `REPORTE ${reportIndex + 1}`,
+      occurrence.reportType === "lot_summary"
+        ? "REPORTE POR LOTE"
+        : `REPORTE ${reportIndex + 1}`,
       {
         x: MARGIN_X,
         y,
@@ -714,7 +716,9 @@ export async function generateAnomalyPdf({
     y -= 5;
 
     page.drawText(
-      `Muestra ${occurrence.affectedQuantity} de ${occurrence.sampleQuantity}`,
+      occurrence.reportType === "lot_summary"
+        ? `${occurrence.affectedQuantity} piezas con la anormalidad de ${occurrence.inspectedQuantity ?? occurrence.sampleQuantity} inspeccionadas · Lote completo: ${occurrence.lotQuantity ?? "N/D"}`
+        : `Muestra ${occurrence.affectedQuantity} de ${occurrence.sampleQuantity} inspeccionadas · Lote completo: ${occurrence.lotQuantity ?? "No registrado"}`,
       {
         x: MARGIN_X,
         y,
@@ -729,6 +733,20 @@ export async function generateAnomalyPdf({
     );
 
     y -= 22;
+
+    y = drawWrappedText({
+      page,
+      text: `Tipo de inspección: ${occurrence.inspectionType === "special" ? "Especial" : occurrence.inspectionType === "normal" ? "Normal" : "No registrado"}   |   Nivel: ${occurrence.inspectionLevel || "No registrado"}   |   AQL: ${occurrence.aql || "No registrado"}`,
+      x: MARGIN_X,
+      y,
+      font: regularFont,
+      fontSize: 10,
+      color: rgb(0.35, 0.38, 0.38),
+      maxWidth: CONTENT_WIDTH,
+      lineHeight: 14,
+    });
+
+    y -= 8;
 
     y = drawWrappedText({
       page,
@@ -901,6 +919,11 @@ export async function generateAnomalyPdf({
       `Anormalidad_${
         anomaly.title ||
         "sin_titulo"
+      }${
+        orderedOccurrences.length === 1 &&
+        orderedOccurrences[0].reportType === "lot_summary"
+          ? `_Lote_${orderedOccurrences[0].lot}`
+          : ""
       }`,
     ) + ".pdf";
 

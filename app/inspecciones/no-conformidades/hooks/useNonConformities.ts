@@ -85,6 +85,19 @@ function mapLot(
         data.sampleQuantity || 0,
       ),
 
+    lotQuantity:
+      Number(
+        data.lotQuantity || data.sampleQuantity || 0,
+      ),
+
+    inspectionType:
+      data.inspectionType === "special" ? "special" : "normal",
+
+    inspectionLevel:
+      String(data.inspectionLevel || "") as NonConformityLot["inspectionLevel"],
+
+    aql: String(data.aql || ""),
+
     status:
       data.status === "finalized"
         ? "finalized"
@@ -735,6 +748,19 @@ const [
         }
 
         if (
+          !isValidSampleQuantity(input.lotQuantity) ||
+          input.sampleQuantity > input.lotQuantity
+        ) {
+          throw new Error(
+            "La cantidad total del lote debe ser igual o mayor a la cantidad inspeccionada.",
+          );
+        }
+
+        if (!input.inspectionType || !input.inspectionLevel || !input.aql.trim()) {
+          throw new Error("Completa el tipo, nivel de inspección y AQL.");
+        }
+
+        if (
           !input.responsiblePm ||
           !input.responsiblePm.email
         ) {
@@ -843,6 +869,17 @@ const [
 
               sampleQuantity:
                 input.sampleQuantity,
+
+              lotQuantity:
+                input.lotQuantity,
+
+              inspectionType:
+                input.inspectionType,
+
+              inspectionLevel:
+                input.inspectionLevel,
+
+              aql: input.aql.trim(),
 
               status: "draft",
 
@@ -961,15 +998,7 @@ const [
 
         if (!description) {
           throw new Error(
-            "Agrega la descripción de la no conformidad.",
-          );
-        }
-
-        if (
-          input.photos.length === 0
-        ) {
-          throw new Error(
-            "Agrega al menos una fotografía.",
+            "Agrega la descripción del rechazo por SPEC.",
           );
         }
 
@@ -983,7 +1012,7 @@ const [
         if (duplicatedSample) {
           throw new Error(
             `La muestra ${input.sampleNumber} ` +
-              "ya tiene una no conformidad registrada.",
+              "ya tiene un rechazo por SPEC registrado.",
           );
         }
 
@@ -1233,7 +1262,7 @@ const [
           }
 
           console.error(
-            "Error guardando no conformidad:",
+            "Error guardando rechazo por SPEC:",
             saveError,
           );
 

@@ -407,6 +407,9 @@ export default function AnomalyPdfDialog({
                           .sampleQuantity
                       }
                     </span>
+                    <span className="text-white/45">
+                      Total del lote: {occurrence.lotQuantity ?? "No registrado"}
+                    </span>
 
                     <span
                       className="mt-3

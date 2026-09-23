@@ -45,6 +45,10 @@ export type NewAnomalyReportInput = {
   lot: string;
   affectedQuantity: number;
   sampleQuantity: number;
+  lotQuantity: number;
+  inspectionType: "normal" | "special";
+  inspectionLevel: "I" | "II" | "III" | "S1" | "S2" | "S3" | "S4";
+  aql: string;
   photos: File[];
   responsiblePm: ResponsiblePm;
 };
@@ -436,6 +440,10 @@ export function useAnomalies({
         );
       }
 
+      if (!input.inspectionType || !input.inspectionLevel || !input.aql.trim()) {
+        throw new Error("Completa el tipo, nivel de inspección y AQL.");
+      }
+
       if (
         !Number.isInteger(
           input.affectedQuantity,
@@ -464,6 +472,16 @@ export function useAnomalies({
       ) {
         throw new Error(
           "El número de muestra no puede ser mayor que el tamaño de la muestra.",
+        );
+      }
+
+      if (
+        !Number.isInteger(input.lotQuantity) ||
+        input.lotQuantity < 1 ||
+        input.sampleQuantity > input.lotQuantity
+      ) {
+        throw new Error(
+          "La cantidad total del lote debe ser igual o mayor a la cantidad inspeccionada.",
         );
       }
 
@@ -667,10 +685,15 @@ let reportCommitted = false;
               anomalyReference.id,
             description,
             lot,
+            inspectionType: input.inspectionType,
+            inspectionLevel: input.inspectionLevel,
+            aql: input.aql.trim(),
             affectedQuantity:
               input.affectedQuantity,
             sampleQuantity:
               input.sampleQuantity,
+            lotQuantity:
+              input.lotQuantity,
             photos:
               uploadedPhotos,
             responsiblePmUid:

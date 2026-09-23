@@ -28,6 +28,10 @@ export default function NonConformityLotForm({
 }: Props) {
   const [lotName, setLotName] = useState("");
   const [sampleQuantity, setSampleQuantity] = useState("");
+  const [lotQuantity, setLotQuantity] = useState("");
+  const [inspectionType, setInspectionType] = useState<"normal" | "special" | "">("");
+  const [inspectionLevel, setInspectionLevel] = useState("");
+  const [aql, setAql] = useState("");
   const [responsiblePmEmail, setResponsiblePmEmail] = useState("");
   const [formError, setFormError] = useState("");
   const isMts = sourceType === "entrada_mts";
@@ -42,6 +46,7 @@ export default function NonConformityLotForm({
     event.preventDefault();
     const cleanLotName = lotName.trim();
     const totalSamples = Number(sampleQuantity);
+    const totalLot = Number(lotQuantity);
 
     if (!cleanLotName) {
       setFormError("Agrega el nombre del lote.");
@@ -52,6 +57,21 @@ export default function NonConformityLotForm({
       setFormError(
         "La cantidad de muestras debe ser un número entero mayor a cero.",
       );
+      return;
+    }
+
+    if (!Number.isInteger(totalLot) || totalLot < 1) {
+      setFormError("La cantidad total del lote debe ser un número entero mayor a cero.");
+      return;
+    }
+
+    if (totalSamples > totalLot) {
+      setFormError("La cantidad inspeccionada no puede superar la cantidad total del lote.");
+      return;
+    }
+
+    if (!inspectionType || !inspectionLevel || !aql.trim()) {
+      setFormError("Completa el tipo, nivel de inspección y AQL.");
       return;
     }
 
@@ -73,6 +93,10 @@ export default function NonConformityLotForm({
       await onSubmit({
         lotName: cleanLotName,
         sampleQuantity: totalSamples,
+        lotQuantity: totalLot,
+        inspectionType,
+        inspectionLevel: inspectionLevel as CreateNonConformityLotInput["inspectionLevel"],
+        aql: aql.trim(),
         responsiblePm,
       });
     } catch (error) {
@@ -98,7 +122,26 @@ export default function NonConformityLotForm({
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 sm:grid-cols-2">
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
+        <div>
+          <label htmlFor="spec-inspection-type" className="text-sm font-medium text-white/75">Tipo de inspección</label>
+          <select id="spec-inspection-type" value={inspectionType} onChange={(event) => { setInspectionType(event.target.value as "normal" | "special" | ""); setFormError(""); }} disabled={saving} className="mt-2 min-h-12 w-full rounded-xl border border-white/15 bg-[#111916] px-4 text-white outline-none focus:border-emerald-400/45 disabled:opacity-50">
+            <option value="">Selecciona una opción</option><option value="normal">Normal</option><option value="special">Especial</option>
+          </select>
+        </div>
+        <div>
+          <label htmlFor="spec-inspection-level" className="text-sm font-medium text-white/75">Nivel de inspección</label>
+          <select id="spec-inspection-level" value={inspectionLevel} onChange={(event) => { setInspectionLevel(event.target.value); setFormError(""); }} disabled={saving} className="mt-2 min-h-12 w-full rounded-xl border border-white/15 bg-[#111916] px-4 text-white outline-none focus:border-emerald-400/45 disabled:opacity-50">
+            <option value="">Selecciona un nivel</option>{["I", "II", "III", "S1", "S2", "S3", "S4"].map((level) => <option key={level} value={level}>{level}</option>)}
+          </select>
+        </div>
+        <div>
+          <label htmlFor="spec-aql" className="text-sm font-medium text-white/75">AQL</label>
+          <input id="spec-aql" value={aql} onChange={(event) => { setAql(event.target.value); setFormError(""); }} disabled={saving} placeholder="Ej. 1.0" className="mt-2 min-h-12 w-full rounded-xl border border-white/15 bg-black/25 px-4 text-white outline-none placeholder:text-white/30 focus:border-emerald-400/45 disabled:opacity-50" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 gap-5 sm:grid-cols-3">
         <div>
           <label htmlFor="nonconformity-lot-name" className="text-sm font-medium text-white/75">
             Nombre del lote
@@ -119,7 +162,7 @@ export default function NonConformityLotForm({
 
         <div>
           <label htmlFor="nonconformity-sample-quantity" className="text-sm font-medium text-white/75">
-            Muestras por inspeccionar
+            Cantidad inspeccionada
           </label>
           <input
             id="nonconformity-sample-quantity"
@@ -137,7 +180,31 @@ export default function NonConformityLotForm({
             className="mt-2 min-h-12 w-full rounded-xl border border-white/15 bg-black/25 px-4 text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/45 focus:ring-2 focus:ring-emerald-400/10 disabled:opacity-50"
           />
           <p className="mt-2 text-xs leading-relaxed text-white/40">
-            Cantidad total de piezas que serán revisadas.
+            Cantidad de piezas que forman parte de la inspección.
+          </p>
+        </div>
+
+        <div>
+          <label htmlFor="nonconformity-lot-quantity" className="text-sm font-medium text-white/75">
+            Cantidad total del lote
+          </label>
+          <input
+            id="nonconformity-lot-quantity"
+            type="number"
+            min="1"
+            step="1"
+            inputMode="numeric"
+            value={lotQuantity}
+            onChange={(event) => {
+              setLotQuantity(event.target.value);
+              setFormError("");
+            }}
+            disabled={saving}
+            placeholder="Ej. 500"
+            className="mt-2 min-h-12 w-full rounded-xl border border-white/15 bg-black/25 px-4 text-white outline-none transition placeholder:text-white/30 focus:border-emerald-400/45 focus:ring-2 focus:ring-emerald-400/10 disabled:opacity-50"
+          />
+          <p className="mt-2 text-xs leading-relaxed text-white/40">
+            Cantidad completa de piezas que contiene el lote.
           </p>
         </div>
       </div>

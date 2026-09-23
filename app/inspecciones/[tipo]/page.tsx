@@ -1290,6 +1290,10 @@ export default function InspectionTypePage() {
               anomalyThreadState
                 .savingOccurrence
             }
+            savingLotReport={
+              anomalyThreadState
+                .savingLotReport
+            }
             addingOccurrencePhotos={
               anomalyThreadState
                 .addingOccurrencePhotos
@@ -1308,6 +1312,10 @@ export default function InspectionTypePage() {
             onReportOccurrence={
               anomalyThreadState
                 .reportOccurrence
+            }
+            onReportLot={
+              anomalyThreadState
+                .reportLot
             }
             onAddOccurrencePhotos={
               anomalyThreadState
@@ -2000,7 +2008,7 @@ export default function InspectionTypePage() {
           .selectedLot.lotName;
       }
 
-      return "No conformidades";
+      return "Rechazos por SPEC";
     }
 
     if (selectedProcessComponent) {

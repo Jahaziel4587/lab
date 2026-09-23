@@ -250,7 +250,7 @@ export default function NonConformityReportForm({
     ) {
       setFormError(
         `La muestra ${parsedSampleNumber} ` +
-          "ya tiene una no conformidad registrada.",
+          "ya tiene un rechazo por SPEC registrado.",
       );
       return;
     }
@@ -260,14 +260,7 @@ export default function NonConformityReportForm({
 
     if (!cleanDescription) {
       setFormError(
-        "Agrega la descripción de la no conformidad.",
-      );
-      return;
-    }
-
-    if (photos.length === 0) {
-      setFormError(
-        "Agrega al menos una fotografía.",
+        "Agrega la descripción del rechazo por SPEC.",
       );
       return;
     }
@@ -310,7 +303,7 @@ export default function NonConformityReportForm({
             tracking-[0.18em]
             text-amber-200"
         >
-          Registrar no conformidad
+          Registrar rechazo por SPEC
         </p>
 
         <h2
@@ -326,12 +319,11 @@ export default function NonConformityReportForm({
             leading-relaxed
             text-white/55"
         >
-          Este lote contiene{" "}
+          Cantidad inspeccionada registrada:{" "}
           {sampleQuantity}{" "}
           {sampleQuantity === 1
-            ? "muestra"
-            : "muestras"}{" "}
-          por inspeccionar.
+            ? "pieza"
+            : "piezas"}.
         </p>
       </div>
 
@@ -394,7 +386,7 @@ export default function NonConformityReportForm({
           className="text-sm
             font-medium text-white/75"
         >
-          Descripción de la no conformidad
+          Descripción del rechazo por SPEC
         </label>
 
         <textarea
@@ -431,7 +423,7 @@ export default function NonConformityReportForm({
           className="text-sm
             font-medium text-white/75"
         >
-          Evidencia fotográfica
+          Evidencia fotográfica (opcional)
         </p>
 
         <p
@@ -439,7 +431,7 @@ export default function NonConformityReportForm({
             leading-relaxed
             text-white/40"
         >
-          Puedes tomar fotografías con
+          Si es necesario, puedes tomar fotografías con
           la cámara o seleccionar varias
           desde el dispositivo.
         </p>

@@ -75,6 +75,12 @@ export type NonConformityLot = {
    */
   sampleQuantity: number;
 
+  /* Cantidad completa de piezas que contiene el lote. */
+  lotQuantity: number;
+  inspectionType: "normal" | "special";
+  inspectionLevel: "I" | "II" | "III" | "S1" | "S2" | "S3" | "S4";
+  aql: string;
+
   status: NonConformityLotStatus;
 
   /*
@@ -118,6 +124,10 @@ export type ResponsibleNonConformityPm = {
 export type CreateNonConformityLotInput = {
   lotName: string;
   sampleQuantity: number;
+  lotQuantity: number;
+  inspectionType: "normal" | "special";
+  inspectionLevel: "I" | "II" | "III" | "S1" | "S2" | "S3" | "S4";
+  aql: string;
   responsiblePm:
     ResponsibleNonConformityPm;
 };

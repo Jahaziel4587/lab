@@ -427,7 +427,7 @@ export async function POST(
           "fueron rechazadas";
 
     const title =
-      "Lote con no conformidades";
+      "Lote con rechazos por SPEC";
 
     const notificationBody =
       `${inspectorName} registró que ` +

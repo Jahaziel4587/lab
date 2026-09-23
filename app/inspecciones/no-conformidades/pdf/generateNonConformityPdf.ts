@@ -523,7 +523,7 @@ export async function generateNonConformityPdf({
   };
 
   page.drawText(
-    "REPORTE OPERACIONAL DE NO CONFORMIDADES",
+    "REPORTE DE RECHAZOS POR SPEC",
     {
       x: MARGIN_X,
       y,
@@ -582,7 +582,7 @@ export async function generateNonConformityPdf({
   }
 
   page.drawText(
-    `Muestras planeadas: ${lot.sampleQuantity}`,
+    `Cantidad inspeccionada: ${lot.sampleQuantity}`,
     {
       x: MARGIN_X,
       y,
@@ -595,6 +595,35 @@ export async function generateNonConformityPdf({
       ),
     },
   );
+
+  y -= 18;
+
+  page.drawText(
+    `Cantidad total del lote: ${lot.lotQuantity}`,
+    {
+      x: MARGIN_X,
+      y,
+      size: 10.5,
+      font: regularFont,
+      color: rgb(0.25, 0.3, 0.29),
+    },
+  );
+
+  y -= 18;
+
+  y = drawWrappedText({
+    page,
+    text: `Tipo de inspección: ${lot.inspectionType === "special" ? "Especial" : "Normal"}   |   Nivel: ${lot.inspectionLevel || "No registrado"}   |   AQL: ${lot.aql || "No registrado"}`,
+    x: MARGIN_X,
+    y,
+    font: regularFont,
+    fontSize: 10.5,
+    color: rgb(0.25, 0.3, 0.29),
+    maxWidth: CONTENT_WIDTH,
+    lineHeight: 15,
+  });
+
+  y -= 8;
 
   page.drawText(
     `Muestras rechazadas: ${rejectedSampleCount}`,
@@ -856,7 +885,7 @@ export async function generateNonConformityPdf({
 
   const fileName =
     safeFileName(
-      `No_conformidades_${lot.lotName}`,
+      `Rechazos_por_SPEC_${lot.lotName}`,
     ) + ".pdf";
 
   downloadPdf(

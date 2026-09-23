@@ -388,14 +388,21 @@ export default function NonConformityList({
                     >
                       {lot.sampleQuantity}
                       {" "}
-                      muestras por
-                      inspeccionar
+                      piezas inspeccionadas
                       {" · "}
+                      {lot.lotQuantity}
+                      {" piezas totales · "}
                       {rejectedCount}
                       {" "}
                       {rejectedCount === 1
                         ? "muestra rechazada"
                         : "muestras rechazadas"}
+                    </p>
+
+                    <p className="mt-1 text-xs text-white/40">
+                      Inspección {lot.inspectionType === "special" ? "especial" : "normal"}
+                      {" · Nivel "}{lot.inspectionLevel || "no registrado"}
+                      {" · AQL "}{lot.aql || "no registrado"}
                     </p>
 
                     {formatDate(
