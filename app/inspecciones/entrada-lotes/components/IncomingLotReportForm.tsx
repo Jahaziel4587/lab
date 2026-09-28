@@ -25,6 +25,7 @@ import type {
 type Props = {
   initialKind: IncomingLotFindingKind;
   lockedSpecMode: SpecCountingMode;
+  inspectedQuantity: number;
   saving?: boolean;
   onSubmit: (input: CreateIncomingLotReportInput) => Promise<void>;
   onCancel: () => void;
@@ -33,6 +34,7 @@ type Props = {
 export default function IncomingLotReportForm({
   initialKind,
   lockedSpecMode,
+  inspectedQuantity,
   saving = false,
   onSubmit,
   onCancel,
@@ -95,9 +97,15 @@ export default function IncomingLotReportForm({
     }
     if (
       mode === "sample_number" &&
-      (!Number.isInteger(parsedSample) || parsedSample < 1)
+      (
+        !Number.isInteger(parsedSample) ||
+        parsedSample < 1 ||
+        parsedSample > inspectedQuantity
+      )
     ) {
-      setFormError("Agrega un número de muestra válido.");
+      setFormError(
+        `El número de muestra debe estar entre 1 y ${inspectedQuantity}.`,
+      );
       return;
     }
     if (kind === "anomaly" && photos.length === 0) {
