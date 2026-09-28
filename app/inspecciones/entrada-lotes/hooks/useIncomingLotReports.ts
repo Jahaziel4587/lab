@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  addDoc,
   collection,
   doc,
   onSnapshot,
@@ -23,6 +24,7 @@ import type {
   CreateIncomingLotReportInput,
   IncomingInspectionContext,
   IncomingInspectionLot,
+  IncomingLotAnomalyMessage,
   IncomingLotReport,
   IncomingLotReportPhoto,
 } from "../types";
@@ -30,6 +32,7 @@ import type {
 type Params = {
   context: IncomingInspectionContext | null;
   lot: IncomingInspectionLot | null;
+  selectedAnomalyId?: string | null;
 };
 
 function safePath(value: string) {
@@ -63,6 +66,18 @@ function mapReport(
     photos: Array.isArray(data.photos)
       ? data.photos as IncomingLotReportPhoto[]
       : [],
+    status: data.status === "resolved"
+      ? "resolved"
+      : data.status === "pending_decision"
+        ? "pending_decision"
+        : "pending_title",
+    decision: data.decision === "pass" || data.decision === "fail"
+      ? data.decision
+      : null,
+    decidedByUid: String(data.decidedByUid || ""),
+    decidedByEmail: String(data.decidedByEmail || ""),
+    decidedByName: String(data.decidedByName || ""),
+    decidedAt: data.decidedAt,
     createdByUid: String(data.createdByUid || ""),
     createdByEmail: String(data.createdByEmail || ""),
     createdByName: String(data.createdByName || ""),
@@ -74,12 +89,23 @@ function mapReport(
 export function useIncomingLotReports({
   context,
   lot,
+  selectedAnomalyId = null,
 }: Params) {
-  const { user, displayName } = useAuth();
+  const { user, displayName, isAdmin } = useAuth();
   const [reports, setReports] = useState<IncomingLotReport[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [messages, setMessages] = useState<IncomingLotAnomalyMessage[]>([]);
+  const [messagesLoading, setMessagesLoading] = useState(false);
+
+  const canDecideAnomalies = Boolean(
+    user && lot && (
+      isAdmin ||
+      user.uid === lot.responsiblePmUid ||
+      Boolean(user.email && user.email.toLowerCase() === lot.responsiblePmEmail.toLowerCase())
+    )
+  );
 
   useEffect(() => {
     if (!context || !lot) {
@@ -114,6 +140,47 @@ export function useIncomingLotReports({
     );
   }, [context, lot]);
 
+  useEffect(() => {
+    if (!context || !lot || !selectedAnomalyId) {
+      setMessages([]);
+      setMessagesLoading(false);
+      return;
+    }
+    setMessagesLoading(true);
+    const messagesReference = collection(
+      db,
+      "inspection_incoming_lots",
+      context.scopeKey,
+      "lots",
+      lot.id,
+      "reports",
+      selectedAnomalyId,
+      "messages",
+    );
+    return onSnapshot(
+      query(messagesReference, orderBy("createdAt", "asc")),
+      (snapshot) => {
+        setMessages(snapshot.docs.map((entry) => {
+          const data = entry.data();
+          return {
+            id: entry.id,
+            text: String(data.text || ""),
+            type: data.type === "decision" ? "decision" : "message",
+            createdByUid: String(data.createdByUid || ""),
+            createdByEmail: String(data.createdByEmail || ""),
+            createdByName: String(data.createdByName || "Usuario"),
+            createdAt: data.createdAt,
+          };
+        }));
+        setMessagesLoading(false);
+      },
+      () => {
+        setMessagesLoading(false);
+        setError("No fue posible cargar la conversación de la anormalidad.");
+      },
+    );
+  }, [context, lot, selectedAnomalyId]);
+
   const createReport = useCallback(async (
     input: CreateIncomingLotReportInput,
   ) => {
@@ -126,8 +193,8 @@ export function useIncomingLotReports({
 
     const title = input.title.trim();
     const description = input.description.trim();
-    if (!title || !description) {
-      throw new Error("Agrega el título y la descripción.");
+    if (input.kind === "spec_rejection" && !title) {
+      throw new Error("Agrega el título del rechazo por SPEC.");
     }
 
     const amount = input.mode === "quantity"
@@ -141,9 +208,6 @@ export function useIncomingLotReports({
       (!Number.isInteger(input.sampleNumber) || Number(input.sampleNumber) < 1)
     ) {
       throw new Error("El número de muestra debe ser mayor a cero.");
-    }
-    if (input.kind === "anomaly" && input.photos.length === 0) {
-      throw new Error("Agrega al menos una fotografía de la anormalidad.");
     }
 
     setSaving(true);
@@ -220,6 +284,9 @@ export function useIncomingLotReports({
             ? { quantity: amount }
             : { sampleNumber: Number(input.sampleNumber) }),
           photos,
+          ...(input.kind === "anomaly"
+            ? { status: "pending_title", decision: null }
+            : {}),
           createdByUid: user.uid,
           createdByEmail: user.email || "",
           createdByName:
@@ -247,6 +314,81 @@ export function useIncomingLotReports({
       setSaving(false);
     }
   }, [context, displayName, lot, user]);
+
+  const addAnomalyMessage = useCallback(async (
+    reportId: string,
+    text: string,
+  ) => {
+    if (!context || !lot || !user || !text.trim()) {
+      throw new Error("Escribe un mensaje.");
+    }
+    await addDoc(collection(
+      db,
+      "inspection_incoming_lots",
+      context.scopeKey,
+      "lots",
+      lot.id,
+      "reports",
+      reportId,
+      "messages",
+    ), {
+      text: text.trim(),
+      type: "message",
+      createdByUid: user.uid,
+      createdByEmail: user.email || "",
+      createdByName: displayName || user.displayName || user.email || "Usuario",
+      createdAt: serverTimestamp(),
+    });
+  }, [context, displayName, lot, user]);
+
+  const resolveAnomaly = useCallback(async (
+    reportId: string,
+    title: string,
+    decision: "pass" | "fail",
+    comment: string,
+  ) => {
+    if (!context || !lot || !user) {
+      throw new Error("Falta la sesión o la información del lote.");
+    }
+    if (!canDecideAnomalies) {
+      throw new Error("Solo el PM responsable o un administrador puede tomar esta decisión.");
+    }
+    if (!title.trim()) {
+      throw new Error("Asigna un título a la anormalidad.");
+    }
+    const reportReference = doc(
+      db,
+      "inspection_incoming_lots",
+      context.scopeKey,
+      "lots",
+      lot.id,
+      "reports",
+      reportId,
+    );
+    const messageReference = doc(collection(reportReference, "messages"));
+    const actorName = displayName || user.displayName || user.email || "Usuario";
+    await runTransaction(db, async (transaction) => {
+      transaction.update(reportReference, {
+        title: title.trim(),
+        status: "resolved",
+        decision,
+        decidedByUid: user.uid,
+        decidedByEmail: user.email || "",
+        decidedByName: actorName,
+        decidedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      });
+      transaction.set(messageReference, {
+        text: comment.trim() || (decision === "pass" ? "Anormalidad aceptada." : "Anormalidad rechazada."),
+        type: "decision",
+        decision,
+        createdByUid: user.uid,
+        createdByEmail: user.email || "",
+        createdByName: actorName,
+        createdAt: serverTimestamp(),
+      });
+    });
+  }, [canDecideAnomalies, context, displayName, lot, user]);
 
   const addQuantity = useCallback(async (
     report: IncomingLotReport,
@@ -331,8 +473,13 @@ export function useIncomingLotReports({
     loading,
     saving,
     error,
+    messages,
+    messagesLoading,
+    canDecideAnomalies,
     createReport,
     addQuantity,
+    addAnomalyMessage,
+    resolveAnomaly,
     confirmUniqueRejectedQuantity,
   };
 }
