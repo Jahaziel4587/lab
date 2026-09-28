@@ -50,6 +50,8 @@ import IncomingLotForm from
   "../entrada-lotes/components/IncomingLotForm";
 import IncomingLotList from
   "../entrada-lotes/components/IncomingLotList";
+import IncomingLotDetail from
+  "../entrada-lotes/components/IncomingLotDetail";
 import { useIncomingInspectionLots } from
   "../entrada-lotes/hooks/useIncomingInspectionLots";
 import { useIncomingResponsiblePms } from
@@ -1715,17 +1717,10 @@ export default function InspectionTypePage() {
       }
 
       return (
-        <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.06] p-5">
-          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-300">
-            Lote en curso
-          </p>
-          <h2 className="mt-2 text-xl font-semibold text-white">
-            {selectedIncomingLot.lotName}
-          </h2>
-          <p className="mt-2 text-sm text-white/55">
-            El detalle del lote y los botones para registrar anormalidades y rechazos por SPEC se agregarán en la siguiente etapa.
-          </p>
-        </div>
+        <IncomingLotDetail
+          context={incomingLotContext}
+          lot={selectedIncomingLot}
+        />
       );
     }
 
