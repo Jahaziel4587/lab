@@ -24,6 +24,7 @@ import type {
 
 type Props = {
   initialKind: IncomingLotFindingKind;
+  initialMode: IncomingLotReportMode;
   lockedSpecMode: SpecCountingMode;
   inspectedQuantity: number;
   saving?: boolean;
@@ -33,6 +34,7 @@ type Props = {
 
 export default function IncomingLotReportForm({
   initialKind,
+  initialMode,
   lockedSpecMode,
   inspectedQuantity,
   saving = false,
@@ -40,11 +42,10 @@ export default function IncomingLotReportForm({
   onCancel,
 }: Props) {
   const fileReference = useRef<HTMLInputElement | null>(null);
-  const [kind, setKind] = useState<IncomingLotFindingKind>(initialKind);
   const [mode, setMode] = useState<IncomingLotReportMode>(
     initialKind === "spec_rejection" && lockedSpecMode
       ? lockedSpecMode
-      : "quantity",
+      : initialMode,
   );
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -54,10 +55,10 @@ export default function IncomingLotReportForm({
   const [formError, setFormError] = useState("");
 
   useEffect(() => {
-    if (kind === "spec_rejection" && lockedSpecMode) {
+    if (initialKind === "spec_rejection" && lockedSpecMode) {
       setMode(lockedSpecMode);
     }
-  }, [kind, lockedSpecMode]);
+  }, [initialKind, lockedSpecMode]);
 
   const previews = useMemo(() => photos.map((file) => ({
     file,
@@ -80,12 +81,8 @@ export default function IncomingLotReportForm({
     const parsedQuantity = Number(quantity);
     const parsedSample = Number(sampleNumber);
 
-    if (kind === "spec_rejection" && !title.trim()) {
+    if (initialKind === "spec_rejection" && !title.trim()) {
       setFormError("Agrega el título del rechazo por SPEC.");
-      return;
-    }
-    if (!description.trim()) {
-      setFormError("Agrega una descripción.");
       return;
     }
     if (
@@ -108,17 +105,12 @@ export default function IncomingLotReportForm({
       );
       return;
     }
-    if (kind === "anomaly" && photos.length === 0) {
-      setFormError("La anormalidad requiere al menos una fotografía.");
-      return;
-    }
-
     try {
       setFormError("");
       await onSubmit({
-        kind,
+        kind: initialKind,
         mode,
-        title: kind === "anomaly" ? "Pendiente de título" : title.trim(),
+        title: initialKind === "anomaly" ? "Pendiente de título" : title.trim(),
         description: description.trim(),
         quantity: mode === "quantity" ? parsedQuantity : undefined,
         sampleNumber: mode === "sample_number" ? parsedSample : undefined,
@@ -135,7 +127,9 @@ export default function IncomingLotReportForm({
         <div className="flex items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">Nuevo reporte</p>
-            <h2 className="mt-2 text-2xl font-semibold text-white">Registrar hallazgo</h2>
+            <h2 className="mt-2 text-2xl font-semibold text-white">
+              {initialKind === "anomaly" ? "Registrar anormalidad" : "Registrar rechazo por SPEC"}
+            </h2>
           </div>
           <button type="button" onClick={onCancel} className="rounded-xl border border-white/10 p-2 text-white/60 hover:bg-white/5">
             <X size={18} />
@@ -143,32 +137,7 @@ export default function IncomingLotReportForm({
         </div>
 
         <form onSubmit={submit} className="mt-6 space-y-5">
-          <div className="grid grid-cols-2 gap-2 rounded-2xl bg-white/[0.04] p-1.5">
-            {(["anomaly", "spec_rejection"] as IncomingLotFindingKind[]).map((value) => (
-              <button key={value} type="button" onClick={() => setKind(value)} className={`rounded-xl px-3 py-3 text-sm font-medium ${kind === value ? "bg-emerald-400/15 text-emerald-200" : "text-white/45"}`}>
-                {value === "anomaly" ? "Anormalidad" : "Rechazo por SPEC"}
-              </button>
-            ))}
-          </div>
-
-          <div>
-            <p className="mb-2 text-sm text-white/70">Manera de reportar</p>
-            <div className="grid grid-cols-2 gap-2">
-              {(["quantity", "sample_number"] as IncomingLotReportMode[]).map((value) => {
-                const disabled = kind === "spec_rejection" && Boolean(lockedSpecMode) && lockedSpecMode !== value;
-                return (
-                  <button key={value} type="button" disabled={disabled} onClick={() => setMode(value)} className={`rounded-xl border px-3 py-3 text-sm ${mode === value ? "border-emerald-400/35 bg-emerald-400/10 text-emerald-100" : "border-white/10 text-white/45"} disabled:opacity-30`}>
-                    {value === "quantity" ? "Cantidad de piezas" : "Número de muestra"}
-                  </button>
-                );
-              })}
-            </div>
-            {kind === "spec_rejection" && lockedSpecMode && (
-              <p className="mt-2 text-xs text-amber-200/70">La modalidad quedó definida por el primer rechazo registrado.</p>
-            )}
-          </div>
-
-          {kind === "spec_rejection" && (
+          {initialKind === "spec_rejection" && (
             <label className="block text-sm text-white/70">
               Título del rechazo
               <input value={title} onChange={(event) => setTitle(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none focus:border-emerald-400/40" placeholder="Ej. Piezas amarillas" />
@@ -176,7 +145,7 @@ export default function IncomingLotReportForm({
           )}
 
           <label className="block text-sm text-white/70">
-            Descripción
+            Descripción (opcional)
             <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={4} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none focus:border-emerald-400/40" placeholder="Describe lo observado. Puedes incluir aquí el rango inspeccionado." />
           </label>
 
@@ -189,7 +158,7 @@ export default function IncomingLotReportForm({
             <div className="flex items-center justify-between gap-3">
               <div>
                 <p className="text-sm text-white/70">Fotografías</p>
-                <p className="text-xs text-white/35">{kind === "anomaly" ? "Obligatorias para anormalidades." : "Opcionales para rechazos por SPEC."}</p>
+                <p className="text-xs text-white/35">Opcionales para este reporte.</p>
               </div>
               <button type="button" onClick={() => fileReference.current?.click()} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-4 py-2 text-sm text-white/70 hover:bg-white/5">
                 <Camera size={16} /> Agregar
