@@ -125,11 +125,27 @@ export type IncomingLotReport = {
   quantity?: number;
   sampleNumber?: number;
   photos: IncomingLotReportPhoto[];
+  status?: "pending_title" | "pending_decision" | "resolved";
+  decision?: "pass" | "fail" | null;
+  decidedByUid?: string;
+  decidedByEmail?: string;
+  decidedByName?: string;
+  decidedAt?: unknown;
   createdByUid: string;
   createdByEmail: string;
   createdByName: string;
   createdAt?: unknown;
   updatedAt?: unknown;
+};
+
+export type IncomingLotAnomalyMessage = {
+  id: string;
+  text: string;
+  type: "message" | "decision";
+  createdByUid: string;
+  createdByEmail: string;
+  createdByName: string;
+  createdAt?: unknown;
 };
 
 export type CreateIncomingLotReportInput = {
