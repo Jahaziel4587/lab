@@ -46,6 +46,17 @@ import type { NonConformityLot } from
 import { buildNonConformityContext } from
   "../no-conformidades/utils";
 
+import IncomingLotForm from
+  "../entrada-lotes/components/IncomingLotForm";
+import IncomingLotList from
+  "../entrada-lotes/components/IncomingLotList";
+import { useIncomingInspectionLots } from
+  "../entrada-lotes/hooks/useIncomingInspectionLots";
+import { useIncomingResponsiblePms } from
+  "../entrada-lotes/hooks/useIncomingResponsiblePms";
+import { buildIncomingInspectionContext } from
+  "../entrada-lotes/utils";
+
 import CatalogList, {
   type CatalogListItem,
 } from "../components/CatalogList";
@@ -101,6 +112,10 @@ export default function InspectionTypePage() {
     searchParams.get("enviado") === "1";
   const nonConformityLotId =
     searchParams.get("lote");
+  const incomingLotId =
+    searchParams.get("loteEntrada");
+  const incomingLotAction =
+    searchParams.get("accionLote");
 
   const validInspectionType =
     isInspectionType(tipo);
@@ -198,6 +213,48 @@ export default function InspectionTypePage() {
           workInstruction.id === wiId,
       );
 
+  const incomingLotContext = useMemo(
+    () =>
+      isEntrada
+        ? buildIncomingInspectionContext({
+            origin,
+            projectId,
+            projectName:
+              selectedProject?.title,
+            wiCode: selectedWi?.id,
+            wiTitle: selectedWi?.title,
+          })
+        : null,
+    [
+      isEntrada,
+      origin,
+      projectId,
+      selectedProject?.title,
+      selectedWi?.id,
+      selectedWi?.title,
+    ],
+  );
+
+  const incomingLotsState =
+    useIncomingInspectionLots({
+      context: incomingLotContext,
+      enabled:
+        isEntrada &&
+        Boolean(incomingLotContext),
+    });
+
+  const incomingPmsState =
+    useIncomingResponsiblePms(
+      incomingLotContext,
+      isEntrada &&
+        Boolean(incomingLotContext),
+    );
+
+  const selectedIncomingLot =
+    incomingLotsState.lots.find(
+      (lot) => lot.id === incomingLotId,
+    ) || null;
+
   const processComponentsState =
     useProcessComponents({
       projectId,
@@ -272,6 +329,7 @@ export default function InspectionTypePage() {
       context: anomalyContext,
       enabled:
         validInspectionType &&
+        !isEntrada &&
         findingType === "anormalidad" &&
         Boolean(anomalyContext),
     });
@@ -289,6 +347,7 @@ export default function InspectionTypePage() {
       anomalyId,
       enabled:
         validInspectionType &&
+        !isEntrada &&
         findingType ===
           "anormalidad" &&
         Boolean(
@@ -334,6 +393,7 @@ export default function InspectionTypePage() {
         nonConformityLotId,
       enabled:
         validInspectionType &&
+        !isEntrada &&
         findingType ===
           "no_conformidad" &&
         Boolean(
@@ -425,6 +485,20 @@ export default function InspectionTypePage() {
   };
 
   const goBack = () => {
+    if (
+      isEntrada &&
+      (incomingLotId ||
+        incomingLotAction === "nuevo")
+    ) {
+      const query = buildCurrentQuery({
+        includeFinding: false,
+      });
+      router.push(
+        `/inspecciones/${tipo}?${query.toString()}`,
+      );
+      return;
+    }
+
     if (
       findingType ===
         "no_conformidad" &&
@@ -699,6 +773,56 @@ export default function InspectionTypePage() {
     router.push(
       `/inspecciones/${tipo}` +
         `?${query.toString()}`,
+    );
+  };
+
+  const openIncomingLotForm = () => {
+    const query = buildCurrentQuery({
+      includeFinding: false,
+    });
+    query.set("accionLote", "nuevo");
+    router.push(
+      `/inspecciones/${tipo}?${query.toString()}`,
+    );
+  };
+
+  const cancelIncomingLotForm = () => {
+    const query = buildCurrentQuery({
+      includeFinding: false,
+    });
+    router.push(
+      `/inspecciones/${tipo}?${query.toString()}`,
+    );
+  };
+
+  const createIncomingLot = async (
+    input: Parameters<
+      typeof incomingLotsState.createLot
+    >[0],
+  ) => {
+    const result = await incomingLotsState
+      .createLot(input);
+    const query = buildCurrentQuery({
+      includeFinding: false,
+    });
+    query.set(
+      "loteEntrada",
+      result.lotId,
+    );
+    router.push(
+      `/inspecciones/${tipo}?${query.toString()}`,
+    );
+  };
+
+  const openIncomingLot = (
+    lotId: string,
+  ) => {
+    const query = buildCurrentQuery({
+      includeFinding: false,
+    });
+    query.set("loteEntrada", lotId);
+    router.push(
+      `/inspecciones/${tipo}?${query.toString()}`,
     );
   };
 
@@ -1554,6 +1678,68 @@ export default function InspectionTypePage() {
       );
     };
 
+  const renderIncomingLotContent = () => {
+    if (!incomingLotContext) {
+      return renderError(
+        "Falta información del componente de entrada.",
+      );
+    }
+
+    if (incomingLotAction === "nuevo") {
+      return (
+        <IncomingLotForm
+          responsiblePms={
+            incomingPmsState.responsiblePms
+          }
+          loadingPms={
+            incomingPmsState.loadingPms
+          }
+          saving={incomingLotsState.creating}
+          onSubmit={createIncomingLot}
+          onCancel={cancelIncomingLotForm}
+        />
+      );
+    }
+
+    if (incomingLotId) {
+      if (incomingLotsState.loading) {
+        return renderLoading(
+          "Cargando lote...",
+        );
+      }
+
+      if (!selectedIncomingLot) {
+        return renderError(
+          "No se encontró el lote seleccionado.",
+        );
+      }
+
+      return (
+        <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.06] p-5">
+          <p className="text-xs font-semibold uppercase tracking-wider text-emerald-300">
+            Lote en curso
+          </p>
+          <h2 className="mt-2 text-xl font-semibold text-white">
+            {selectedIncomingLot.lotName}
+          </h2>
+          <p className="mt-2 text-sm text-white/55">
+            El detalle del lote y los botones para registrar anormalidades y rechazos por SPEC se agregarán en la siguiente etapa.
+          </p>
+        </div>
+      );
+    }
+
+    return (
+      <IncomingLotList
+        lots={incomingLotsState.lots}
+        loading={incomingLotsState.loading}
+        error={incomingLotsState.error}
+        onCreate={openIncomingLotForm}
+        onOpen={openIncomingLot}
+      />
+    );
+  };
+
   const renderContent = () => {
     /*
      * Inicio de Entrada.
@@ -1777,6 +1963,16 @@ export default function InspectionTypePage() {
     }
 
     /*
+     * Entrada usa exclusivamente el nuevo
+     * flujo centrado en lotes. Las pantallas
+     * anteriores de hallazgos quedan solamente
+     * para inspecciones de proceso.
+     */
+    if (isEntrada && selectedWi) {
+      return renderIncomingLotContent();
+    }
+
+    /*
      * Antes de abrir un hallazgo de proceso
      * esperamos a cargar el componente.
      */
@@ -1954,6 +2150,18 @@ export default function InspectionTypePage() {
   };
 
   const getTitle = () => {
+    if (isEntrada && selectedWi) {
+      if (incomingLotAction === "nuevo") {
+        return "Agregar lote";
+      }
+
+      if (selectedIncomingLot) {
+        return selectedIncomingLot.lotName;
+      }
+
+      return selectedWi.title;
+    }
+
     if (
       findingType === "anormalidad"
     ) {
@@ -2043,6 +2251,18 @@ export default function InspectionTypePage() {
   };
 
   const getDescription = () => {
+    if (isEntrada && selectedWi) {
+      if (incomingLotAction === "nuevo") {
+        return "Registra la información y el criterio de aceptación de la inspección.";
+      }
+
+      if (selectedIncomingLot) {
+        return "Consulta el avance y registra los hallazgos de este lote.";
+      }
+
+      return "Consulta los lotes registrados para este componente.";
+    }
+
     if (
       findingType === "anormalidad"
     ) {
@@ -2170,11 +2390,11 @@ export default function InspectionTypePage() {
         steps: [
           "Origen",
           "Componente MTS",
-          "Tipo de hallazgo",
-          "Registro",
+          "Lotes",
+          "Detalle",
         ],
         currentStep:
-          findingType
+          incomingLotId
             ? 4
             : wiId
               ? 3
@@ -2188,11 +2408,11 @@ export default function InspectionTypePage() {
           "Origen",
           "Proyecto",
           "Componente",
-          "Tipo de hallazgo",
-          "Registro",
+          "Lotes",
+          "Detalle",
         ],
         currentStep:
-          findingType
+          incomingLotId
             ? 5
             : wiId
               ? 4
@@ -2270,7 +2490,8 @@ export default function InspectionTypePage() {
             {getTitle()}
           </h1>
 
-          {findingType ===
+          {!isEntrada &&
+            findingType ===
             "anormalidad" &&
             anomaliesState.hasAnomalies &&
             !anomalyId &&
