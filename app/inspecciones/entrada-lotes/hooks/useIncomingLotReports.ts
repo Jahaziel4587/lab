@@ -161,7 +161,9 @@ export function useIncomingLotReports({
       const photos = await Promise.all(
         input.photos.map(async (photo, index) => {
           const storagePath = [
-            "inspection-incoming-lots",
+            input.kind === "anomaly"
+              ? "inspection-anomalies"
+              : "inspection-nonconformities",
             safePath(context.scopeKey),
             lot.id,
             reportReference.id,
@@ -170,6 +172,16 @@ export function useIncomingLotReports({
           const storageReference = ref(storage, storagePath);
           await uploadBytes(storageReference, photo, {
             contentType: photo.type || "image/jpeg",
+            customMetadata: {
+              ownerUid: user.uid,
+              scopeKey: context.scopeKey,
+              lotId: lot.id,
+              reportId: reportReference.id,
+              anomalyId: lot.id,
+              occurrenceId: reportReference.id,
+              sampleNumber: String(input.sampleNumber || 0),
+              findingKind: input.kind,
+            },
           });
           return {
             name: photo.name,
