@@ -101,3 +101,43 @@ export type CreateIncomingInspectionLotInput = {
   allowedRejectedQuantity: number;
   responsiblePm: IncomingLotResponsible;
 };
+
+export type IncomingLotFindingKind =
+  | "anomaly"
+  | "spec_rejection";
+
+export type IncomingLotReportMode =
+  | "quantity"
+  | "sample_number";
+
+export type IncomingLotReportPhoto = {
+  name: string;
+  url: string;
+  storagePath: string;
+};
+
+export type IncomingLotReport = {
+  id: string;
+  kind: IncomingLotFindingKind;
+  mode: IncomingLotReportMode;
+  title: string;
+  description: string;
+  quantity?: number;
+  sampleNumber?: number;
+  photos: IncomingLotReportPhoto[];
+  createdByUid: string;
+  createdByEmail: string;
+  createdByName: string;
+  createdAt?: unknown;
+  updatedAt?: unknown;
+};
+
+export type CreateIncomingLotReportInput = {
+  kind: IncomingLotFindingKind;
+  mode: IncomingLotReportMode;
+  title: string;
+  description: string;
+  quantity?: number;
+  sampleNumber?: number;
+  photos: File[];
+};
