@@ -202,6 +202,7 @@ export default function IncomingLotDetail({ context, lot }: Props) {
         <IncomingLotReportForm
           initialKind={reportKind}
           lockedSpecMode={lot.specCountingMode}
+          inspectedQuantity={lot.inspectedQuantity}
           saving={reportsState.saving}
           onSubmit={async (input) => {
             await reportsState.createReport(input);
