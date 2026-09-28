@@ -209,7 +209,28 @@ export function useIncomingInspectionLots({
         batch.set(
           scopeReference,
           {
-            ...context,
+            sourceType:
+              context.sourceType,
+            scopeKey:
+              context.scopeKey,
+            wiCode: context.wiCode,
+            wiTitle: context.wiTitle,
+            componentId:
+              context.componentId,
+            componentTitle:
+              context.componentTitle,
+            ...(context.projectId
+              ? {
+                  projectId:
+                    context.projectId,
+                }
+              : {}),
+            ...(context.projectName
+              ? {
+                  projectName:
+                    context.projectName,
+                }
+              : {}),
             active: true,
             updatedAt:
               serverTimestamp(),
