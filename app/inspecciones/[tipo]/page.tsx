@@ -2478,7 +2478,7 @@ export default function InspectionTypePage() {
             : "Proceso"}
         </p>
 
-        <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        {!(isEntrada && selectedIncomingLot) && <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <h1
             className="text-2xl font-semibold sm:text-3xl"
           >
@@ -2503,15 +2503,15 @@ export default function InspectionTypePage() {
                 Reportar nueva anormalidad
               </button>
             )}
-        </div>
+        </div>}
 
-        <p
+        {!(isEntrada && selectedIncomingLot) && <p
           className="mt-3 max-w-2xl
             text-sm leading-relaxed
             text-white/65 sm:text-base"
         >
           {getDescription()}
-        </p>
+        </p>}
 
         <div className="mt-7">
           {renderContent()}
