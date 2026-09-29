@@ -11,6 +11,7 @@ import {
   runTransaction,
   serverTimestamp,
   updateDoc,
+  writeBatch,
 } from "firebase/firestore";
 import {
   getDownloadURL,
@@ -63,6 +64,10 @@ function mapReport(
       typeof data.sampleNumber === "number"
         ? data.sampleNumber
         : undefined,
+    finalRejectedQuantity:
+      typeof data.finalRejectedQuantity === "number"
+        ? data.finalRejectedQuantity
+        : undefined,
     photos: Array.isArray(data.photos)
       ? data.photos as IncomingLotReportPhoto[]
       : [],
@@ -106,7 +111,7 @@ export function useIncomingLotReports({
   );
 
   const notify = useCallback(async (
-    action: "anomaly_created" | "message" | "decision" | "threshold_exceeded",
+    action: "anomaly_created" | "message" | "decision" | "threshold_exceeded" | "lot_finalized",
     details: { reportId?: string; messageId?: string } = {},
   ) => {
     if (!user || !context || !lot) return;
@@ -540,6 +545,14 @@ export function useIncomingLotReports({
       {
         confirmedUniqueRejectedQuantity: uniqueQuantity,
         lastReviewedReportedQuantity: lot.reportedRejectedQuantity,
+        rejectionClarifications: arrayUnion({
+          reportedQuantity: lot.reportedRejectedQuantity,
+          confirmedUniqueQuantity: uniqueQuantity,
+          allowedQuantity: lot.allowedRejectedQuantity,
+          repeatedSamples: uniqueQuantity < lot.reportedRejectedQuantity,
+          createdByName: displayName || user?.displayName || user?.email || "Usuario",
+          createdAt: new Date(),
+        }),
         inspectionResult:
           uniqueQuantity > lot.allowedRejectedQuantity
             ? "will_fail"
@@ -550,10 +563,11 @@ export function useIncomingLotReports({
     if (uniqueQuantity > lot.allowedRejectedQuantity) {
       await notify("threshold_exceeded");
     }
-  }, [context, lot, notify]);
+  }, [context, displayName, lot, notify, user]);
 
   const finalizeLot = useCallback(async (
     quantities: Record<string, number>,
+    finalRejectedPieces: number,
   ) => {
     if (!context || !lot || !user) {
       throw new Error("Falta la sesión o la información del lote.");
@@ -582,20 +596,36 @@ export function useIncomingLotReports({
       }
       return { title, quantity };
     });
-    await updateDoc(
-      doc(db, "inspection_incoming_lots", context.scopeKey, "lots", lot.id),
-      {
+    if (!Number.isInteger(finalRejectedPieces) || finalRejectedPieces < 0 || finalRejectedPieces > lot.totalLotQuantity) {
+      throw new Error("Agrega una cantidad válida de piezas que no pasaron la inspección.");
+    }
+    const lotReference = doc(db, "inspection_incoming_lots", context.scopeKey, "lots", lot.id);
+    const batch = writeBatch(db);
+    batch.update(lotReference, {
         status: "finalized",
         inspectionResult: lot.inspectionResult === "pending" ? "within_limit" : lot.inspectionResult,
         finalAnomalyQuantities,
+        finalRejectedPieces,
         finalizedByUid: user.uid,
         finalizedByEmail: user.email || "",
         finalizedByName: displayName || user.displayName || user.email || "Usuario",
         finalizedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
-      },
-    );
-  }, [context, displayName, lot, reports, user]);
+    });
+    anomalies
+      .filter((report) => report.decision === "fail")
+      .forEach((report) => {
+        const finalQuantity = finalAnomalyQuantities.find((item) => item.title === report.title.trim())?.quantity;
+        if (typeof finalQuantity === "number") {
+          batch.update(doc(lotReference, "reports", report.id), {
+            finalRejectedQuantity: finalQuantity,
+            updatedAt: serverTimestamp(),
+          });
+        }
+      });
+    await batch.commit();
+    await notify("lot_finalized");
+  }, [context, displayName, lot, notify, reports, user]);
 
   return {
     reports,
