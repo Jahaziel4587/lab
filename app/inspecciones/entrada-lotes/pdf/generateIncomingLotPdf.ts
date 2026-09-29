@@ -71,7 +71,10 @@ async function toJpeg(blob: Blob) {
   } finally { URL.revokeObjectURL(url); }
 }
 async function loadImage(pdf: PDFDocument, path: string, token: string): Promise<PDFImage> {
-  const response = await fetch(`/api/inspections/incoming-lots/image?${new URLSearchParams({ path })}`, { headers: { Authorization: `Bearer ${token}` } });
+  const endpoint = path.startsWith("inspection-anomalies/")
+    ? "/api/inspections/anomalies/image"
+    : "/api/inspections/nonconformities/image";
+  const response = await fetch(`${endpoint}?${new URLSearchParams({ path })}`, { headers: { Authorization: `Bearer ${token}` } });
   if (!response.ok) throw new Error("No fue posible descargar una fotografía.");
   const blob = await response.blob();
   const bytes = new Uint8Array(await blob.arrayBuffer());
