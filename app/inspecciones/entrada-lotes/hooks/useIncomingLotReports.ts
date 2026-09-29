@@ -32,7 +32,6 @@ import type {
 type Params = {
   context: IncomingInspectionContext | null;
   lot: IncomingInspectionLot | null;
-  selectedAnomalyId?: string | null;
 };
 
 function safePath(value: string) {
@@ -89,15 +88,13 @@ function mapReport(
 export function useIncomingLotReports({
   context,
   lot,
-  selectedAnomalyId = null,
 }: Params) {
   const { user, displayName, isAdmin } = useAuth();
   const [reports, setReports] = useState<IncomingLotReport[]>([]);
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [messages, setMessages] = useState<IncomingLotAnomalyMessage[]>([]);
-  const [messagesLoading, setMessagesLoading] = useState(false);
+  const [messagesByReport, setMessagesByReport] = useState<Record<string, IncomingLotAnomalyMessage[]>>({});
 
   const canDecideAnomalies = Boolean(
     user && lot && (
@@ -141,45 +138,46 @@ export function useIncomingLotReports({
   }, [context, lot]);
 
   useEffect(() => {
-    if (!context || !lot || !selectedAnomalyId) {
-      setMessages([]);
-      setMessagesLoading(false);
+    if (!context || !lot) {
+      setMessagesByReport({});
       return;
     }
-    setMessagesLoading(true);
-    const messagesReference = collection(
-      db,
-      "inspection_incoming_lots",
-      context.scopeKey,
-      "lots",
-      lot.id,
-      "reports",
-      selectedAnomalyId,
-      "messages",
-    );
-    return onSnapshot(
-      query(messagesReference, orderBy("createdAt", "asc")),
-      (snapshot) => {
-        setMessages(snapshot.docs.map((entry) => {
-          const data = entry.data();
-          return {
-            id: entry.id,
-            text: String(data.text || ""),
-            type: data.type === "decision" ? "decision" : "message",
-            createdByUid: String(data.createdByUid || ""),
-            createdByEmail: String(data.createdByEmail || ""),
-            createdByName: String(data.createdByName || "Usuario"),
-            createdAt: data.createdAt,
-          };
-        }));
-        setMessagesLoading(false);
-      },
-      () => {
-        setMessagesLoading(false);
-        setError("No fue posible cargar la conversación de la anormalidad.");
-      },
-    );
-  }, [context, lot, selectedAnomalyId]);
+    const anomalyIds = reports
+      .filter((report) => report.kind === "anomaly")
+      .map((report) => report.id);
+    const subscriptions = anomalyIds.map((reportId) => {
+      const messagesReference = collection(
+        db,
+        "inspection_incoming_lots",
+        context.scopeKey,
+        "lots",
+        lot.id,
+        "reports",
+        reportId,
+        "messages",
+      );
+      return onSnapshot(
+        query(messagesReference, orderBy("createdAt", "asc")),
+        (snapshot) => {
+          const messages = snapshot.docs.map((entry) => {
+            const data = entry.data();
+            return {
+              id: entry.id,
+              text: String(data.text || ""),
+              type: data.type === "decision" ? "decision" as const : "message" as const,
+              createdByUid: String(data.createdByUid || ""),
+              createdByEmail: String(data.createdByEmail || ""),
+              createdByName: String(data.createdByName || "Usuario"),
+              createdAt: data.createdAt,
+            };
+          });
+          setMessagesByReport((current) => ({ ...current, [reportId]: messages }));
+        },
+        () => setError("No fue posible cargar una conversación de anormalidad."),
+      );
+    });
+    return () => subscriptions.forEach((unsubscribe) => unsubscribe());
+  }, [context, lot, reports]);
 
   const createReport = useCallback(async (
     input: CreateIncomingLotReportInput,
@@ -473,8 +471,7 @@ export function useIncomingLotReports({
     loading,
     saving,
     error,
-    messages,
-    messagesLoading,
+    messagesByReport,
     canDecideAnomalies,
     createReport,
     addQuantity,
