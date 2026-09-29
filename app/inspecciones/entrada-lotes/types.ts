@@ -89,6 +89,10 @@ export type IncomingInspectionLot = {
   finalizedByEmail?: string;
   finalizedByName?: string;
   finalizedAt?: unknown;
+  finalAnomalyQuantities?: Array<{
+    title: string;
+    quantity: number;
+  }>;
 };
 
 export type CreateIncomingInspectionLotInput = {
