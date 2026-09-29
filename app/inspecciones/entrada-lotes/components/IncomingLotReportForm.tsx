@@ -137,6 +137,29 @@ export default function IncomingLotReportForm({
         </div>
 
         <form onSubmit={submit} className="mt-6 space-y-5">
+          <div>
+            <p className="mb-2 text-sm text-white/70">Manera de reportar</p>
+            <div className="grid grid-cols-2 gap-2">
+              {(["quantity", "sample_number"] as IncomingLotReportMode[]).map((value) => {
+                const disabled = initialKind === "spec_rejection" && Boolean(lockedSpecMode) && lockedSpecMode !== value;
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    disabled={disabled}
+                    onClick={() => setMode(value)}
+                    className={`rounded-xl border px-3 py-3 text-sm ${mode === value ? "border-emerald-400/35 bg-emerald-400/10 text-emerald-100" : "border-white/10 text-white/45"} disabled:opacity-30`}
+                  >
+                    {value === "quantity" ? "Cantidad de piezas" : "Número de muestra"}
+                  </button>
+                );
+              })}
+            </div>
+            {initialKind === "spec_rejection" && lockedSpecMode && (
+              <p className="mt-2 text-xs text-amber-200/70">La modalidad quedó definida por el primer rechazo registrado.</p>
+            )}
+          </div>
+
           {initialKind === "spec_rejection" && (
             <label className="block text-sm text-white/70">
               Título del rechazo
