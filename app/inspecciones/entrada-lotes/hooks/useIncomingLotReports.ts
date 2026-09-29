@@ -2,6 +2,7 @@
 
 import {
   addDoc,
+  arrayUnion,
   collection,
   doc,
   onSnapshot,
@@ -103,6 +104,30 @@ export function useIncomingLotReports({
       Boolean(user.email && user.email.toLowerCase() === lot.responsiblePmEmail.toLowerCase())
     )
   );
+
+  const notify = useCallback(async (
+    action: "anomaly_created" | "message" | "decision" | "threshold_exceeded",
+    details: { reportId?: string; messageId?: string } = {},
+  ) => {
+    if (!user || !context || !lot) return;
+    const response = await fetch("/api/notifications/inspections/incoming-lot", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${await user.getIdToken()}`,
+      },
+      body: JSON.stringify({
+        action,
+        scopeKey: context.scopeKey,
+        lotId: lot.id,
+        ...details,
+      }),
+    });
+    if (!response.ok) {
+      const result = await response.json().catch(() => null);
+      throw new Error(result?.error || "La información se guardó, pero no fue posible enviar la notificación.");
+    }
+  }, [context, lot, user]);
 
   useEffect(() => {
     if (!context || !lot) {
@@ -307,11 +332,17 @@ export function useIncomingLotReports({
         }
       });
 
+      if (input.kind === "anomaly") {
+        await notify("anomaly_created", { reportId: reportReference.id }).catch((cause) => {
+          console.error("La anormalidad se guardó, pero no pudo notificarse:", cause);
+        });
+      }
+
       return { reportId: reportReference.id };
     } finally {
       setSaving(false);
     }
-  }, [context, displayName, lot, user]);
+  }, [context, displayName, lot, notify, user]);
 
   const addAnomalyMessage = useCallback(async (
     reportId: string,
@@ -320,7 +351,7 @@ export function useIncomingLotReports({
     if (!context || !lot || !user || !text.trim()) {
       throw new Error("Escribe un mensaje.");
     }
-    await addDoc(collection(
+    const messageReference = await addDoc(collection(
       db,
       "inspection_incoming_lots",
       context.scopeKey,
@@ -337,7 +368,10 @@ export function useIncomingLotReports({
       createdByName: displayName || user.displayName || user.email || "Usuario",
       createdAt: serverTimestamp(),
     });
-  }, [context, displayName, lot, user]);
+    await notify("message", { reportId, messageId: messageReference.id }).catch((cause) => {
+      console.error("El mensaje se guardó, pero no pudo notificarse:", cause);
+    });
+  }, [context, displayName, lot, notify, user]);
 
   const resolveAnomaly = useCallback(async (
     reportId: string,
@@ -386,7 +420,56 @@ export function useIncomingLotReports({
         createdAt: serverTimestamp(),
       });
     });
-  }, [canDecideAnomalies, context, displayName, lot, user]);
+    await notify("decision", { reportId }).catch((cause) => {
+      console.error("La decisión se guardó, pero no pudo notificarse:", cause);
+    });
+  }, [canDecideAnomalies, context, displayName, lot, notify, user]);
+
+  const addReportPhotos = useCallback(async (
+    report: IncomingLotReport,
+    files: File[],
+  ) => {
+    if (!context || !lot || !user || files.length === 0) return;
+    if (lot.status !== "in_progress") {
+      throw new Error("Este lote ya fue finalizado.");
+    }
+    setSaving(true);
+    try {
+      const uploaded = await Promise.all(files.map(async (photo, index) => {
+        const storagePath = [
+          report.kind === "anomaly" ? "inspection-anomalies" : "inspection-nonconformities",
+          safePath(context.scopeKey),
+          lot.id,
+          report.id,
+          `${Date.now()}-extra-${index}-${safePath(photo.name)}`,
+        ].join("/");
+        const storageReference = ref(storage, storagePath);
+        await uploadBytes(storageReference, photo, {
+          contentType: photo.type || "image/jpeg",
+          customMetadata: {
+            ownerUid: user.uid,
+            scopeKey: context.scopeKey,
+            lotId: lot.id,
+            reportId: report.id,
+            anomalyId: lot.id,
+            occurrenceId: report.id,
+            findingKind: report.kind,
+          },
+        });
+        return {
+          name: photo.name,
+          storagePath,
+          url: await getDownloadURL(storageReference),
+        };
+      }));
+      await updateDoc(
+        doc(db, "inspection_incoming_lots", context.scopeKey, "lots", lot.id, "reports", report.id),
+        { photos: arrayUnion(...uploaded), updatedAt: serverTimestamp() },
+      );
+    } finally {
+      setSaving(false);
+    }
+  }, [context, lot, user]);
 
   const addQuantity = useCallback(async (
     report: IncomingLotReport,
@@ -464,7 +547,55 @@ export function useIncomingLotReports({
         updatedAt: serverTimestamp(),
       },
     );
-  }, [context, lot]);
+    if (uniqueQuantity > lot.allowedRejectedQuantity) {
+      await notify("threshold_exceeded");
+    }
+  }, [context, lot, notify]);
+
+  const finalizeLot = useCallback(async (
+    quantities: Record<string, number>,
+  ) => {
+    if (!context || !lot || !user) {
+      throw new Error("Falta la sesión o la información del lote.");
+    }
+    if (
+      lot.reportedRejectedQuantity > lot.allowedRejectedQuantity &&
+      lot.reportedRejectedQuantity > Number(lot.lastReviewedReportedQuantity || 0)
+    ) {
+      throw new Error("Confirma primero si los rechazos por SPEC corresponden a piezas diferentes.");
+    }
+    const anomalies = reports.filter((report) => report.kind === "anomaly");
+    const pending = anomalies.filter((report) => report.decision == null);
+    if (pending.length > 0) {
+      throw new Error(`Faltan ${pending.length} anormalidades por resolver.`);
+    }
+    const failedTitles = Array.from(new Set(
+      anomalies
+        .filter((report) => report.decision === "fail")
+        .map((report) => report.title.trim())
+        .filter(Boolean),
+    ));
+    const finalAnomalyQuantities = failedTitles.map((title) => {
+      const quantity = Number(quantities[title]);
+      if (!Number.isInteger(quantity) || quantity < 1 || quantity > lot.totalLotQuantity) {
+        throw new Error(`Agrega una cantidad válida para “${title}”.`);
+      }
+      return { title, quantity };
+    });
+    await updateDoc(
+      doc(db, "inspection_incoming_lots", context.scopeKey, "lots", lot.id),
+      {
+        status: "finalized",
+        inspectionResult: lot.inspectionResult === "pending" ? "within_limit" : lot.inspectionResult,
+        finalAnomalyQuantities,
+        finalizedByUid: user.uid,
+        finalizedByEmail: user.email || "",
+        finalizedByName: displayName || user.displayName || user.email || "Usuario",
+        finalizedAt: serverTimestamp(),
+        updatedAt: serverTimestamp(),
+      },
+    );
+  }, [context, displayName, lot, reports, user]);
 
   return {
     reports,
@@ -475,8 +606,10 @@ export function useIncomingLotReports({
     canDecideAnomalies,
     createReport,
     addQuantity,
+    addReportPhotos,
     addAnomalyMessage,
     resolveAnomaly,
     confirmUniqueRejectedQuantity,
+    finalizeLot,
   };
 }
