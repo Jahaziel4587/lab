@@ -3,7 +3,6 @@
 import {
   AlertTriangle,
   Camera,
-  CheckCircle2,
   ChevronDown,
   FileDown,
   ImagePlus,
@@ -352,13 +351,6 @@ function ReportCard({
                     Decisión pendiente del PM
                   </span>
                 ))}
-              {report.kind === "anomaly" && report.decision != null && (
-                <span
-                  className={`inline-flex min-h-10 items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium ${report.decision === "pass" ? "border-emerald-400/25 text-emerald-200" : "border-red-400/25 text-red-200"}`}
-                >
-                  <CheckCircle2 size={14} /> {decisionLabel}
-                </span>
-              )}
               <input
                 ref={photoInput}
                 type="file"
@@ -396,9 +388,6 @@ export default function IncomingLotDetail({ context, lot }: Props) {
   const [decisionReport, setDecisionReport] =
     useState<IncomingLotReport | null>(null);
   const [finalizeOpen, setFinalizeOpen] = useState(false);
-  const [finalQuantities, setFinalQuantities] = useState<
-    Record<string, string>
-  >({});
   const [finalRejectedPieces, setFinalRejectedPieces] = useState("");
   const reportsState = useIncomingLotReports({ context, lot });
   const [quantityReport, setQuantityReport] =
@@ -461,25 +450,36 @@ export default function IncomingLotDetail({ context, lot }: Props) {
   const pendingAnomalies = reportsState.reports.filter(
     (report) => report.kind === "anomaly" && report.decision == null,
   );
-  const failedAnomalyTitles = Array.from(
-    new Set(
-      reportsState.reports
-        .filter(
-          (report) => report.kind === "anomaly" && report.decision === "fail",
-        )
-        .map((report) => report.title.trim())
-        .filter(Boolean),
-    ),
+  const failedAnomalySummary = useMemo(
+    () =>
+      Array.from(
+        reportsState.reports
+          .filter(
+            (report) =>
+              report.kind === "anomaly" && report.decision === "fail",
+          )
+          .reduce((groups, report) => {
+            const title = report.title.trim() || "Sin título";
+            const current = groups.get(title) || {
+              title,
+              quantity: 0,
+              reports: [] as IncomingLotReport[],
+            };
+            current.quantity += report.mode === "quantity" ? report.quantity || 0 : 0;
+            current.reports.push(report);
+            groups.set(title, current);
+            return groups;
+          }, new Map<string, { title: string; quantity: number; reports: IncomingLotReport[] }>())
+          .values(),
+      ),
+    [reportsState.reports],
+  );
+  const specReports = reportsState.reports.filter(
+    (report) => report.kind === "spec_rejection",
   );
   const finalize = async () => {
     await run(async () => {
       await reportsState.finalizeLot(
-        Object.fromEntries(
-          Object.entries(finalQuantities).map(([title, quantity]) => [
-            title,
-            Number(quantity),
-          ]),
-        ),
         finalRejectedPieces.trim() === ""
           ? Number.NaN
           : Number(finalRejectedPieces),
@@ -682,49 +682,82 @@ export default function IncomingLotDetail({ context, lot }: Props) {
           {reportsState.error || actionError}
         </p>
       )}
-      {quantityReport && (
-        <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.05] p-4">
-          <p className="font-medium text-white">
-            Agregar piezas a “{quantityReport.title}”
-          </p>
-          <p className="mt-1 text-xs text-white/40">
-            La cantidad existente no se sustituirá ni podrá disminuirse.
-          </p>
-          <div className="mt-3 flex flex-col gap-2 sm:flex-row">
-            <input
-              type="number"
-              min="1"
-              value={quantityToAdd}
-              onChange={(e) => setQuantityToAdd(e.target.value)}
-              placeholder="¿Cuántas piezas agregarás?"
-              className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white"
-            />
-            <button
-              type="button"
-              onClick={() =>
-                run(async () => {
-                  await reportsState.addQuantity(
-                    quantityReport,
-                    Number(quantityToAdd),
-                  );
-                  setQuantityReport(null);
-                  setQuantityToAdd("");
-                }, "No fue posible agregar la cantidad.")
-              }
-              className="rounded-xl bg-emerald-400/15 px-4 py-3 text-sm text-emerald-100"
-            >
-              Sumar
-            </button>
-            <button
-              type="button"
-              onClick={() => setQuantityReport(null)}
-              className="rounded-xl border border-white/10 px-4 py-3 text-sm text-white/50"
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
-      )}
+      {quantityReport &&
+        typeof document !== "undefined" &&
+        createPortal(
+          <div className="fixed inset-0 z-[110] flex items-center justify-center overflow-y-auto bg-black/75 p-4 backdrop-blur-sm">
+            <div className="w-full max-w-md rounded-3xl border border-emerald-400/20 bg-[#0d1512] p-5 shadow-2xl sm:p-7">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">
+                    Sumar cantidad
+                  </p>
+                  <h2 className="mt-2 text-xl font-semibold text-white">
+                    Agregar piezas a “{quantityReport.title}”
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuantityReport(null);
+                    setQuantityToAdd("");
+                  }}
+                  className="rounded-xl border border-white/10 p-2 text-white/60"
+                >
+                  <X size={18} />
+                </button>
+              </div>
+              <p className="mt-5 text-sm text-white/50">
+                Actualmente hay {quantityReport.quantity || 0} piezas. La
+                cantidad existente no se sustituirá ni podrá disminuirse.
+              </p>
+              <input
+                autoFocus
+                type="number"
+                min="1"
+                value={quantityToAdd}
+                onChange={(e) => setQuantityToAdd(e.target.value)}
+                placeholder="¿Cuántas piezas agregarás?"
+                className="mt-4 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white"
+              />
+              {actionError && (
+                <p className="mt-3 rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-100">
+                  {actionError}
+                </p>
+              )}
+              <div className="mt-5 grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setQuantityReport(null);
+                    setQuantityToAdd("");
+                  }}
+                  className="rounded-xl border border-white/10 px-4 py-3 text-sm text-white/60"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  disabled={reportsState.saving}
+                  onClick={() =>
+                    run(async () => {
+                      await reportsState.addQuantity(
+                        quantityReport,
+                        Number(quantityToAdd),
+                      );
+                      setQuantityReport(null);
+                      setQuantityToAdd("");
+                    }, "No fue posible agregar la cantidad.")
+                  }
+                  className="rounded-xl bg-emerald-400/15 px-4 py-3 text-sm font-medium text-emerald-100 disabled:opacity-50"
+                >
+                  Sumar piezas
+                </button>
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
       <div>
         <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
@@ -913,40 +946,89 @@ export default function IncomingLotDetail({ context, lot }: Props) {
                       Se notificará esta cantidad al PM y a Quality Management.
                     </span>
                   </label>
-                  <p className="text-sm text-white/60">
-                    Captura la cantidad exacta de piezas rechazadas para cada
-                    título de anormalidad que no pasó.
-                  </p>
-                  {failedAnomalyTitles.length === 0 ? (
-                    <p className="rounded-xl border border-white/10 p-4 text-sm text-white/45">
-                      No hay anormalidades rechazadas. El lote puede
-                      finalizarse.
-                    </p>
-                  ) : (
-                    failedAnomalyTitles.map((title) => (
-                      <label
-                        key={title}
-                        className="block text-sm text-white/70"
-                      >
-                        {title}
-                        <input
-                          type="number"
-                          min="1"
-                          max={lot.totalLotQuantity}
-                          step="1"
-                          value={finalQuantities[title] || ""}
-                          onChange={(event) =>
-                            setFinalQuantities((current) => ({
-                              ...current,
-                              [title]: event.target.value,
-                            }))
-                          }
-                          placeholder="Cantidad exacta"
-                          className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white"
-                        />
-                      </label>
-                    ))
-                  )}
+                  <div>
+                    <h3 className="text-sm font-semibold text-amber-100">
+                      Anormalidades que no pasaron
+                    </h3>
+                    <div className="mt-2 space-y-2">
+                      {failedAnomalySummary.length === 0 ? (
+                        <p className="rounded-xl border border-white/10 p-3 text-sm text-white/45">
+                          No hay anormalidades rechazadas.
+                        </p>
+                      ) : (
+                        failedAnomalySummary.map((item) => {
+                          const targetReport = item.reports.find(
+                            (report) => report.mode === "quantity",
+                          );
+                          return (
+                            <div
+                              key={item.title}
+                              className="flex flex-col gap-3 rounded-xl border border-amber-400/15 bg-amber-400/[0.04] p-3 sm:flex-row sm:items-center sm:justify-between"
+                            >
+                              <div>
+                                <p className="text-sm font-medium text-white">
+                                  {item.title}
+                                </p>
+                                <p className="mt-1 text-xs text-white/45">
+                                  {targetReport
+                                    ? `${item.quantity} piezas registradas`
+                                    : `${item.reports.length} muestras registradas`}
+                                </p>
+                              </div>
+                              {targetReport && (
+                                <button
+                                  type="button"
+                                  onClick={() => setQuantityReport(targetReport)}
+                                  className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-400/20 px-3 py-2 text-xs font-medium text-emerald-200"
+                                >
+                                  <Plus size={14} /> Agregar piezas
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })
+                      )}
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="text-sm font-semibold text-red-100">
+                      Rechazos por SPEC
+                    </h3>
+                    <div className="mt-2 space-y-2">
+                      {specReports.length === 0 ? (
+                        <p className="rounded-xl border border-white/10 p-3 text-sm text-white/45">
+                          No hay rechazos por SPEC registrados.
+                        </p>
+                      ) : (
+                        specReports.map((report) => (
+                          <div
+                            key={report.id}
+                            className="flex flex-col gap-3 rounded-xl border border-red-400/15 bg-red-400/[0.04] p-3 sm:flex-row sm:items-center sm:justify-between"
+                          >
+                            <div>
+                              <p className="text-sm font-medium text-white">
+                                {report.title}
+                              </p>
+                              <p className="mt-1 text-xs text-white/45">
+                                {report.mode === "quantity"
+                                  ? `${report.quantity || 0} piezas registradas`
+                                  : `Muestra #${report.sampleNumber}`}
+                              </p>
+                            </div>
+                            {report.mode === "quantity" && (
+                              <button
+                                type="button"
+                                onClick={() => setQuantityReport(report)}
+                                className="inline-flex items-center justify-center gap-2 rounded-xl border border-emerald-400/20 px-3 py-2 text-xs font-medium text-emerald-200"
+                              >
+                                <Plus size={14} /> Agregar piezas
+                              </button>
+                            )}
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
                   {actionError && (
                     <p className="rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-100">
                       {actionError}
