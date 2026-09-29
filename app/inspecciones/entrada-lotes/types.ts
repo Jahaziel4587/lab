@@ -69,6 +69,9 @@ export type IncomingInspectionLot = {
   /* Total reportado que ya fue revisado por el inspector. */
   lastReviewedReportedQuantity?: number;
 
+  /* Piezas del lote que no estarán disponibles para producción, sin duplicarlas. */
+  finalRejectedPieces?: number;
+
   failureNotificationSent: boolean;
   failureNotificationSentAt?: unknown;
   failureConfirmedByUid?: string;
@@ -93,6 +96,16 @@ export type IncomingInspectionLot = {
     title: string;
     quantity: number;
   }>;
+  rejectionClarifications?: IncomingLotRejectionClarification[];
+};
+
+export type IncomingLotRejectionClarification = {
+  reportedQuantity: number;
+  confirmedUniqueQuantity: number;
+  allowedQuantity: number;
+  repeatedSamples: boolean;
+  createdByName: string;
+  createdAt?: unknown;
 };
 
 export type CreateIncomingInspectionLotInput = {
@@ -128,6 +141,7 @@ export type IncomingLotReport = {
   description: string;
   quantity?: number;
   sampleNumber?: number;
+  finalRejectedQuantity?: number;
   photos: IncomingLotReportPhoto[];
   status?: "pending_title" | "pending_decision" | "resolved";
   decision?: "pass" | "fail" | null;
