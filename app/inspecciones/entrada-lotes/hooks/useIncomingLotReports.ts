@@ -566,7 +566,6 @@ export function useIncomingLotReports({
   }, [context, displayName, lot, notify, user]);
 
   const finalizeLot = useCallback(async (
-    quantities: Record<string, number>,
     finalRejectedPieces: number,
   ) => {
     if (!context || !lot || !user) {
@@ -583,19 +582,6 @@ export function useIncomingLotReports({
     if (pending.length > 0) {
       throw new Error(`Faltan ${pending.length} anormalidades por resolver.`);
     }
-    const failedTitles = Array.from(new Set(
-      anomalies
-        .filter((report) => report.decision === "fail")
-        .map((report) => report.title.trim())
-        .filter(Boolean),
-    ));
-    const finalAnomalyQuantities = failedTitles.map((title) => {
-      const quantity = Number(quantities[title]);
-      if (!Number.isInteger(quantity) || quantity < 1 || quantity > lot.totalLotQuantity) {
-        throw new Error(`Agrega una cantidad válida para “${title}”.`);
-      }
-      return { title, quantity };
-    });
     if (!Number.isInteger(finalRejectedPieces) || finalRejectedPieces < 0 || finalRejectedPieces > lot.totalLotQuantity) {
       throw new Error("Agrega una cantidad válida de piezas que no pasaron la inspección.");
     }
@@ -604,7 +590,6 @@ export function useIncomingLotReports({
     batch.update(lotReference, {
         status: "finalized",
         inspectionResult: lot.inspectionResult === "pending" ? "within_limit" : lot.inspectionResult,
-        finalAnomalyQuantities,
         finalRejectedPieces,
         finalizedByUid: user.uid,
         finalizedByEmail: user.email || "",
@@ -612,17 +597,6 @@ export function useIncomingLotReports({
         finalizedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
     });
-    anomalies
-      .filter((report) => report.decision === "fail")
-      .forEach((report) => {
-        const finalQuantity = finalAnomalyQuantities.find((item) => item.title === report.title.trim())?.quantity;
-        if (typeof finalQuantity === "number") {
-          batch.update(doc(lotReference, "reports", report.id), {
-            finalRejectedQuantity: finalQuantity,
-            updatedAt: serverTimestamp(),
-          });
-        }
-      });
     await batch.commit();
     await notify("lot_finalized");
   }, [context, displayName, lot, notify, reports, user]);
