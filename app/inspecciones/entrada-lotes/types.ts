@@ -93,6 +93,16 @@ export type IncomingInspectionLot = {
     title: string;
     quantity: number;
   }>;
+  rejectionClarifications?: IncomingLotRejectionClarification[];
+};
+
+export type IncomingLotRejectionClarification = {
+  reportedQuantity: number;
+  confirmedUniqueQuantity: number;
+  allowedQuantity: number;
+  repeatedSamples: boolean;
+  createdByName: string;
+  createdAt?: unknown;
 };
 
 export type CreateIncomingInspectionLotInput = {
@@ -128,6 +138,7 @@ export type IncomingLotReport = {
   description: string;
   quantity?: number;
   sampleNumber?: number;
+  finalRejectedQuantity?: number;
   photos: IncomingLotReportPhoto[];
   status?: "pending_title" | "pending_decision" | "resolved";
   decision?: "pass" | "fail" | null;
