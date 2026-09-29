@@ -1,66 +1,119 @@
 "use client";
 
-import { AlertTriangle, Camera, MessageCircle, Plus, Send, ShieldAlert } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
-import type { IncomingInspectionContext, IncomingInspectionLot, IncomingLotFindingKind, IncomingLotReport, IncomingLotReportMode } from "../types";
+import { AlertTriangle, Camera, CheckCircle2, LoaderCircle, Plus, Send, ShieldAlert, X } from "lucide-react";
+import { FormEvent, useMemo, useState } from "react";
+import { useAuth } from "@/src/Context/AuthContext";
+import type {
+  IncomingInspectionContext,
+  IncomingInspectionLot,
+  IncomingLotAnomalyMessage,
+  IncomingLotFindingKind,
+  IncomingLotReport,
+  IncomingLotReportMode,
+} from "../types";
 import { useIncomingLotReports } from "../hooks/useIncomingLotReports";
 import IncomingLotReportForm from "./IncomingLotReportForm";
 
 type Props = { context: IncomingInspectionContext; lot: IncomingInspectionLot };
 
-function ReportCard({ report, disabled, onAddQuantity, onOpenChat }: { report: IncomingLotReport; disabled: boolean; onAddQuantity: (report: IncomingLotReport) => void; onOpenChat?: (report: IncomingLotReport) => void }) {
+function formatDate(value: unknown) {
+  if (!value) return "";
+  const candidate = value as { toDate?: () => Date; seconds?: number };
+  const date = typeof candidate.toDate === "function"
+    ? candidate.toDate()
+    : typeof candidate.seconds === "number"
+      ? new Date(candidate.seconds * 1000)
+      : new Date(String(value));
+  if (Number.isNaN(date.getTime())) return "";
+  return new Intl.DateTimeFormat("es-MX", { dateStyle: "short", timeStyle: "short" }).format(date);
+}
+
+function AnomalyChat({ messages, sending, onSend }: {
+  messages: IncomingLotAnomalyMessage[];
+  sending: boolean;
+  onSend: (text: string) => Promise<void>;
+}) {
+  const { user } = useAuth();
+  const [message, setMessage] = useState("");
+  const [error, setError] = useState("");
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!message.trim()) return;
+    try {
+      setError("");
+      await onSend(message);
+      setMessage("");
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "No fue posible enviar el mensaje.");
+    }
+  };
+
+  return <div className="mt-5 overflow-hidden rounded-2xl border border-white/10 bg-black/15">
+    <div className="max-h-64 space-y-3 overflow-y-auto bg-gradient-to-b from-emerald-950/10 to-black/10 p-4">
+      {messages.length === 0 && <p className="py-4 text-center text-xs text-white/35">Todavía no hay mensajes en esta anormalidad.</p>}
+      {messages.map((entry) => {
+        const isDecision = entry.type === "decision";
+        const isOwn = Boolean(user?.uid && entry.createdByUid === user.uid);
+        if (isDecision) return <div key={entry.id} className="flex justify-center"><div className="max-w-xl rounded-2xl border border-emerald-400/25 bg-emerald-400/[0.09] px-4 py-3 text-center"><p className="text-[11px] font-semibold uppercase tracking-wider text-emerald-300">Decisión registrada</p><p className="mt-1 whitespace-pre-wrap text-sm text-white/80">{entry.text}</p><p className="mt-1 text-[11px] text-white/35">{entry.createdByName} · {formatDate(entry.createdAt)}</p></div></div>;
+        return <div key={entry.id} className={`flex ${isOwn ? "justify-end" : "justify-start"}`}><div className={`max-w-[85%] px-4 py-3 text-sm sm:max-w-[72%] ${isOwn ? "rounded-2xl rounded-tr-md bg-emerald-500/20" : "rounded-2xl rounded-tl-md border border-white/10 bg-white/[0.065]"}`}><div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1"><p className={`text-xs font-medium ${isOwn ? "text-emerald-200" : "text-white/60"}`}>{isOwn ? "Tú" : entry.createdByName}</p><p className="text-[11px] text-white/30">{formatDate(entry.createdAt)}</p></div><p className="mt-1.5 whitespace-pre-wrap leading-relaxed text-white/80">{entry.text}</p></div></div>;
+      })}
+    </div>
+    <form onSubmit={submit} className="border-t border-white/10 bg-black/20 p-3">
+      <div className="flex items-end gap-2"><textarea value={message} onChange={(event) => setMessage(event.target.value)} onKeyDown={(event) => { if (event.key === "Enter" && !event.shiftKey) { event.preventDefault(); event.currentTarget.form?.requestSubmit(); } }} rows={1} disabled={sending} placeholder="Escribe un mensaje..." className="max-h-28 min-h-11 flex-1 resize-y rounded-xl border border-white/15 bg-white/[0.045] px-3 py-2.5 text-sm text-white outline-none placeholder:text-white/30 focus:border-emerald-400/45" /><button type="submit" disabled={sending || !message.trim()} aria-label="Enviar mensaje" className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full border border-emerald-400/30 bg-emerald-400/15 text-emerald-200 disabled:opacity-40">{sending ? <LoaderCircle size={16} className="animate-spin" /> : <Send size={16} />}</button></div>
+      {error && <p className="mt-2 text-xs text-red-200">{error}</p>}
+    </form>
+  </div>;
+}
+
+function ReportCard({ report, messages, disabled, canDecide, saving, onAddQuantity, onOpenDecision, onSendMessage }: {
+  report: IncomingLotReport;
+  messages: IncomingLotAnomalyMessage[];
+  disabled: boolean;
+  canDecide: boolean;
+  saving: boolean;
+  onAddQuantity: (report: IncomingLotReport) => void;
+  onOpenDecision: (report: IncomingLotReport) => void;
+  onSendMessage: (reportId: string, text: string) => Promise<void>;
+}) {
   const decisionLabel = report.decision === "pass" ? "Pasa" : report.decision === "fail" ? "No pasa" : "Decisión pendiente";
-  return <article className="rounded-2xl border border-white/10 bg-white/[0.035] p-4">
+  return <article className="rounded-2xl border border-white/10 bg-white/[0.035] p-4 sm:p-5">
     <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-wider text-white/35">{report.kind === "anomaly" ? "Anormalidad" : "Rechazo por SPEC"}</p><h4 className="mt-1 break-words font-semibold text-white">{report.title || "Pendiente de título"}</h4>{report.kind === "anomaly" && <span className={`mt-2 inline-block rounded-full border px-2.5 py-1 text-xs ${report.decision === "pass" ? "border-emerald-400/25 text-emerald-200" : report.decision === "fail" ? "border-red-400/25 text-red-200" : "border-amber-400/25 text-amber-200"}`}>{decisionLabel}</span>}</div><span className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/55">{report.mode === "quantity" ? `${report.quantity || 0} piezas` : `Muestra #${report.sampleNumber}`}</span></div>
     {report.description && <p className="mt-3 whitespace-pre-wrap text-sm text-white/60">{report.description}</p>}
     {report.photos.length > 0 && <div className="mt-4 flex flex-wrap gap-2">{report.photos.map((photo) => <a key={photo.storagePath} href={photo.url} target="_blank" rel="noreferrer" className="block h-20 w-20 overflow-hidden rounded-xl border border-white/10">{/* eslint-disable-next-line @next/next/no-img-element */}<img src={photo.url} alt={photo.name} className="h-full w-full object-cover" /></a>)}</div>}
-    <div className="mt-4 flex flex-wrap gap-2">{report.mode === "quantity" && !disabled && <button type="button" onClick={() => onAddQuantity(report)} className="inline-flex items-center gap-2 rounded-xl border border-emerald-400/20 px-3 py-2 text-xs font-medium text-emerald-200"><Plus size={14} /> Agregar piezas</button>}{report.kind === "anomaly" && onOpenChat && <button type="button" onClick={() => onOpenChat(report)} className="inline-flex items-center gap-2 rounded-xl border border-white/10 px-3 py-2 text-xs font-medium text-white/70"><MessageCircle size={14} /> Conversación y decisión</button>}</div>
+    <div className="mt-4 flex flex-wrap gap-2">{report.mode === "quantity" && !disabled && <button type="button" onClick={() => onAddQuantity(report)} className="inline-flex min-h-10 items-center gap-2 rounded-xl border border-emerald-400/20 px-3 py-2 text-xs font-medium text-emerald-200"><Plus size={14} /> Agregar piezas</button>}{report.kind === "anomaly" && report.decision == null && (canDecide ? <button type="button" onClick={() => onOpenDecision(report)} className="inline-flex min-h-10 items-center rounded-xl border border-amber-400/25 bg-amber-400/10 px-4 py-2 text-xs font-medium text-amber-100">Tomar decisión</button> : <span className="self-center text-xs text-amber-200/60">Decisión pendiente del PM</span>)}{report.kind === "anomaly" && report.decision != null && <span className={`inline-flex min-h-10 items-center gap-2 rounded-xl border px-3 py-2 text-xs font-medium ${report.decision === "pass" ? "border-emerald-400/25 text-emerald-200" : "border-red-400/25 text-red-200"}`}><CheckCircle2 size={14} /> {decisionLabel}</span>}</div>
+    {report.kind === "anomaly" && <AnomalyChat messages={messages} sending={saving} onSend={(text) => onSendMessage(report.id, text)} />}
   </article>;
 }
 
 export default function IncomingLotDetail({ context, lot }: Props) {
   const [activeKind, setActiveKind] = useState<IncomingLotFindingKind>("anomaly");
-  const [activeMode, setActiveMode] = useState<IncomingLotReportMode>("quantity");
   const [formOpen, setFormOpen] = useState(false);
-  const [selectedAnomaly, setSelectedAnomaly] = useState<IncomingLotReport | null>(null);
-  const reportsState = useIncomingLotReports({ context, lot, selectedAnomalyId: selectedAnomaly?.id });
+  const [decisionReport, setDecisionReport] = useState<IncomingLotReport | null>(null);
+  const reportsState = useIncomingLotReports({ context, lot });
   const [quantityReport, setQuantityReport] = useState<IncomingLotReport | null>(null);
   const [quantityToAdd, setQuantityToAdd] = useState("");
   const [uniqueQuantity, setUniqueQuantity] = useState("");
-  const [message, setMessage] = useState("");
   const [decisionTitle, setDecisionTitle] = useState("");
   const [decisionComment, setDecisionComment] = useState("");
   const [actionError, setActionError] = useState("");
-
-  useEffect(() => { if (activeKind === "spec_rejection" && lot.specCountingMode) setActiveMode(lot.specCountingMode); }, [activeKind, lot.specCountingMode]);
-  useEffect(() => { if (selectedAnomaly) setDecisionTitle(selectedAnomaly.title === "Pendiente de título" ? "" : selectedAnomaly.title); }, [selectedAnomaly]);
-  useEffect(() => {
-    if (!selectedAnomaly) return;
-    const updated = reportsState.reports.find((report) => report.id === selectedAnomaly.id);
-    if (updated && (updated.title !== selectedAnomaly.title || updated.decision !== selectedAnomaly.decision)) {
-      setSelectedAnomaly(updated);
-    }
-  }, [reportsState.reports, selectedAnomaly]);
-  const visibleReports = useMemo(() => reportsState.reports.filter((report) => report.kind === activeKind && report.mode === activeMode), [activeKind, activeMode, reportsState.reports]);
+  const visibleReports = useMemo(() => reportsState.reports.filter((report) => report.kind === activeKind), [activeKind, reportsState.reports]);
   const counts = useMemo(() => ({ anomaly: reportsState.reports.filter((r) => r.kind === "anomaly").length, spec: reportsState.reports.filter((r) => r.kind === "spec_rejection").length }), [reportsState.reports]);
   const needsThresholdReview = lot.reportedRejectedQuantity > lot.allowedRejectedQuantity && lot.inspectionResult !== "will_fail" && lot.reportedRejectedQuantity > Number(lot.lastReviewedReportedQuantity || 0);
   const run = async (action: () => Promise<void>, fallback: string) => { try { setActionError(""); await action(); } catch (cause) { setActionError(cause instanceof Error ? cause.message : fallback); } };
+  const openDecision = (report: IncomingLotReport) => { setDecisionReport(report); setDecisionTitle(report.title === "Pendiente de título" ? "" : report.title); setDecisionComment(""); };
+  const saveDecision = async (decision: "pass" | "fail") => { if (!decisionReport) return; await run(async () => { await reportsState.resolveAnomaly(decisionReport.id, decisionTitle, decision, decisionComment); setDecisionReport(null); }, "No fue posible guardar la decisión."); };
+  const initialMode: IncomingLotReportMode = activeKind === "spec_rejection" && lot.specCountingMode ? lot.specCountingMode : "quantity";
 
   return <section className="space-y-6">
     <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.06] p-5"><p className="text-xs font-semibold uppercase tracking-wider text-emerald-300">{lot.status === "in_progress" ? "Lote en curso" : "Lote finalizado"}</p><h2 className="mt-2 text-2xl font-semibold text-white">{lot.lotName}</h2><p className="mt-2 text-sm text-white/55">{lot.inspectedQuantity} por inspeccionar · {lot.totalLotQuantity} totales · {lot.allowedRejectedQuantity} rechazos permitidos</p><p className="mt-1 text-xs text-white/40">Inspección {lot.inspectionType === "special" ? "especial" : "normal"} · Nivel {lot.inspectionLevel} · AQL {lot.aql}</p></div>
-
-    <div className="rounded-2xl border border-white/10 bg-black/15 p-3 sm:p-4"><div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => setActiveKind("anomaly")} className={`rounded-xl px-3 py-3 text-sm font-medium ${activeKind === "anomaly" ? "bg-amber-400/15 text-amber-100 ring-1 ring-amber-400/30" : "text-white/45"}`}>Anormalidades <span className="opacity-60">({counts.anomaly})</span></button><button type="button" onClick={() => setActiveKind("spec_rejection")} className={`rounded-xl px-3 py-3 text-sm font-medium ${activeKind === "spec_rejection" ? "bg-red-400/15 text-red-100 ring-1 ring-red-400/30" : "text-white/45"}`}>Rechazos por SPEC <span className="opacity-60">({counts.spec})</span></button></div><div className="mt-3 grid grid-cols-2 gap-2 border-t border-white/10 pt-3">{(["quantity", "sample_number"] as IncomingLotReportMode[]).map((mode) => { const locked = activeKind === "spec_rejection" && Boolean(lot.specCountingMode) && lot.specCountingMode !== mode; return <button key={mode} type="button" disabled={locked} onClick={() => setActiveMode(mode)} className={`rounded-xl border px-3 py-3 text-sm ${activeMode === mode ? "border-emerald-400/35 bg-emerald-400/10 text-emerald-100" : "border-white/10 text-white/45"} disabled:opacity-30`}>{mode === "quantity" ? "Cantidad de piezas" : "Número de muestra"}</button>; })}</div>{activeKind === "spec_rejection" && lot.specCountingMode && <p className="mt-2 text-xs text-amber-200/60">La modalidad quedó definida por el primer rechazo del lote.</p>}{lot.status === "in_progress" && <button type="button" onClick={() => setFormOpen(true)} className={`mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium sm:w-auto ${activeKind === "anomaly" ? "border-amber-400/25 bg-amber-400/10 text-amber-100" : "border-red-400/25 bg-red-400/10 text-red-100"}`}>{activeKind === "anomaly" ? <Camera size={16} /> : <ShieldAlert size={16} />}{activeKind === "anomaly" ? "Reportar anormalidad" : "Reportar rechazo por SPEC"}</button>}</div>
-
+    <div className="rounded-2xl border border-white/10 bg-black/15 p-3 sm:p-4"><div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => setActiveKind("anomaly")} className={`rounded-xl px-3 py-3 text-sm font-medium ${activeKind === "anomaly" ? "bg-amber-400/15 text-amber-100 ring-1 ring-amber-400/30" : "text-white/45"}`}>Anormalidades <span className="opacity-60">({counts.anomaly})</span></button><button type="button" onClick={() => setActiveKind("spec_rejection")} className={`rounded-xl px-3 py-3 text-sm font-medium ${activeKind === "spec_rejection" ? "bg-red-400/15 text-red-100 ring-1 ring-red-400/30" : "text-white/45"}`}>Rechazos por SPEC <span className="opacity-60">({counts.spec})</span></button></div>{lot.status === "in_progress" && <button type="button" onClick={() => setFormOpen(true)} className={`mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium sm:w-auto ${activeKind === "anomaly" ? "border-amber-400/25 bg-amber-400/10 text-amber-100" : "border-red-400/25 bg-red-400/10 text-red-100"}`}>{activeKind === "anomaly" ? <Camera size={16} /> : <ShieldAlert size={16} />}{activeKind === "anomaly" ? "Reportar anormalidad" : "Reportar rechazo por SPEC"}</button>}</div>
     {activeKind === "spec_rejection" && needsThresholdReview && <div className="rounded-2xl border border-red-400/30 bg-red-400/[0.08] p-5"><div className="flex gap-3"><AlertTriangle className="mt-0.5 shrink-0 text-red-300" size={22} /><div className="flex-1"><h3 className="font-semibold text-red-100">Confirma la cantidad de piezas rechazadas</h3><p className="mt-2 text-sm text-red-100/70">Los reportes suman {lot.reportedRejectedQuantity} y el máximo permitido es {lot.allowedRejectedQuantity}. ¿Las cantidades corresponden a piezas diferentes?</p><div className="mt-4 flex flex-col gap-3 sm:flex-row"><button type="button" onClick={() => run(() => reportsState.confirmUniqueRejectedQuantity(lot.reportedRejectedQuantity), "No fue posible confirmar.")} className="rounded-xl bg-red-400/15 px-4 py-3 text-sm font-medium text-red-100">Sí, son piezas diferentes</button><div className="flex flex-1 gap-2"><input type="number" min="0" max={lot.allowedRejectedQuantity} value={uniqueQuantity} onChange={(e) => setUniqueQuantity(e.target.value)} placeholder="Cantidad real sin repetir" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/20 px-3 py-2 text-sm text-white" /><button type="button" onClick={() => run(async () => { await reportsState.confirmUniqueRejectedQuantity(Number(uniqueQuantity)); setUniqueQuantity(""); }, "No fue posible confirmar.")} className="rounded-xl border border-white/10 px-4 py-2 text-sm text-white/70">Confirmar</button></div></div></div></div></div>}
     {lot.inspectionResult === "will_fail" && <div className="rounded-2xl border border-red-400/25 bg-red-400/[0.07] p-4 text-sm font-medium text-red-100">Este lote está marcado como que no pasará la inspección por exceder los rechazos permitidos.</div>}
     {(reportsState.error || actionError) && <p className="rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-100">{reportsState.error || actionError}</p>}
-
     {quantityReport && <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.05] p-4"><p className="font-medium text-white">Agregar piezas a “{quantityReport.title}”</p><p className="mt-1 text-xs text-white/40">La cantidad existente no se sustituirá ni podrá disminuirse.</p><div className="mt-3 flex flex-col gap-2 sm:flex-row"><input type="number" min="1" value={quantityToAdd} onChange={(e) => setQuantityToAdd(e.target.value)} placeholder="¿Cuántas piezas agregarás?" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white" /><button type="button" onClick={() => run(async () => { await reportsState.addQuantity(quantityReport, Number(quantityToAdd)); setQuantityReport(null); setQuantityToAdd(""); }, "No fue posible agregar la cantidad.")} className="rounded-xl bg-emerald-400/15 px-4 py-3 text-sm text-emerald-100">Sumar</button><button type="button" onClick={() => setQuantityReport(null)} className="rounded-xl border border-white/10 px-4 py-3 text-sm text-white/50">Cancelar</button></div></div>}
-
-    <div><div className="mb-3 flex items-center justify-between"><h3 className="text-lg font-semibold text-white">{activeKind === "anomaly" ? "Anormalidades" : "Rechazos por SPEC"} · {activeMode === "quantity" ? "Cantidad" : "Muestra"}</h3><span className="text-sm text-white/35">{visibleReports.length}</span></div>{reportsState.loading ? <p className="text-sm text-white/45">Cargando reportes...</p> : <div className="space-y-3">{visibleReports.length === 0 ? <p className="rounded-2xl border border-dashed border-white/10 p-5 text-sm text-white/35">No hay reportes en este filtro.</p> : visibleReports.map((report) => <ReportCard key={report.id} report={report} disabled={lot.status !== "in_progress"} onAddQuantity={setQuantityReport} onOpenChat={report.kind === "anomaly" ? setSelectedAnomaly : undefined} />)}</div>}</div>
-
-    {selectedAnomaly && <div className="rounded-2xl border border-amber-400/20 bg-amber-400/[0.04] p-4 sm:p-5"><div className="flex items-start justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-wider text-amber-200/70">Conversación de la anormalidad</p><h3 className="mt-1 font-semibold text-white">{selectedAnomaly.title}</h3></div><button type="button" onClick={() => setSelectedAnomaly(null)} className="rounded-lg border border-white/10 px-3 py-2 text-xs text-white/50">Cerrar</button></div>{reportsState.canDecideAnomalies && selectedAnomaly.decision == null && <div className="mt-4 space-y-3 rounded-xl border border-white/10 bg-black/15 p-3"><input value={decisionTitle} onChange={(e) => setDecisionTitle(e.target.value)} placeholder="Título de la anormalidad" className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white" /><textarea value={decisionComment} onChange={(e) => setDecisionComment(e.target.value)} rows={2} placeholder="Comentario de decisión (opcional)" className="w-full rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white" /><div className="grid grid-cols-2 gap-2"><button type="button" onClick={() => run(async () => { await reportsState.resolveAnomaly(selectedAnomaly.id, decisionTitle, "pass", decisionComment); setDecisionComment(""); }, "No fue posible guardar la decisión.")} className="rounded-xl border border-emerald-400/25 bg-emerald-400/10 px-3 py-2.5 text-sm text-emerald-100">Pasa</button><button type="button" onClick={() => run(async () => { await reportsState.resolveAnomaly(selectedAnomaly.id, decisionTitle, "fail", decisionComment); setDecisionComment(""); }, "No fue posible guardar la decisión.")} className="rounded-xl border border-red-400/25 bg-red-400/10 px-3 py-2.5 text-sm text-red-100">No pasa</button></div></div>}<div className="mt-4 max-h-52 space-y-2 overflow-y-auto rounded-xl border border-white/10 bg-black/15 p-3">{reportsState.messagesLoading ? <p className="text-xs text-white/35">Cargando conversación...</p> : reportsState.messages.length === 0 ? <p className="text-xs text-white/35">Todavía no hay mensajes.</p> : reportsState.messages.map((entry) => <div key={entry.id} className={`rounded-lg p-2.5 text-sm ${entry.type === "decision" ? "bg-amber-400/10 text-amber-100" : "bg-white/[0.05] text-white/70"}`}><p>{entry.text}</p><p className="mt-1 text-[11px] text-white/35">{entry.createdByName}</p></div>)}</div><div className="mt-3 flex gap-2"><input value={message} onChange={(e) => setMessage(e.target.value)} placeholder="Escribe un mensaje" className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/20 px-3 py-2.5 text-sm text-white" /><button type="button" onClick={() => run(async () => { await reportsState.addAnomalyMessage(selectedAnomaly.id, message); setMessage(""); }, "No fue posible enviar el mensaje.")} className="rounded-xl border border-amber-400/20 px-3 text-amber-100"><Send size={16} /></button></div></div>}
-
-    {formOpen && <IncomingLotReportForm initialKind={activeKind} initialMode={activeMode} lockedSpecMode={lot.specCountingMode} inspectedQuantity={lot.inspectedQuantity} saving={reportsState.saving} onSubmit={async (input) => { await reportsState.createReport(input); setFormOpen(false); }} onCancel={() => setFormOpen(false)} />}
+    <div><div className="mb-3 flex items-center justify-between"><h3 className="text-lg font-semibold text-white">{activeKind === "anomaly" ? "Anormalidades" : "Rechazos por SPEC"}</h3><span className="text-sm text-white/35">{visibleReports.length}</span></div>{reportsState.loading ? <p className="text-sm text-white/45">Cargando reportes...</p> : <div className="space-y-4">{visibleReports.length === 0 ? <p className="rounded-2xl border border-dashed border-white/10 p-5 text-sm text-white/35">No hay reportes registrados.</p> : visibleReports.map((report) => <ReportCard key={report.id} report={report} messages={reportsState.messagesByReport[report.id] || []} disabled={lot.status !== "in_progress"} canDecide={reportsState.canDecideAnomalies} saving={reportsState.saving} onAddQuantity={setQuantityReport} onOpenDecision={openDecision} onSendMessage={reportsState.addAnomalyMessage} />)}</div>}</div>
+    {formOpen && <IncomingLotReportForm initialKind={activeKind} initialMode={initialMode} lockedSpecMode={lot.specCountingMode} inspectedQuantity={lot.inspectedQuantity} saving={reportsState.saving} onSubmit={async (input) => { await reportsState.createReport(input); setFormOpen(false); }} onCancel={() => setFormOpen(false)} />}
+    {decisionReport && <div className="fixed inset-0 z-50 overflow-y-auto bg-black/75 p-4 backdrop-blur-sm"><div className="mx-auto my-10 max-w-lg rounded-3xl border border-white/10 bg-[#0d1512] p-5 shadow-2xl sm:p-7"><div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-amber-300">Anormalidad</p><h2 className="mt-2 text-xl font-semibold text-white">Tomar decisión</h2></div><button type="button" onClick={() => setDecisionReport(null)} className="rounded-xl border border-white/10 p-2 text-white/60"><X size={18} /></button></div><div className="mt-6 space-y-4"><label className="block text-sm text-white/70">Título de la anormalidad<input value={decisionTitle} onChange={(e) => setDecisionTitle(e.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white" placeholder="Asigna un título" /></label><label className="block text-sm text-white/70">Comentario (opcional)<textarea value={decisionComment} onChange={(e) => setDecisionComment(e.target.value)} rows={3} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white" /></label><div className="grid grid-cols-2 gap-3"><button type="button" onClick={() => saveDecision("pass")} className="rounded-xl border border-emerald-400/25 bg-emerald-400/10 px-4 py-3 text-sm font-medium text-emerald-100">Pasa</button><button type="button" onClick={() => saveDecision("fail")} className="rounded-xl border border-red-400/25 bg-red-400/10 px-4 py-3 text-sm font-medium text-red-100">No pasa</button></div></div></div></div>}
   </section>;
 }
