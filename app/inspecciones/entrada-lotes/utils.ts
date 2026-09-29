@@ -200,5 +200,18 @@ export function mapIncomingLot(
           };
         })
       : undefined,
+    rejectionClarifications: Array.isArray(data.rejectionClarifications)
+      ? data.rejectionClarifications.map((entry) => {
+          const item = entry as Record<string, unknown>;
+          return {
+            reportedQuantity: Number(item.reportedQuantity || 0),
+            confirmedUniqueQuantity: Number(item.confirmedUniqueQuantity || 0),
+            allowedQuantity: Number(item.allowedQuantity || 0),
+            repeatedSamples: item.repeatedSamples === true,
+            createdByName: String(item.createdByName || "Usuario"),
+            createdAt: item.createdAt,
+          };
+        })
+      : undefined,
   };
 }
