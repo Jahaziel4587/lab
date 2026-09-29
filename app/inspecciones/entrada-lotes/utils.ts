@@ -191,5 +191,14 @@ export function mapIncomingLot(
       data.finalizedByName || "",
     ) || undefined,
     finalizedAt: data.finalizedAt,
+    finalAnomalyQuantities: Array.isArray(data.finalAnomalyQuantities)
+      ? data.finalAnomalyQuantities.map((entry) => {
+          const item = entry as Record<string, unknown>;
+          return {
+            title: String(item.title || ""),
+            quantity: Number(item.quantity || 0),
+          };
+        })
+      : undefined,
   };
 }
