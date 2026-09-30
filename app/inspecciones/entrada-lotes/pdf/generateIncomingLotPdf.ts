@@ -90,8 +90,11 @@ function download(bytes: Uint8Array, filename: string) {
 }
 
 export async function generateIncomingLotPdf({ mode, context, lot, reports, messagesByReport, idToken, anomalyId }: Params) {
-  const spec = reports.filter((report) => report.kind === "spec_rejection").sort((a, b) => stamp(a.createdAt) - stamp(b.createdAt));
-  const anomalies = reports.filter((report) => report.kind === "anomaly" && (mode !== "anomaly" || report.id === anomalyId)).sort((a, b) => stamp(a.createdAt) - stamp(b.createdAt));
+  const methodOrder = lot.methodPlans.map((plan) => plan.method);
+  const methodLabel = (method?: string) => method === "documentary" ? "Documental" : method === "dimensional" ? "Dimensional" : method === "functional" ? "Funcional" : "Visual";
+  const byMethodThenDate = (a: IncomingLotReport, b: IncomingLotReport) => methodOrder.indexOf(a.inspectionMethod || "visual") - methodOrder.indexOf(b.inspectionMethod || "visual") || stamp(a.createdAt) - stamp(b.createdAt);
+  const spec = reports.filter((report) => report.kind === "spec_rejection").sort(byMethodThenDate);
+  const anomalies = reports.filter((report) => report.kind === "anomaly" && (mode !== "anomaly" || report.id === anomalyId)).sort(byMethodThenDate);
   if (mode === "spec" && !spec.length) throw new Error("Este lote no tiene rechazos por SPEC.");
   if ((mode === "anomalies" || mode === "anomaly") && !anomalies.length) throw new Error("No hay anormalidades para incluir.");
 
@@ -123,15 +126,18 @@ export async function generateIncomingLotPdf({ mode, context, lot, reports, mess
   };
   const drawSpec = async () => {
     section("Rechazos por SPEC", RED);
-    text(`Total acumulado en reportes: ${lot.reportedRejectedQuantity} | Cantidad única confirmada: ${lot.confirmedUniqueRejectedQuantity ?? "Sin confirmar"} | Límite permitido: ${lot.allowedRejectedQuantity}`, { font: bold });
+    text(`Total acumulado en reportes: ${lot.reportedRejectedQuantity}`, { font: bold });
     const clarifications = lot.rejectionClarifications || (typeof lot.confirmedUniqueRejectedQuantity === "number" ? [{ reportedQuantity: lot.lastReviewedReportedQuantity || lot.reportedRejectedQuantity, confirmedUniqueQuantity: lot.confirmedUniqueRejectedQuantity, allowedQuantity: lot.allowedRejectedQuantity, repeatedSamples: lot.confirmedUniqueRejectedQuantity < (lot.lastReviewedReportedQuantity || lot.reportedRejectedQuantity), createdByName: lot.failureConfirmedByName || lot.createdByName, createdAt: lot.failureNotificationSentAt }] : []);
     if (clarifications.length) {
       text("Historial de aclaraciones", { size: 11.5, font: bold, color: GREEN });
       clarifications.forEach((item, index) => text(`${index + 1}. La suma reportada era ${item.reportedQuantity}. Se confirmaron ${item.confirmedUniqueQuantity} piezas únicas frente a ${item.allowedQuantity} permitidas.${item.repeatedSamples ? " Se aclaró que había piezas repetidas entre los reportes." : " Se confirmó que correspondían a piezas diferentes."} ${item.createdByName} - ${time(item.createdAt)}`, { indent: 8, color: GRAY }));
       rule();
     }
+    let currentMethod = "";
     for (let index = 0; index < spec.length; index += 1) {
-      const report = spec[index]; space(90); text(`SPEC ${index + 1}: ${report.title}`, { size: 12.5, font: bold, color: RED });
+      const report = spec[index]; space(90);
+      if ((report.inspectionMethod || "visual") !== currentMethod) { currentMethod = report.inspectionMethod || "visual"; const plan = lot.methodPlans.find((item) => item.method === currentMethod); text(`Método: ${methodLabel(currentMethod)}${plan ? ` | Muestra: ${plan.inspectedQuantity} | Tipo: ${plan.inspectionType === "special" ? "Especial" : "Normal"} | Nivel: ${plan.inspectionLevel} | AQL: ${plan.aql} | Permitidos: ${plan.allowedRejectedQuantity}` : ""}`, { size: 11.5, font: bold, color: GREEN }); }
+      text(`SPEC ${index + 1}: ${report.title}`, { size: 12.5, font: bold, color: RED });
       text(report.mode === "quantity" ? `Cantidad reportada: ${report.quantity || 0} piezas` : `Número de muestra: ${report.sampleNumber}`, { font: bold });
       if (report.description) text(report.description, { color: GRAY });
       text(`Reportó: ${report.createdByName} | ${time(report.createdAt)}`, { size: 9, color: GRAY });
@@ -140,8 +146,10 @@ export async function generateIncomingLotPdf({ mode, context, lot, reports, mess
   };
   const drawAnomalies = async () => {
     section(mode === "anomaly" ? "Anormalidad" : "Anormalidades", rgb(0.68, 0.43, 0.04));
+    let currentMethod = "";
     for (let index = 0; index < anomalies.length; index += 1) {
       const report = anomalies[index]; const failed = report.decision === "fail"; space(100);
+      if ((report.inspectionMethod || "visual") !== currentMethod) { currentMethod = report.inspectionMethod || "visual"; const plan = lot.methodPlans.find((item) => item.method === currentMethod); text(`Método: ${methodLabel(currentMethod)}${plan ? ` | Muestra: ${plan.inspectedQuantity} | Tipo: ${plan.inspectionType === "special" ? "Especial" : "Normal"} | Nivel: ${plan.inspectionLevel} | AQL: ${plan.aql}` : ""}`, { size: 11.5, font: bold, color: GREEN }); }
       text(`${index + 1}. ${report.title || "Pendiente de título"}`, { size: 13, font: bold, color: failed ? RED : GREEN });
       text(`Decisión: ${report.decision === "pass" ? "Pasó" : failed ? "No pasó" : "Pendiente"} | ${report.mode === "quantity" ? `Cantidad reportada: ${report.quantity || 0}` : `Muestra: ${report.sampleNumber}`}${typeof report.finalRejectedQuantity === "number" ? ` | Cantidad final rechazada: ${report.finalRejectedQuantity}` : ""}`, { font: bold, color: failed ? RED : DARK });
       if (report.description) text(report.description, { color: GRAY });
@@ -158,8 +166,8 @@ export async function generateIncomingLotPdf({ mode, context, lot, reports, mess
   text(titles[mode], { size: 17, font: bold, color: GREEN, gap: 12 });
   text(lot.lotName, { size: 20, font: bold, gap: 8 });
   text(`Componente: ${context.componentTitle}`, { font: bold });
-  text(`Cantidad inspeccionada: ${lot.inspectedQuantity} | Cantidad total del lote: ${lot.totalLotQuantity}`);
-  text(`Inspección: ${lot.inspectionType === "special" ? "Especial" : "Normal"} | Nivel: ${lot.inspectionLevel} | AQL: ${lot.aql} | Rechazos permitidos: ${lot.allowedRejectedQuantity}`);
+  text(`Cantidad total del lote: ${lot.totalLotQuantity}`);
+  lot.methodPlans.forEach((plan) => text(`${methodLabel(plan.method)}: ${plan.inspectedQuantity} por inspeccionar | ${plan.inspectionType === "special" ? "Especial" : "Normal"} | Nivel ${plan.inspectionLevel} | AQL ${plan.aql} | ${plan.allowedRejectedQuantity} rechazos permitidos`, { size: 9.5, color: GRAY }));
   text(`Estado: ${lot.status === "finalized" ? "Finalizado" : "En curso"} | Resultado: ${lot.inspectionResult === "will_fail" ? "No pasará" : lot.inspectionResult === "within_limit" ? "Dentro del límite" : "Pendiente"}`, { color: lot.inspectionResult === "will_fail" ? RED : GRAY });
   if (mode === "summary") {
     text(`Piezas del lote que no pasaron la inspección: ${typeof lot.finalRejectedPieces === "number" ? lot.finalRejectedPieces : "Pendiente de cierre"}`, { size: 13, font: bold, color: typeof lot.finalRejectedPieces === "number" && lot.finalRejectedPieces > 0 ? RED : GREEN, gap: 8 });
