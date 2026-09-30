@@ -15,6 +15,17 @@ export type IncomingInspectionLevel =
   | "S3"
   | "S4";
 
+export type IncomingInspectionMethod = "documentary" | "visual" | "dimensional" | "functional";
+
+export type IncomingInspectionMethodPlan = {
+  method: IncomingInspectionMethod;
+  inspectedQuantity: number;
+  inspectionType: IncomingInspectionType;
+  inspectionLevel: IncomingInspectionLevel;
+  aql: string;
+  allowedRejectedQuantity: number;
+};
+
 export type IncomingLotStatus =
   | "in_progress"
   | "finalized";
@@ -56,6 +67,7 @@ export type IncomingInspectionLot = {
   inspectionLevel: IncomingInspectionLevel;
   aql: string;
   allowedRejectedQuantity: number;
+  methodPlans: IncomingInspectionMethodPlan[];
   status: IncomingLotStatus;
   inspectionResult: IncomingLotResult;
   specCountingMode: SpecCountingMode;
@@ -68,6 +80,9 @@ export type IncomingInspectionLot = {
 
   /* Total reportado que ya fue revisado por el inspector. */
   lastReviewedReportedQuantity?: number;
+
+  /* Piezas del lote que no estarán disponibles para producción, sin duplicarlas. */
+  finalRejectedPieces?: number;
 
   failureNotificationSent: boolean;
   failureNotificationSentAt?: unknown;
@@ -94,9 +109,11 @@ export type IncomingInspectionLot = {
     quantity: number;
   }>;
   rejectionClarifications?: IncomingLotRejectionClarification[];
+  methodReviewState?: Partial<Record<IncomingInspectionMethod, { confirmedUniqueQuantity?: number; lastReviewedReportedQuantity?: number; result?: IncomingLotResult }>>;
 };
 
 export type IncomingLotRejectionClarification = {
+  inspectionMethod?: IncomingInspectionMethod;
   reportedQuantity: number;
   confirmedUniqueQuantity: number;
   allowedQuantity: number;
@@ -108,11 +125,7 @@ export type IncomingLotRejectionClarification = {
 export type CreateIncomingInspectionLotInput = {
   lotName: string;
   totalLotQuantity: number;
-  inspectedQuantity: number;
-  inspectionType: IncomingInspectionType;
-  inspectionLevel: IncomingInspectionLevel;
-  aql: string;
-  allowedRejectedQuantity: number;
+  methodPlans: IncomingInspectionMethodPlan[];
   responsiblePm: IncomingLotResponsible;
 };
 
@@ -139,6 +152,7 @@ export type IncomingLotReport = {
   quantity?: number;
   sampleNumber?: number;
   finalRejectedQuantity?: number;
+  inspectionMethod?: IncomingInspectionMethod;
   photos: IncomingLotReportPhoto[];
   status?: "pending_title" | "pending_decision" | "resolved";
   decision?: "pass" | "fail" | null;
@@ -170,5 +184,6 @@ export type CreateIncomingLotReportInput = {
   description: string;
   quantity?: number;
   sampleNumber?: number;
+  inspectionMethod: IncomingInspectionMethod;
   photos: File[];
 };
