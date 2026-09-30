@@ -18,6 +18,7 @@ import {
 import type {
   CreateIncomingLotReportInput,
   IncomingLotFindingKind,
+  IncomingInspectionMethodPlan,
   IncomingLotReportMode,
   SpecCountingMode,
 } from "../types";
@@ -26,7 +27,7 @@ type Props = {
   initialKind: IncomingLotFindingKind;
   initialMode: IncomingLotReportMode;
   lockedSpecMode: SpecCountingMode;
-  inspectedQuantity: number;
+  methodPlans: IncomingInspectionMethodPlan[];
   saving?: boolean;
   onSubmit: (input: CreateIncomingLotReportInput) => Promise<void>;
   onCancel: () => void;
@@ -36,7 +37,7 @@ export default function IncomingLotReportForm({
   initialKind,
   initialMode,
   lockedSpecMode,
-  inspectedQuantity,
+  methodPlans,
   saving = false,
   onSubmit,
   onCancel,
@@ -48,6 +49,7 @@ export default function IncomingLotReportForm({
       : initialMode,
   );
   const [title, setTitle] = useState("");
+  const [inspectionMethod, setInspectionMethod] = useState(methodPlans[0]?.method || "visual");
   const [description, setDescription] = useState("");
   const [quantity, setQuantity] = useState("");
   const [sampleNumber, setSampleNumber] = useState("");
@@ -80,6 +82,7 @@ export default function IncomingLotReportForm({
     event.preventDefault();
     const parsedQuantity = Number(quantity);
     const parsedSample = Number(sampleNumber);
+    const selectedPlan = methodPlans.find((plan) => plan.method === inspectionMethod) || methodPlans[0];
 
     if (initialKind === "spec_rejection" && !title.trim()) {
       setFormError("Agrega el título del rechazo por SPEC.");
@@ -97,11 +100,11 @@ export default function IncomingLotReportForm({
       (
         !Number.isInteger(parsedSample) ||
         parsedSample < 1 ||
-        parsedSample > inspectedQuantity
+        parsedSample > selectedPlan.inspectedQuantity
       )
     ) {
       setFormError(
-        `El número de muestra debe estar entre 1 y ${inspectedQuantity}.`,
+        `El número de muestra debe estar entre 1 y ${selectedPlan.inspectedQuantity}.`,
       );
       return;
     }
@@ -115,6 +118,7 @@ export default function IncomingLotReportForm({
         quantity: mode === "quantity" ? parsedQuantity : undefined,
         sampleNumber: mode === "sample_number" ? parsedSample : undefined,
         photos,
+        inspectionMethod,
       });
     } catch (cause) {
       setFormError(cause instanceof Error ? cause.message : "No fue posible guardar el reporte.");
@@ -137,6 +141,7 @@ export default function IncomingLotReportForm({
         </div>
 
         <form onSubmit={submit} className="mt-6 space-y-5">
+          {methodPlans.length > 1 && <div><p className="mb-2 text-sm text-white/70">Método de inspección del reporte</p><div className="grid grid-cols-2 gap-2">{methodPlans.map((plan) => <button key={plan.method} type="button" onClick={() => setInspectionMethod(plan.method)} className={`rounded-xl border px-3 py-3 text-sm ${inspectionMethod === plan.method ? "border-emerald-400/35 bg-emerald-400/10 text-emerald-100" : "border-white/10 text-white/45"}`}>{plan.method === "documentary" ? "Documental" : plan.method === "visual" ? "Visual" : plan.method === "dimensional" ? "Dimensional" : "Funcional"}</button>)}</div></div>}
           <div>
             <p className="mb-2 text-sm text-white/70">Manera de reportar</p>
             <div className="grid grid-cols-2 gap-2">
