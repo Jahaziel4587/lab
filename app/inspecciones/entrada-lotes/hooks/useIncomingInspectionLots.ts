@@ -122,7 +122,8 @@ export function useIncomingInspectionLots({
         normalizeIncomingLotName(
           lotName,
         );
-      const aql = input.aql.trim();
+      const methodPlans = input.methodPlans;
+      const primaryPlan = methodPlans[0];
 
       if (!lotName) {
         throw new Error(
@@ -140,35 +141,7 @@ export function useIncomingInspectionLots({
         );
       }
 
-      if (
-        !isPositiveInteger(
-          input.inspectedQuantity,
-        ) ||
-        input.inspectedQuantity >
-          input.totalLotQuantity
-      ) {
-        throw new Error(
-          "La cantidad inspeccionada debe ser mayor a cero y no superar el total del lote.",
-        );
-      }
-
-      if (!aql) {
-        throw new Error(
-          "Agrega el AQL de la inspección.",
-        );
-      }
-
-      if (
-        !isNonNegativeInteger(
-          input.allowedRejectedQuantity,
-        ) ||
-        input.allowedRejectedQuantity >
-          input.inspectedQuantity
-      ) {
-        throw new Error(
-          "La cantidad permitida de rechazos debe estar entre cero y la cantidad inspeccionada.",
-        );
-      }
+      if (!primaryPlan || methodPlans.some((plan) => !isPositiveInteger(plan.inspectedQuantity) || plan.inspectedQuantity > input.totalLotQuantity || !plan.aql.trim() || !isNonNegativeInteger(plan.allowedRejectedQuantity) || plan.allowedRejectedQuantity > plan.inspectedQuantity)) throw new Error("Completa correctamente el plan de cada método de inspección.");
 
       if (!input.responsiblePm.email) {
         throw new Error(
@@ -244,14 +217,15 @@ export function useIncomingInspectionLots({
           totalLotQuantity:
             input.totalLotQuantity,
           inspectedQuantity:
-            input.inspectedQuantity,
+            primaryPlan.inspectedQuantity,
           inspectionType:
-            input.inspectionType,
+            primaryPlan.inspectionType,
           inspectionLevel:
-            input.inspectionLevel,
-          aql,
+            primaryPlan.inspectionLevel,
+          aql: primaryPlan.aql.trim(),
           allowedRejectedQuantity:
-            input.allowedRejectedQuantity,
+            primaryPlan.allowedRejectedQuantity,
+          methodPlans: methodPlans.map((plan) => ({ ...plan, aql: plan.aql.trim() })),
           status: "in_progress",
           inspectionResult: "pending",
           specCountingMode: null,
