@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
     const lotId = clean(body?.lotId);
     const reportId = clean(body?.reportId);
     const messageId = clean(body?.messageId);
+    const inspectionMethod = clean(body?.inspectionMethod);
     if (!scopeKey || !lotId || !["anomaly_created", "message", "decision", "threshold_exceeded", "lot_finalized"].includes(action)) {
       return NextResponse.json({ ok: false, error: "Falta información de la notificación." }, { status: 400 });
     }
@@ -101,12 +102,15 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === "threshold_exceeded") {
-      if (lot.inspectionResult !== "will_fail" || Number(lot.confirmedUniqueRejectedQuantity || 0) <= Number(lot.allowedRejectedQuantity || 0)) return NextResponse.json({ ok: false, error: "El lote todavía no excede el límite confirmado." }, { status: 409 });
+      const methodPlan = Array.isArray(lot.methodPlans) ? lot.methodPlans.find((plan: FirebaseFirestore.DocumentData) => clean(plan.method) === inspectionMethod) : null;
+      const allowedQuantity = Number(methodPlan?.allowedRejectedQuantity ?? lot.allowedRejectedQuantity ?? 0);
+      if (lot.inspectionResult !== "will_fail" || Number(lot.confirmedUniqueRejectedQuantity || 0) <= allowedQuantity) return NextResponse.json({ ok: false, error: "El lote todavía no excede el límite confirmado." }, { status: 409 });
       if (lot.failureNotificationSent === true) return NextResponse.json({ ok: true, alreadyNotified: true });
       const qmSnapshot = await adminDB.collection("users").where("isQualityManager", "==", true).get();
       recipients = [pmEmail, ...qmSnapshot.docs.map((entry) => email(entry.data().email))];
       title = "Lote fuera del límite de aceptación";
-      notificationBody = `El lote ${clean(lot.lotName)} tiene ${Number(lot.confirmedUniqueRejectedQuantity || 0)} piezas rechazadas confirmadas; el máximo permitido es ${Number(lot.allowedRejectedQuantity || 0)}. El lote no pasará la inspección.`;
+      const methodName = inspectionMethod === "documentary" ? "documental" : inspectionMethod === "dimensional" ? "dimensional" : inspectionMethod === "functional" ? "funcional" : "visual";
+      notificationBody = `El lote ${clean(lot.lotName)} tiene ${Number(lot.confirmedUniqueRejectedQuantity || 0)} piezas rechazadas confirmadas en inspección ${methodName}; el máximo permitido para ese método es ${allowedQuantity}. El lote no pasará la inspección.`;
       type = "inspection_incoming_lot_failed";
     }
 
