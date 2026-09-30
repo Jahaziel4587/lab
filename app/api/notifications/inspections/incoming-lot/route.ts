@@ -36,7 +36,8 @@ export async function POST(request: NextRequest) {
     const lotId = clean(body?.lotId);
     const reportId = clean(body?.reportId);
     const messageId = clean(body?.messageId);
-    if (!scopeKey || !lotId || !["anomaly_created", "message", "decision", "threshold_exceeded"].includes(action)) {
+    const inspectionMethod = clean(body?.inspectionMethod);
+    if (!scopeKey || !lotId || !["anomaly_created", "message", "decision", "threshold_exceeded", "lot_finalized"].includes(action)) {
       return NextResponse.json({ ok: false, error: "Falta información de la notificación." }, { status: 400 });
     }
 
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
     let reportReference: FirebaseFirestore.DocumentReference | null = null;
     let report: FirebaseFirestore.DocumentData = {};
 
-    if (action !== "threshold_exceeded") {
+    if (!["threshold_exceeded", "lot_finalized"].includes(action)) {
       if (!reportId) return NextResponse.json({ ok: false, error: "Falta el reporte." }, { status: 400 });
       reportReference = lotReference.collection("reports").doc(reportId);
       const reportSnapshot = await reportReference.get();
@@ -101,13 +102,28 @@ export async function POST(request: NextRequest) {
     }
 
     if (action === "threshold_exceeded") {
-      if (lot.inspectionResult !== "will_fail" || Number(lot.confirmedUniqueRejectedQuantity || 0) <= Number(lot.allowedRejectedQuantity || 0)) return NextResponse.json({ ok: false, error: "El lote todavía no excede el límite confirmado." }, { status: 409 });
+      const methodPlan = Array.isArray(lot.methodPlans) ? lot.methodPlans.find((plan: FirebaseFirestore.DocumentData) => clean(plan.method) === inspectionMethod) : null;
+      const allowedQuantity = Number(methodPlan?.allowedRejectedQuantity ?? lot.allowedRejectedQuantity ?? 0);
+      if (lot.inspectionResult !== "will_fail" || Number(lot.confirmedUniqueRejectedQuantity || 0) <= allowedQuantity) return NextResponse.json({ ok: false, error: "El lote todavía no excede el límite confirmado." }, { status: 409 });
       if (lot.failureNotificationSent === true) return NextResponse.json({ ok: true, alreadyNotified: true });
       const qmSnapshot = await adminDB.collection("users").where("isQualityManager", "==", true).get();
       recipients = [pmEmail, ...qmSnapshot.docs.map((entry) => email(entry.data().email))];
       title = "Lote fuera del límite de aceptación";
-      notificationBody = `El lote ${clean(lot.lotName)} tiene ${Number(lot.confirmedUniqueRejectedQuantity || 0)} piezas rechazadas confirmadas; el máximo permitido es ${Number(lot.allowedRejectedQuantity || 0)}. El lote no pasará la inspección.`;
+      const methodName = inspectionMethod === "documentary" ? "documental" : inspectionMethod === "dimensional" ? "dimensional" : inspectionMethod === "functional" ? "funcional" : "visual";
+      notificationBody = `El lote ${clean(lot.lotName)} tiene ${Number(lot.confirmedUniqueRejectedQuantity || 0)} piezas rechazadas confirmadas en inspección ${methodName}; el máximo permitido para ese método es ${allowedQuantity}. El lote no pasará la inspección.`;
       type = "inspection_incoming_lot_failed";
+    }
+
+    if (action === "lot_finalized") {
+      if (lot.status !== "finalized" || clean(lot.finalizedByUid) !== decoded.uid || !Number.isInteger(Number(lot.finalRejectedPieces))) {
+        return NextResponse.json({ ok: false, error: "El lote todavía no tiene un cierre válido." }, { status: 409 });
+      }
+      if (lot.finalRejectionNotificationSent === true) return NextResponse.json({ ok: true, alreadyNotified: true });
+      const qmSnapshot = await adminDB.collection("users").where("isQualityManager", "==", true).get();
+      recipients = [pmEmail, ...qmSnapshot.docs.map((entry) => email(entry.data().email))];
+      title = "Inspección de lote finalizada";
+      notificationBody = `El lote ${clean(lot.lotName)} finalizó con ${Number(lot.finalRejectedPieces)} piezas que no pasaron la inspección y no estarán disponibles para producción.`;
+      type = "inspection_incoming_lot_finalized";
     }
 
     recipients = Array.from(new Set(recipients.filter((recipient) => recipient && recipient !== senderEmail)));
@@ -129,6 +145,7 @@ export async function POST(request: NextRequest) {
     if (action === "anomaly_created" && reportReference) await reportReference.set({ notifications: { ...(report.notifications || {}), createdSent: true, createdSentAt: FieldValue.serverTimestamp() } }, { merge: true });
     if (action === "decision" && reportReference) await reportReference.set({ notifications: { ...(report.notifications || {}), decisionSent: true, decisionSentAt: FieldValue.serverTimestamp() } }, { merge: true });
     if (action === "threshold_exceeded") await lotReference.set({ failureNotificationSent: true, failureNotificationSentAt: FieldValue.serverTimestamp(), failureConfirmedByUid: decoded.uid, failureConfirmedByEmail: senderEmail, failureConfirmedByName: senderName }, { merge: true });
+    if (action === "lot_finalized") await lotReference.set({ finalRejectionNotificationSent: true, finalRejectionNotificationSentAt: FieldValue.serverTimestamp() }, { merge: true });
     return NextResponse.json({ ok: true, notified: recipients.length });
   } catch (error) {
     console.error("[incoming lot notification]", error);
