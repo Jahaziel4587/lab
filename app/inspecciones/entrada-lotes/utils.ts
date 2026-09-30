@@ -89,6 +89,20 @@ export function mapIncomingLot(
   id: string,
   data: Record<string, unknown>,
 ): IncomingInspectionLot {
+  const fallbackPlan = {
+    method: "visual" as const,
+    inspectedQuantity: Number(data.inspectedQuantity || 0),
+    inspectionType: data.inspectionType === "special" ? "special" as const : "normal" as const,
+    inspectionLevel: String(data.inspectionLevel || "II") as IncomingInspectionLot["inspectionLevel"],
+    aql: String(data.aql || ""),
+    allowedRejectedQuantity: Number(data.allowedRejectedQuantity || 0),
+  };
+  const methodPlans = Array.isArray(data.methodPlans) && data.methodPlans.length > 0
+    ? data.methodPlans.map((entry) => {
+        const item = entry as Record<string, unknown>;
+        const method = ["documentary", "visual", "dimensional", "functional"].includes(String(item.method)) ? String(item.method) as IncomingInspectionLot["methodPlans"][number]["method"] : "visual";
+        return { method, inspectedQuantity: Number(item.inspectedQuantity || 0), inspectionType: item.inspectionType === "special" ? "special" as const : "normal" as const, inspectionLevel: String(item.inspectionLevel || "II") as IncomingInspectionLot["inspectionLevel"], aql: String(item.aql || ""), allowedRejectedQuantity: Number(item.allowedRejectedQuantity || 0) };
+      }) : [fallbackPlan];
   return {
     id,
     lotName: String(data.lotName || ""),
@@ -114,6 +128,7 @@ export function mapIncomingLot(
     allowedRejectedQuantity: Number(
       data.allowedRejectedQuantity || 0,
     ),
+    methodPlans,
     status:
       data.status === "finalized"
         ? "finalized"
@@ -200,11 +215,13 @@ export function mapIncomingLot(
       ? data.finalAnomalyQuantities.map((entry) => {
           const item = entry as Record<string, unknown>;
           return {
+            inspectionMethod: ["documentary", "visual", "dimensional", "functional"].includes(String(item.inspectionMethod)) ? item.inspectionMethod as IncomingInspectionLot["methodPlans"][number]["method"] : undefined,
             title: String(item.title || ""),
             quantity: Number(item.quantity || 0),
           };
         })
       : undefined,
+    methodReviewState: data.methodReviewState && typeof data.methodReviewState === "object" ? data.methodReviewState as IncomingInspectionLot["methodReviewState"] : undefined,
     rejectionClarifications: Array.isArray(data.rejectionClarifications)
       ? data.rejectionClarifications.map((entry) => {
           const item = entry as Record<string, unknown>;
