@@ -208,6 +208,7 @@ function ReportCard({
       : report.decision === "fail"
         ? "No pasa"
         : "Decisión pendiente";
+  const methodLabel = report.inspectionMethod === "documentary" ? "Documental" : report.inspectionMethod === "dimensional" ? "Dimensional" : report.inspectionMethod === "functional" ? "Funcional" : "Visual";
   const addPhotos = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(event.target.files || []).filter((file) =>
       file.type.startsWith("image/"),
@@ -245,6 +246,7 @@ function ReportCard({
           <h4 className="mt-1 break-words font-semibold text-white">
             {report.title || "Pendiente de título"}
           </h4>
+          <p className="mt-1 text-xs text-white/40">Método: {methodLabel}</p>
           {report.kind === "anomaly" && (
             <span
               className={`mt-2 inline-block rounded-full border px-2.5 py-1 text-xs ${report.decision === "pass" ? "border-emerald-400/25 text-emerald-200" : report.decision === "fail" ? "border-red-400/25 bg-red-400/10 text-red-200" : "border-amber-400/25 text-amber-200"}`}
@@ -410,11 +412,10 @@ export default function IncomingLotDetail({ context, lot }: Props) {
     }),
     [reportsState.reports],
   );
-  const needsThresholdReview =
-    lot.reportedRejectedQuantity > lot.allowedRejectedQuantity &&
-    lot.inspectionResult !== "will_fail" &&
-    lot.reportedRejectedQuantity >
-      Number(lot.lastReviewedReportedQuantity || 0);
+  const specTotalsByMethod = useMemo(() => reportsState.reports.filter((report) => report.kind === "spec_rejection").reduce((totals, report) => ({ ...totals, [report.inspectionMethod || "visual"]: (totals[report.inspectionMethod || "visual"] || 0) + (report.mode === "quantity" ? report.quantity || 0 : 1) }), {} as Record<string, number>), [reportsState.reports]);
+  const thresholdPlan = lot.methodPlans.find((plan) => { const reported = specTotalsByMethod[plan.method] || 0; const reviewed = lot.methodReviewState?.[plan.method]?.lastReviewedReportedQuantity || 0; return reported > plan.allowedRejectedQuantity && reported > reviewed; });
+  const thresholdReportedQuantity = thresholdPlan ? specTotalsByMethod[thresholdPlan.method] || 0 : 0;
+  const thresholdMethodLabel = thresholdPlan?.method === "documentary" ? "documental" : thresholdPlan?.method === "dimensional" ? "dimensional" : thresholdPlan?.method === "functional" ? "funcional" : "visual";
   const run = async (action: () => Promise<void>, fallback: string) => {
     try {
       setActionError("");
@@ -529,15 +530,8 @@ export default function IncomingLotDetail({ context, lot }: Props) {
             <h2 className="mt-2 text-2xl font-semibold text-white">
               {lot.lotName}
             </h2>
-            <p className="mt-2 text-sm text-white/55">
-              {lot.inspectedQuantity} por inspeccionar · {lot.totalLotQuantity}{" "}
-              totales · {lot.allowedRejectedQuantity} rechazos permitidos
-            </p>
-            <p className="mt-1 text-xs text-white/40">
-              Inspección{" "}
-              {lot.inspectionType === "special" ? "especial" : "normal"} · Nivel{" "}
-              {lot.inspectionLevel} · AQL {lot.aql}
-            </p>
+            <p className="mt-2 text-sm text-white/55">{lot.totalLotQuantity} piezas totales · {lot.methodPlans.length} método{lot.methodPlans.length === 1 ? "" : "s"} de inspección</p>
+            <div className="mt-2 flex flex-wrap gap-2">{lot.methodPlans.map((plan) => <span key={plan.method} className="rounded-full border border-white/10 px-2.5 py-1 text-xs text-white/45">{plan.method === "documentary" ? "Documental" : plan.method === "visual" ? "Visual" : plan.method === "dimensional" ? "Dimensional" : "Funcional"}: {plan.inspectedQuantity} muestras · {plan.allowedRejectedQuantity} permitidos</span>)}</div>
             {typeof lot.finalRejectedPieces === "number" && (
               <p className="mt-2 text-sm font-medium text-red-200">
                 {lot.finalRejectedPieces} piezas no pasaron la inspección
@@ -606,7 +600,7 @@ export default function IncomingLotDetail({ context, lot }: Props) {
           )}
         </div>
       </div>
-      {activeKind === "spec_rejection" && needsThresholdReview && (
+      {activeKind === "spec_rejection" && thresholdPlan && (
         <div className="rounded-2xl border border-red-400/30 bg-red-400/[0.08] p-5">
           <div className="flex gap-3">
             <AlertTriangle className="mt-0.5 shrink-0 text-red-300" size={22} />
@@ -615,8 +609,8 @@ export default function IncomingLotDetail({ context, lot }: Props) {
                 Confirma la cantidad de piezas rechazadas
               </h3>
               <p className="mt-2 text-sm text-red-100/70">
-                La suma actual es {lot.reportedRejectedQuantity} y la cantidad
-                permitida es {lot.allowedRejectedQuantity}. Si son piezas
+                En el método {thresholdMethodLabel}, la suma actual es {thresholdReportedQuantity} y la cantidad
+                permitida es {thresholdPlan.allowedRejectedQuantity}. Si son piezas
                 diferentes, se notificará al PM y a Quality Management que el
                 lote no pasará. ¿Es correcto?
               </p>
@@ -627,7 +621,7 @@ export default function IncomingLotDetail({ context, lot }: Props) {
                     run(
                       () =>
                         reportsState.confirmUniqueRejectedQuantity(
-                          lot.reportedRejectedQuantity,
+                          thresholdPlan.method, thresholdReportedQuantity, thresholdReportedQuantity, thresholdPlan.allowedRejectedQuantity,
                         ),
                       "No fue posible confirmar o notificar.",
                     )
@@ -644,7 +638,7 @@ export default function IncomingLotDetail({ context, lot }: Props) {
                     <input
                       type="number"
                       min="0"
-                      max={lot.reportedRejectedQuantity}
+                      max={thresholdReportedQuantity}
                       value={uniqueQuantity}
                       onChange={(e) => setUniqueQuantity(e.target.value)}
                       placeholder="Cantidad real de piezas sin repetir"
@@ -655,7 +649,7 @@ export default function IncomingLotDetail({ context, lot }: Props) {
                       onClick={() =>
                         run(async () => {
                           await reportsState.confirmUniqueRejectedQuantity(
-                            Number(uniqueQuantity),
+                            thresholdPlan.method, Number(uniqueQuantity), thresholdReportedQuantity, thresholdPlan.allowedRejectedQuantity,
                           );
                           setUniqueQuantity("");
                         }, "No fue posible confirmar o notificar.")
@@ -822,7 +816,7 @@ export default function IncomingLotDetail({ context, lot }: Props) {
           initialKind={activeKind}
           initialMode={initialMode}
           lockedSpecMode={lot.specCountingMode}
-          inspectedQuantity={lot.inspectedQuantity}
+          methodPlans={lot.methodPlans}
           saving={reportsState.saving}
           onSubmit={async (input) => {
             await reportsState.createReport(input);
