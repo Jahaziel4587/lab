@@ -26,6 +26,7 @@ import type {
   CreateIncomingLotReportInput,
   IncomingInspectionContext,
   IncomingInspectionLot,
+  IncomingInspectionMethod,
   IncomingLotAnomalyMessage,
   IncomingLotReport,
   IncomingLotReportPhoto,
@@ -68,6 +69,7 @@ function mapReport(
       typeof data.finalRejectedQuantity === "number"
         ? data.finalRejectedQuantity
         : undefined,
+    inspectionMethod: ["documentary", "visual", "dimensional", "functional"].includes(String(data.inspectionMethod)) ? data.inspectionMethod as IncomingLotReport["inspectionMethod"] : "visual",
     photos: Array.isArray(data.photos)
       ? data.photos as IncomingLotReportPhoto[]
       : [],
@@ -111,8 +113,8 @@ export function useIncomingLotReports({
   );
 
   const notify = useCallback(async (
-    action: "anomaly_created" | "message" | "decision" | "threshold_exceeded",
-    details: { reportId?: string; messageId?: string } = {},
+    action: "anomaly_created" | "message" | "decision" | "threshold_exceeded" | "lot_finalized",
+    details: { reportId?: string; messageId?: string; inspectionMethod?: IncomingInspectionMethod } = {},
   ) => {
     if (!user || !context || !lot) return;
     const response = await fetch("/api/notifications/inspections/incoming-lot", {
@@ -221,6 +223,8 @@ export function useIncomingLotReports({
 
     const title = input.title.trim();
     const description = input.description.trim();
+    const methodPlan = lot.methodPlans.find((plan) => plan.method === input.inspectionMethod);
+    if (!methodPlan) throw new Error("Selecciona un método de inspección válido.");
     if (input.kind === "spec_rejection" && !title) {
       throw new Error("Agrega el título del rechazo por SPEC.");
     }
@@ -233,7 +237,7 @@ export function useIncomingLotReports({
     }
     if (
       input.mode === "sample_number" &&
-      (!Number.isInteger(input.sampleNumber) || Number(input.sampleNumber) < 1)
+      (!Number.isInteger(input.sampleNumber) || Number(input.sampleNumber) < 1 || Number(input.sampleNumber) > methodPlan.inspectedQuantity)
     ) {
       throw new Error("El número de muestra debe ser mayor a cero.");
     }
@@ -308,6 +312,7 @@ export function useIncomingLotReports({
           mode: input.mode,
           title,
           description,
+          inspectionMethod: input.inspectionMethod,
           ...(input.mode === "quantity"
             ? { quantity: amount }
             : { sampleNumber: Number(input.sampleNumber) }),
@@ -534,7 +539,10 @@ export function useIncomingLotReports({
   }, [context, lot, user]);
 
   const confirmUniqueRejectedQuantity = useCallback(async (
+    inspectionMethod: IncomingInspectionMethod,
     uniqueQuantity: number,
+    reportedQuantity: number,
+    allowedQuantity: number,
   ) => {
     if (!context || !lot) return;
     if (!Number.isInteger(uniqueQuantity) || uniqueQuantity < 0) {
@@ -544,37 +552,40 @@ export function useIncomingLotReports({
       doc(db, "inspection_incoming_lots", context.scopeKey, "lots", lot.id),
       {
         confirmedUniqueRejectedQuantity: uniqueQuantity,
-        lastReviewedReportedQuantity: lot.reportedRejectedQuantity,
+        lastReviewedReportedQuantity: reportedQuantity,
+        [`methodReviewState.${inspectionMethod}`]: { confirmedUniqueQuantity: uniqueQuantity, lastReviewedReportedQuantity: reportedQuantity, result: uniqueQuantity > allowedQuantity ? "will_fail" : "within_limit" },
         rejectionClarifications: arrayUnion({
-          reportedQuantity: lot.reportedRejectedQuantity,
+          inspectionMethod,
+          reportedQuantity,
           confirmedUniqueQuantity: uniqueQuantity,
-          allowedQuantity: lot.allowedRejectedQuantity,
-          repeatedSamples: uniqueQuantity < lot.reportedRejectedQuantity,
+          allowedQuantity,
+          repeatedSamples: uniqueQuantity < reportedQuantity,
           createdByName: displayName || user?.displayName || user?.email || "Usuario",
           createdAt: new Date(),
         }),
         inspectionResult:
-          uniqueQuantity > lot.allowedRejectedQuantity
+          uniqueQuantity > allowedQuantity
             ? "will_fail"
             : "within_limit",
         updatedAt: serverTimestamp(),
       },
     );
-    if (uniqueQuantity > lot.allowedRejectedQuantity) {
-      await notify("threshold_exceeded");
+    if (uniqueQuantity > allowedQuantity) {
+      await notify("threshold_exceeded", { inspectionMethod });
     }
   }, [context, displayName, lot, notify, user]);
 
   const finalizeLot = useCallback(async (
-    quantities: Record<string, number>,
+    finalRejectedPieces: number,
   ) => {
     if (!context || !lot || !user) {
       throw new Error("Falta la sesión o la información del lote.");
     }
-    if (
-      lot.reportedRejectedQuantity > lot.allowedRejectedQuantity &&
-      lot.reportedRejectedQuantity > Number(lot.lastReviewedReportedQuantity || 0)
-    ) {
+    const hasUnreviewedThreshold = lot.methodPlans.some((plan) => {
+      const reported = reports.filter((report) => report.kind === "spec_rejection" && (report.inspectionMethod || "visual") === plan.method).reduce((sum, report) => sum + (report.mode === "quantity" ? report.quantity || 0 : 1), 0);
+      return reported > plan.allowedRejectedQuantity && reported > Number(lot.methodReviewState?.[plan.method]?.lastReviewedReportedQuantity || 0);
+    });
+    if (hasUnreviewedThreshold) {
       throw new Error("Confirma primero si los rechazos por SPEC corresponden a piezas diferentes.");
     }
     const anomalies = reports.filter((report) => report.kind === "anomaly");
@@ -582,44 +593,24 @@ export function useIncomingLotReports({
     if (pending.length > 0) {
       throw new Error(`Faltan ${pending.length} anormalidades por resolver.`);
     }
-    const failedTitles = Array.from(new Set(
-      anomalies
-        .filter((report) => report.decision === "fail")
-        .map((report) => report.title.trim())
-        .filter(Boolean),
-    ));
-    const finalAnomalyQuantities = failedTitles.map((title) => {
-      const quantity = Number(quantities[title]);
-      if (!Number.isInteger(quantity) || quantity < 1 || quantity > lot.totalLotQuantity) {
-        throw new Error(`Agrega una cantidad válida para “${title}”.`);
-      }
-      return { title, quantity };
-    });
+    if (!Number.isInteger(finalRejectedPieces) || finalRejectedPieces < 0 || finalRejectedPieces > lot.totalLotQuantity) {
+      throw new Error("Agrega una cantidad válida de piezas que no pasaron la inspección.");
+    }
     const lotReference = doc(db, "inspection_incoming_lots", context.scopeKey, "lots", lot.id);
     const batch = writeBatch(db);
     batch.update(lotReference, {
         status: "finalized",
         inspectionResult: lot.inspectionResult === "pending" ? "within_limit" : lot.inspectionResult,
-        finalAnomalyQuantities,
+        finalRejectedPieces,
         finalizedByUid: user.uid,
         finalizedByEmail: user.email || "",
         finalizedByName: displayName || user.displayName || user.email || "Usuario",
         finalizedAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
     });
-    anomalies
-      .filter((report) => report.decision === "fail")
-      .forEach((report) => {
-        const finalQuantity = finalAnomalyQuantities.find((item) => item.title === report.title.trim())?.quantity;
-        if (typeof finalQuantity === "number") {
-          batch.update(doc(lotReference, "reports", report.id), {
-            finalRejectedQuantity: finalQuantity,
-            updatedAt: serverTimestamp(),
-          });
-        }
-      });
     await batch.commit();
-  }, [context, displayName, lot, reports, user]);
+    await notify("lot_finalized");
+  }, [context, displayName, lot, notify, reports, user]);
 
   return {
     reports,
