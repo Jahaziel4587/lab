@@ -169,6 +169,7 @@ export async function generateIncomingLotPdf({ mode, context, lot, reports, mess
   text(titles[mode], { size: 17, font: bold, color: GREEN, gap: 12 });
   text(lot.lotName, { size: 20, font: bold, gap: 8 });
   text(`Componente: ${context.componentTitle}`, { font: bold });
+  text(`PDO / PO #: ${lot.purchaseOrder || "Sin registrar"}`);
   text(`Cantidad total del lote: ${lot.totalLotQuantity}`);
   lot.methodPlans.forEach((plan) => text(`${methodLabel(plan.method)}: ${plan.isFullInspection?`Inspección del 100% | ${plan.inspectedQuantity} piezas por inspeccionar`:`${plan.inspectedQuantity} por inspeccionar | ${plan.inspectionType === "special" ? "Especial" : "Normal"} | Nivel ${plan.inspectionLevel} | AQL ${plan.aql} | ${plan.allowedRejectedQuantity} rechazos permitidos`}`, { size: 9.5, color: GRAY }));
   text(`Estado: ${lot.status === "finalized" ? "Finalizado" : "En curso"} | Resultado: ${lot.inspectionResult === "will_fail" ? "No pasará" : lot.inspectionResult === "within_limit" ? "Dentro del límite" : "Pendiente"}`, { color: lot.inspectionResult === "will_fail" ? RED : GRAY });

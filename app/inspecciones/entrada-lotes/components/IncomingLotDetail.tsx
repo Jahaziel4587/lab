@@ -20,15 +20,23 @@ import type {
   IncomingInspectionLot,
   IncomingLotAnomalyMessage,
   IncomingLotFindingKind,
+  IncomingNonconformanceDetails,
   IncomingLotReport,
   IncomingLotReportMode,
 } from "../types";
 import { useIncomingLotReports } from "../hooks/useIncomingLotReports";
 import IncomingLotReportForm from "./IncomingLotReportForm";
+import IncomingNonconformanceFields from "./IncomingNonconformanceFields";
 import {
   generateIncomingLotPdf,
   type IncomingLotPdfMode,
 } from "../pdf/generateIncomingLotPdf";
+import {
+  buildNonconformanceDescription,
+  buildSuggestedRejectionSummary,
+  generateOfficialNonconformancePdf,
+  generateOfficialRejectionPdf,
+} from "../pdf/generateIncomingQmsPdf";
 
 type Props = { context: IncomingInspectionContext; lot: IncomingInspectionLot };
 
@@ -400,6 +408,23 @@ export default function IncomingLotDetail({ context, lot }: Props) {
   const [decisionComment, setDecisionComment] = useState("");
   const [actionError, setActionError] = useState("");
   const [generatingPdf, setGeneratingPdf] = useState<string | null>(null);
+  const [rejectionPdfOpen, setRejectionPdfOpen] = useState(false);
+  const [nonconformancePdfOpen, setNonconformancePdfOpen] = useState(false);
+  const [rejectionSummary, setRejectionSummary] = useState("");
+  const [rejectionDisposition, setRejectionDisposition] = useState<"scrap" | "other">("scrap");
+  const [rejectionOtherDisposition, setRejectionOtherDisposition] = useState("");
+  const [rejectionObservations, setRejectionObservations] = useState("");
+  const [nonconformanceExtraComment, setNonconformanceExtraComment] = useState("");
+  const [nonconformanceDetails, setNonconformanceDetails] = useState<IncomingNonconformanceDetails>({
+    category: "quality",
+    immediateActions: "Se segregó y retuvo el lote; se notificó al PM responsable y a Quality Management.",
+    riskSeverity: "",
+    riskOccurrence: "",
+    riskLevel: "medium",
+    capaRequired: false,
+    dispositions: ["return_supplier"],
+    dispositionJustification: "",
+  });
   const visibleReports = useMemo(
     () => reportsState.reports.filter((report) => report.kind === activeKind),
     [activeKind, reportsState.reports],
@@ -478,15 +503,25 @@ export default function IncomingLotDetail({ context, lot }: Props) {
   const specReports = reportsState.reports.filter(
     (report) => report.kind === "spec_rejection",
   );
+  const requiresNonconformance = lot.inspectionResult === "will_fail" || Object.values(lot.methodReviewState || {}).some(
+    (review) => review?.result === "will_fail",
+  );
   const finalize = async () => {
     await run(async () => {
-      await reportsState.finalizeLot(
-        finalRejectedPieces.trim() === ""
+      await reportsState.finalizeLot({
+        finalRejectedPieces: finalRejectedPieces.trim() === ""
           ? Number.NaN
           : Number(finalRejectedPieces),
-      );
+        ...(requiresNonconformance ? { nonconformanceDetails } : {}),
+      });
       setFinalizeOpen(false);
     }, "No fue posible finalizar el lote.");
+  };
+  const generatorName = user?.displayName || user?.email || "Usuario";
+  const openRejectionPdf = () => {
+    setRejectionSummary(buildSuggestedRejectionSummary(reportsState.reports));
+    setActionError("");
+    setRejectionPdfOpen(true);
   };
   const generatePdf = async (
     mode: IncomingLotPdfMode,
@@ -531,6 +566,7 @@ export default function IncomingLotDetail({ context, lot }: Props) {
               {lot.lotName}
             </h2>
             <p className="mt-2 text-sm text-white/55">{lot.totalLotQuantity} piezas totales · {lot.methodPlans.length} método{lot.methodPlans.length === 1 ? "" : "s"} de inspección</p>
+            <p className="mt-1 text-sm text-white/45">PDO / PO #: {lot.purchaseOrder || "Sin registrar"}</p>
             <div className="mt-2 flex flex-wrap gap-2">{lot.methodPlans.map((plan) => <span key={plan.method} className="rounded-full border border-white/10 px-2.5 py-1 text-xs text-white/45">{plan.method === "documentary" ? "Documental" : plan.method === "visual" ? "Visual" : plan.method === "dimensional" ? "Dimensional" : "Funcional"}: {plan.isFullInspection?`100% · ${plan.inspectedQuantity} piezas`:`${plan.inspectedQuantity} muestras · ${plan.allowedRejectedQuantity} permitidos`}</span>)}</div>
             {typeof lot.finalRejectedPieces === "number" && (
               <p className="mt-2 text-sm font-medium text-red-200">
@@ -547,6 +583,24 @@ export default function IncomingLotDetail({ context, lot }: Props) {
             >
               <FileDown size={16} /> Resumen general
             </button>
+            {lot.status === "finalized" && Number(lot.finalRejectedPieces || 0) > 0 && (
+              <button
+                type="button"
+                onClick={openRejectionPdf}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-400/25 bg-red-400/[0.07] px-4 py-3 text-sm text-red-100"
+              >
+                <FileDown size={16} /> Reporte de rechazo
+              </button>
+            )}
+            {lot.status === "finalized" && requiresNonconformance && (
+              <button
+                type="button"
+                onClick={() => { setActionError(""); setNonconformancePdfOpen(true); }}
+                className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-400/35 bg-red-400/15 px-4 py-3 text-sm font-medium text-red-100"
+              >
+                <FileDown size={16} /> No conformidad
+              </button>
+            )}
             {lot.status === "in_progress" && (
               <button
                 type="button"
@@ -1023,6 +1077,12 @@ export default function IncomingLotDetail({ context, lot }: Props) {
                       )}
                     </div>
                   </div>
+                  {requiresNonconformance && (
+                    <IncomingNonconformanceFields
+                      value={nonconformanceDetails}
+                      onChange={setNonconformanceDetails}
+                    />
+                  )}
                   {actionError && (
                     <p className="rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-100">
                       {actionError}
@@ -1042,6 +1102,37 @@ export default function IncomingLotDetail({ context, lot }: Props) {
           </div>,
           document.body,
         )}
+      {rejectionPdfOpen && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[120] flex items-center justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-sm">
+          <div className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-3xl border border-red-400/20 bg-[#0d1512] p-5 shadow-2xl sm:p-7">
+            <div className="flex items-start justify-between gap-4">
+              <div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-red-300">Formato oficial</p><h2 className="mt-2 text-xl font-semibold text-white">Reporte de rechazo</h2></div>
+              <button type="button" onClick={() => setRejectionPdfOpen(false)} className="rounded-xl border border-white/10 p-2 text-white/60"><X size={18} /></button>
+            </div>
+            <div className="mt-6 space-y-4">
+              <div className="grid gap-3 rounded-2xl border border-white/10 bg-black/15 p-4 text-sm text-white/60 sm:grid-cols-2">
+                <p>Emitido por: <span className="text-white/85">{generatorName}</span></p><p>Fecha: <span className="text-white/85">{new Intl.DateTimeFormat("es-MX").format(new Date())}</span></p><p>PDO / PO #: <span className="text-white/85">{lot.purchaseOrder}</span></p><p>Piezas rechazadas: <span className="text-red-200">{lot.finalRejectedPieces}</span></p>
+              </div>
+              <label className="block text-sm text-white/70">Descripción general<textarea rows={4} value={rejectionSummary} onChange={(event) => setRejectionSummary(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white" /><span className="mt-1 block text-xs text-white/40">Se sugieren los títulos registrados; puedes redactar cómo quedará en el reporte.</span></label>
+              <div><p className="text-sm text-white/70">Disposición</p><div className="mt-2 grid grid-cols-2 gap-2"><button type="button" onClick={() => setRejectionDisposition("scrap")} className={`rounded-xl border px-4 py-3 text-sm ${rejectionDisposition === "scrap" ? "border-red-400/35 bg-red-400/10 text-red-100" : "border-white/10 text-white/50"}`}>SCRAP</button><button type="button" onClick={() => setRejectionDisposition("other")} className={`rounded-xl border px-4 py-3 text-sm ${rejectionDisposition === "other" ? "border-red-400/35 bg-red-400/10 text-red-100" : "border-white/10 text-white/50"}`}>Otra</button></div>{rejectionDisposition === "other" && <input value={rejectionOtherDisposition} onChange={(event) => setRejectionOtherDisposition(event.target.value)} placeholder="Especifica la disposición" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white" />}</div>
+              <label className="block text-sm text-white/70">Observaciones (opcional)<textarea rows={3} value={rejectionObservations} onChange={(event) => setRejectionObservations(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white" /></label>
+              {actionError && <p className="rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-100">{actionError}</p>}
+              <button type="button" onClick={() => run(async () => { if (!rejectionSummary.trim()) throw new Error("Agrega la descripción general."); if (rejectionDisposition === "other" && !rejectionOtherDisposition.trim()) throw new Error("Especifica la otra disposición."); await generateOfficialRejectionPdf({ context, lot, reports: reportsState.reports, generatedBy: generatorName, summary: rejectionSummary, disposition: rejectionDisposition, otherDisposition: rejectionOtherDisposition, observations: rejectionObservations }); }, "No fue posible generar el reporte de rechazo.")} className="w-full rounded-xl border border-red-400/30 bg-red-400/15 px-5 py-3 text-sm font-medium text-red-100"><FileDown size={16} className="mr-2 inline" />Descargar reporte de rechazo</button>
+            </div>
+          </div>
+        </div>, document.body)}
+      {nonconformancePdfOpen && typeof document !== "undefined" && createPortal(
+        <div className="fixed inset-0 z-[120] flex items-center justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-sm">
+          <div className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-3xl border border-red-400/25 bg-[#0d1512] p-5 shadow-2xl sm:p-7">
+            <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-red-300">Formato oficial</p><h2 className="mt-2 text-xl font-semibold text-white">Reporte de no conformidad</h2></div><button type="button" onClick={() => setNonconformancePdfOpen(false)} className="rounded-xl border border-white/10 p-2 text-white/60"><X size={18} /></button></div>
+            <div className="mt-6 space-y-4">
+              <div className="rounded-2xl border border-white/10 bg-black/15 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-emerald-300">Descripción predeterminada</p><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-white/65">{buildNonconformanceDescription(lot, reportsState.reports)}</p><p className="mt-2 text-xs text-white/35">Esta parte se genera con la inspección y no se puede editar.</p></div>
+              <label className="block text-sm text-white/70">Comentario o detalle adicional (opcional)<textarea rows={4} value={nonconformanceExtraComment} onChange={(event) => setNonconformanceExtraComment(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white" /></label>
+              {actionError && <p className="rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-100">{actionError}</p>}
+              <button type="button" onClick={() => run(() => generateOfficialNonconformancePdf({ context, lot, reports: reportsState.reports, generatedBy: generatorName, extraComment: nonconformanceExtraComment }), "No fue posible generar la no conformidad.")} className="w-full rounded-xl border border-red-400/30 bg-red-400/15 px-5 py-3 text-sm font-medium text-red-100"><FileDown size={16} className="mr-2 inline" />Descargar no conformidad</button>
+            </div>
+          </div>
+        </div>, document.body)}
     </section>
   );
 }
