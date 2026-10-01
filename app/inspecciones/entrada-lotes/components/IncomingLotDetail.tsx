@@ -32,11 +32,9 @@ import {
   type IncomingLotPdfMode,
 } from "../pdf/generateIncomingLotPdf";
 import {
-  buildNonconformanceDescription,
   buildSuggestedRejectionSummary,
-  generateOfficialNonconformancePdf,
-  generateOfficialRejectionPdf,
-} from "../pdf/generateIncomingQmsPdf";
+  buildNonconformanceDescription,
+} from "../qmsReportData";
 
 type Props = { context: IncomingInspectionContext; lot: IncomingInspectionLot };
 
@@ -522,6 +520,36 @@ export default function IncomingLotDetail({ context, lot }: Props) {
     setRejectionSummary(buildSuggestedRejectionSummary(reportsState.reports));
     setActionError("");
     setRejectionPdfOpen(true);
+  };
+  const downloadOfficialReport = async (
+    endpoint: "rejection-report" | "nonconformance-report",
+    payload: Record<string, unknown>,
+    fallbackFileName: string,
+  ) => {
+    if (!user) throw new Error("No hay una sesión activa.");
+    const response = await fetch(`/api/inspections/incoming-lot/${endpoint}`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${await user.getIdToken()}`,
+      },
+      body: JSON.stringify({ scopeKey: context.scopeKey, lotId: lot.id, ...payload }),
+    });
+    if (!response.ok) {
+      const result = await response.json().catch(() => null);
+      throw new Error(result?.detail || result?.error || "No fue posible generar el formato oficial.");
+    }
+    const blob = await response.blob();
+    const disposition = response.headers.get("content-disposition") || "";
+    const headerName = disposition.match(/filename="?([^";]+)"?/i)?.[1];
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = headerName || fallbackFileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   };
   const generatePdf = async (
     mode: IncomingLotPdfMode,
@@ -1117,7 +1145,7 @@ export default function IncomingLotDetail({ context, lot }: Props) {
               <div><p className="text-sm text-white/70">Disposición</p><div className="mt-2 grid grid-cols-2 gap-2"><button type="button" onClick={() => setRejectionDisposition("scrap")} className={`rounded-xl border px-4 py-3 text-sm ${rejectionDisposition === "scrap" ? "border-red-400/35 bg-red-400/10 text-red-100" : "border-white/10 text-white/50"}`}>SCRAP</button><button type="button" onClick={() => setRejectionDisposition("other")} className={`rounded-xl border px-4 py-3 text-sm ${rejectionDisposition === "other" ? "border-red-400/35 bg-red-400/10 text-red-100" : "border-white/10 text-white/50"}`}>Otra</button></div>{rejectionDisposition === "other" && <input value={rejectionOtherDisposition} onChange={(event) => setRejectionOtherDisposition(event.target.value)} placeholder="Especifica la disposición" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white" />}</div>
               <label className="block text-sm text-white/70">Observaciones (opcional)<textarea rows={3} value={rejectionObservations} onChange={(event) => setRejectionObservations(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white" /></label>
               {actionError && <p className="rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-100">{actionError}</p>}
-              <button type="button" onClick={() => run(async () => { if (!rejectionSummary.trim()) throw new Error("Agrega la descripción general."); if (rejectionDisposition === "other" && !rejectionOtherDisposition.trim()) throw new Error("Especifica la otra disposición."); await generateOfficialRejectionPdf({ context, lot, reports: reportsState.reports, generatedBy: generatorName, summary: rejectionSummary, disposition: rejectionDisposition, otherDisposition: rejectionOtherDisposition, observations: rejectionObservations }); }, "No fue posible generar el reporte de rechazo.")} className="w-full rounded-xl border border-red-400/30 bg-red-400/15 px-5 py-3 text-sm font-medium text-red-100"><FileDown size={16} className="mr-2 inline" />Descargar reporte de rechazo</button>
+              <button type="button" onClick={() => run(async () => { if (!rejectionSummary.trim()) throw new Error("Agrega la descripción general."); if (rejectionDisposition === "other" && !rejectionOtherDisposition.trim()) throw new Error("Especifica la otra disposición."); await downloadOfficialReport("rejection-report", { rejectionSummary, disposition: rejectionDisposition, otherDisposition: rejectionOtherDisposition, rejectionObservations }, `Reporte_rechazo_${lot.lotName}.xlsx`); }, "No fue posible generar el reporte de rechazo.")} className="w-full rounded-xl border border-red-400/30 bg-red-400/15 px-5 py-3 text-sm font-medium text-red-100"><FileDown size={16} className="mr-2 inline" />Descargar XLSX oficial</button>
             </div>
           </div>
         </div>, document.body)}
@@ -1129,7 +1157,7 @@ export default function IncomingLotDetail({ context, lot }: Props) {
               <div className="rounded-2xl border border-white/10 bg-black/15 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-emerald-300">Descripción predeterminada</p><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-white/65">{buildNonconformanceDescription(lot, reportsState.reports)}</p><p className="mt-2 text-xs text-white/35">Esta parte se genera con la inspección y no se puede editar.</p></div>
               <label className="block text-sm text-white/70">Comentario o detalle adicional (opcional)<textarea rows={4} value={nonconformanceExtraComment} onChange={(event) => setNonconformanceExtraComment(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white" /></label>
               {actionError && <p className="rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-100">{actionError}</p>}
-              <button type="button" onClick={() => run(() => generateOfficialNonconformancePdf({ context, lot, reports: reportsState.reports, generatedBy: generatorName, extraComment: nonconformanceExtraComment }), "No fue posible generar la no conformidad.")} className="w-full rounded-xl border border-red-400/30 bg-red-400/15 px-5 py-3 text-sm font-medium text-red-100"><FileDown size={16} className="mr-2 inline" />Descargar no conformidad</button>
+              <button type="button" onClick={() => run(() => downloadOfficialReport("nonconformance-report", { extraComment: nonconformanceExtraComment }, `No_conformidad_${lot.lotName}.docx`), "No fue posible generar la no conformidad.")} className="w-full rounded-xl border border-red-400/30 bg-red-400/15 px-5 py-3 text-sm font-medium text-red-100"><FileDown size={16} className="mr-2 inline" />Descargar DOCX oficial</button>
             </div>
           </div>
         </div>, document.body)}
