@@ -91,6 +91,7 @@ export function mapIncomingLot(
 ): IncomingInspectionLot {
   const fallbackPlan = {
     method: "visual" as const,
+    isFullInspection: data.isFullInspection === true,
     inspectedQuantity: Number(data.inspectedQuantity || 0),
     inspectionType: data.inspectionType === "special" ? "special" as const : "normal" as const,
     inspectionLevel: String(data.inspectionLevel || "II") as IncomingInspectionLot["inspectionLevel"],
@@ -101,7 +102,7 @@ export function mapIncomingLot(
     ? data.methodPlans.map((entry) => {
         const item = entry as Record<string, unknown>;
         const method = ["documentary", "visual", "dimensional", "functional"].includes(String(item.method)) ? String(item.method) as IncomingInspectionLot["methodPlans"][number]["method"] : "visual";
-        return { method, inspectedQuantity: Number(item.inspectedQuantity || 0), inspectionType: item.inspectionType === "special" ? "special" as const : "normal" as const, inspectionLevel: String(item.inspectionLevel || "II") as IncomingInspectionLot["inspectionLevel"], aql: String(item.aql || ""), allowedRejectedQuantity: Number(item.allowedRejectedQuantity || 0) };
+        return { method, isFullInspection: item.isFullInspection === true, inspectedQuantity: Number(item.inspectedQuantity || 0), inspectionType: item.inspectionType === "special" ? "special" as const : "normal" as const, inspectionLevel: String(item.inspectionLevel || "II") as IncomingInspectionLot["inspectionLevel"], aql: String(item.aql || ""), allowedRejectedQuantity: Number(item.allowedRejectedQuantity || 0) };
       }) : [fallbackPlan];
   return {
     id,

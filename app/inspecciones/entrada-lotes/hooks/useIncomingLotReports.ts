@@ -582,6 +582,7 @@ export function useIncomingLotReports({
       throw new Error("Falta la sesión o la información del lote.");
     }
     const hasUnreviewedThreshold = lot.methodPlans.some((plan) => {
+      if (plan.isFullInspection) return false;
       const reported = reports.filter((report) => report.kind === "spec_rejection" && (report.inspectionMethod || "visual") === plan.method).reduce((sum, report) => sum + (report.mode === "quantity" ? report.quantity || 0 : 1), 0);
       return reported > plan.allowedRejectedQuantity && reported > Number(lot.methodReviewState?.[plan.method]?.lastReviewedReportedQuantity || 0);
     });

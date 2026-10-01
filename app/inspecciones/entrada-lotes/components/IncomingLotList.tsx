@@ -152,7 +152,7 @@ export default function IncomingLotList({
                   </div>
 
                   <p className="mt-2 text-sm text-white/55">{lot.totalLotQuantity} piezas totales · {lot.methodPlans.length} método{lot.methodPlans.length === 1 ? "" : "s"}</p>
-                  <div className="mt-2 flex flex-wrap gap-1.5">{lot.methodPlans.map((plan) => <span key={plan.method} className="rounded-full border border-white/10 px-2 py-1 text-[11px] text-white/40">{plan.method === "documentary" ? "Documental" : plan.method === "visual" ? "Visual" : plan.method === "dimensional" ? "Dimensional" : "Funcional"}: {plan.inspectedQuantity} muestras · AQL {plan.aql}</span>)}</div>
+                  <div className="mt-2 flex flex-wrap gap-1.5">{lot.methodPlans.map((plan) => <span key={plan.method} className="rounded-full border border-white/10 px-2 py-1 text-[11px] text-white/40">{plan.method === "documentary" ? "Documental" : plan.method === "visual" ? "Visual" : plan.method === "dimensional" ? "Dimensional" : "Funcional"}: {plan.isFullInspection?`Inspección del 100% · ${plan.inspectedQuantity} piezas`:`${plan.inspectedQuantity} muestras · AQL ${plan.aql}`}</span>)}</div>
 
                   {formatDate(lot.createdAt) && (
                     <p className="mt-1 text-xs text-white/30">

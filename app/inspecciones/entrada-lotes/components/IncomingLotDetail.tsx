@@ -413,7 +413,7 @@ export default function IncomingLotDetail({ context, lot }: Props) {
     [reportsState.reports],
   );
   const specTotalsByMethod = useMemo(() => reportsState.reports.filter((report) => report.kind === "spec_rejection").reduce((totals, report) => ({ ...totals, [report.inspectionMethod || "visual"]: (totals[report.inspectionMethod || "visual"] || 0) + (report.mode === "quantity" ? report.quantity || 0 : 1) }), {} as Record<string, number>), [reportsState.reports]);
-  const thresholdPlan = lot.methodPlans.find((plan) => { const reported = specTotalsByMethod[plan.method] || 0; const reviewed = lot.methodReviewState?.[plan.method]?.lastReviewedReportedQuantity || 0; return reported > plan.allowedRejectedQuantity && reported > reviewed; });
+  const thresholdPlan = lot.methodPlans.find((plan) => { if(plan.isFullInspection)return false; const reported = specTotalsByMethod[plan.method] || 0; const reviewed = lot.methodReviewState?.[plan.method]?.lastReviewedReportedQuantity || 0; return reported > plan.allowedRejectedQuantity && reported > reviewed; });
   const thresholdReportedQuantity = thresholdPlan ? specTotalsByMethod[thresholdPlan.method] || 0 : 0;
   const thresholdMethodLabel = thresholdPlan?.method === "documentary" ? "documental" : thresholdPlan?.method === "dimensional" ? "dimensional" : thresholdPlan?.method === "functional" ? "funcional" : "visual";
   const run = async (action: () => Promise<void>, fallback: string) => {
@@ -531,7 +531,7 @@ export default function IncomingLotDetail({ context, lot }: Props) {
               {lot.lotName}
             </h2>
             <p className="mt-2 text-sm text-white/55">{lot.totalLotQuantity} piezas totales · {lot.methodPlans.length} método{lot.methodPlans.length === 1 ? "" : "s"} de inspección</p>
-            <div className="mt-2 flex flex-wrap gap-2">{lot.methodPlans.map((plan) => <span key={plan.method} className="rounded-full border border-white/10 px-2.5 py-1 text-xs text-white/45">{plan.method === "documentary" ? "Documental" : plan.method === "visual" ? "Visual" : plan.method === "dimensional" ? "Dimensional" : "Funcional"}: {plan.inspectedQuantity} muestras · {plan.allowedRejectedQuantity} permitidos</span>)}</div>
+            <div className="mt-2 flex flex-wrap gap-2">{lot.methodPlans.map((plan) => <span key={plan.method} className="rounded-full border border-white/10 px-2.5 py-1 text-xs text-white/45">{plan.method === "documentary" ? "Documental" : plan.method === "visual" ? "Visual" : plan.method === "dimensional" ? "Dimensional" : "Funcional"}: {plan.isFullInspection?`100% · ${plan.inspectedQuantity} piezas`:`${plan.inspectedQuantity} muestras · ${plan.allowedRejectedQuantity} permitidos`}</span>)}</div>
             {typeof lot.finalRejectedPieces === "number" && (
               <p className="mt-2 text-sm font-medium text-red-200">
                 {lot.finalRejectedPieces} piezas no pasaron la inspección

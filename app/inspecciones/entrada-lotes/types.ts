@@ -19,6 +19,7 @@ export type IncomingInspectionMethod = "documentary" | "visual" | "dimensional" 
 
 export type IncomingInspectionMethodPlan = {
   method: IncomingInspectionMethod;
+  isFullInspection?: boolean;
   inspectedQuantity: number;
   inspectionType: IncomingInspectionType;
   inspectionLevel: IncomingInspectionLevel;

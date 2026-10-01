@@ -122,7 +122,9 @@ export function useIncomingInspectionLots({
         normalizeIncomingLotName(
           lotName,
         );
-      const methodPlans = input.methodPlans;
+      const methodPlans = input.methodPlans.map((plan) => plan.isFullInspection
+        ? { ...plan, inspectedQuantity: input.totalLotQuantity, aql: "", allowedRejectedQuantity: 0 }
+        : plan);
       const primaryPlan = methodPlans[0];
 
       if (!lotName) {
@@ -141,7 +143,9 @@ export function useIncomingInspectionLots({
         );
       }
 
-      if (!primaryPlan || methodPlans.some((plan) => !isPositiveInteger(plan.inspectedQuantity) || plan.inspectedQuantity > input.totalLotQuantity || !plan.aql.trim() || !isNonNegativeInteger(plan.allowedRejectedQuantity) || plan.allowedRejectedQuantity > plan.inspectedQuantity)) throw new Error("Completa correctamente el plan de cada método de inspección.");
+      if (!primaryPlan || methodPlans.some((plan) => plan.isFullInspection
+        ? plan.inspectedQuantity !== input.totalLotQuantity
+        : !isPositiveInteger(plan.inspectedQuantity) || plan.inspectedQuantity > input.totalLotQuantity || !plan.aql.trim() || !isNonNegativeInteger(plan.allowedRejectedQuantity) || plan.allowedRejectedQuantity > plan.inspectedQuantity)) throw new Error("Completa correctamente el plan de cada método de inspección.");
 
       if (!input.responsiblePm.email) {
         throw new Error(
