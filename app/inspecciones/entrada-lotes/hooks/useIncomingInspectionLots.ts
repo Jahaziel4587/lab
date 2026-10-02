@@ -133,6 +133,10 @@ export function useIncomingInspectionLots({
         );
       }
 
+      if (!input.purchaseOrder.trim()) {
+        throw new Error("Agrega el PDO / PO del lote.");
+      }
+
       if (
         !isPositiveInteger(
           input.totalLotQuantity,
@@ -218,6 +222,7 @@ export function useIncomingInspectionLots({
         batch.set(lotReference, {
           lotName,
           normalizedLotName,
+          purchaseOrder: input.purchaseOrder.trim(),
           totalLotQuantity:
             input.totalLotQuantity,
           inspectedQuantity:

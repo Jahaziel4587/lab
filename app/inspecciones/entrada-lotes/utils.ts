@@ -110,6 +110,7 @@ export function mapIncomingLot(
     normalizedLotName: String(
       data.normalizedLotName || "",
     ),
+    purchaseOrder: String(data.purchaseOrder || ""),
     totalLotQuantity: Number(
       data.totalLotQuantity || 0,
     ),
@@ -223,6 +224,7 @@ export function mapIncomingLot(
         })
       : undefined,
     methodReviewState: data.methodReviewState && typeof data.methodReviewState === "object" ? data.methodReviewState as IncomingInspectionLot["methodReviewState"] : undefined,
+    nonconformanceDetails: data.nonconformanceDetails && typeof data.nonconformanceDetails === "object" ? data.nonconformanceDetails as IncomingInspectionLot["nonconformanceDetails"] : undefined,
     rejectionClarifications: Array.isArray(data.rejectionClarifications)
       ? data.rejectionClarifications.map((entry) => {
           const item = entry as Record<string, unknown>;

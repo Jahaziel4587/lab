@@ -24,6 +24,7 @@ import { useAuth } from "@/src/Context/AuthContext";
 import { db, storage } from "@/src/firebase/firebaseConfig";
 import type {
   CreateIncomingLotReportInput,
+  FinalizeIncomingLotInput,
   IncomingInspectionContext,
   IncomingInspectionLot,
   IncomingInspectionMethod,
@@ -548,12 +549,27 @@ export function useIncomingLotReports({
     if (!Number.isInteger(uniqueQuantity) || uniqueQuantity < 0) {
       throw new Error("Agrega una cantidad válida.");
     }
-    await updateDoc(
-      doc(db, "inspection_incoming_lots", context.scopeKey, "lots", lot.id),
-      {
+    const result = uniqueQuantity > allowedQuantity ? "will_fail" : "within_limit";
+    const lotReference = doc(db, "inspection_incoming_lots", context.scopeKey, "lots", lot.id);
+    await runTransaction(db, async (transaction) => {
+      const snapshot = await transaction.get(lotReference);
+      if (!snapshot.exists()) throw new Error("El lote ya no existe.");
+      const currentMethodReviewState = (snapshot.data().methodReviewState || {}) as IncomingInspectionLot["methodReviewState"];
+      const nextMethodReviewState = {
+        ...currentMethodReviewState,
+        [inspectionMethod]: {
+          confirmedUniqueQuantity: uniqueQuantity,
+          lastReviewedReportedQuantity: reportedQuantity,
+          result,
+        },
+      };
+      const overallResult = Object.values(nextMethodReviewState).some(
+        (review) => review?.result === "will_fail",
+      ) ? "will_fail" : "within_limit";
+      transaction.update(lotReference, {
         confirmedUniqueRejectedQuantity: uniqueQuantity,
         lastReviewedReportedQuantity: reportedQuantity,
-        [`methodReviewState.${inspectionMethod}`]: { confirmedUniqueQuantity: uniqueQuantity, lastReviewedReportedQuantity: reportedQuantity, result: uniqueQuantity > allowedQuantity ? "will_fail" : "within_limit" },
+        methodReviewState: nextMethodReviewState,
         rejectionClarifications: arrayUnion({
           inspectionMethod,
           reportedQuantity,
@@ -563,20 +579,17 @@ export function useIncomingLotReports({
           createdByName: displayName || user?.displayName || user?.email || "Usuario",
           createdAt: new Date(),
         }),
-        inspectionResult:
-          uniqueQuantity > allowedQuantity
-            ? "will_fail"
-            : "within_limit",
+        inspectionResult: overallResult,
         updatedAt: serverTimestamp(),
-      },
-    );
+      });
+    });
     if (uniqueQuantity > allowedQuantity) {
       await notify("threshold_exceeded", { inspectionMethod });
     }
   }, [context, displayName, lot, notify, user]);
 
   const finalizeLot = useCallback(async (
-    finalRejectedPieces: number,
+    input: FinalizeIncomingLotInput,
   ) => {
     if (!context || !lot || !user) {
       throw new Error("Falta la sesión o la información del lote.");
@@ -594,15 +607,31 @@ export function useIncomingLotReports({
     if (pending.length > 0) {
       throw new Error(`Faltan ${pending.length} anormalidades por resolver.`);
     }
-    if (!Number.isInteger(finalRejectedPieces) || finalRejectedPieces < 0 || finalRejectedPieces > lot.totalLotQuantity) {
+    if (!Number.isInteger(input.finalRejectedPieces) || input.finalRejectedPieces < 0 || input.finalRejectedPieces > lot.totalLotQuantity) {
       throw new Error("Agrega una cantidad válida de piezas que no pasaron la inspección.");
+    }
+    const requiresNonconformance = lot.inspectionResult === "will_fail" || Object.values(lot.methodReviewState || {}).some(
+      (review) => review?.result === "will_fail",
+    );
+    if (requiresNonconformance) {
+      const details = input.nonconformanceDetails;
+      if (!details) throw new Error("Completa la información de la no conformidad.");
+      if (details.category === "other" && !details.categoryOtherText?.trim()) throw new Error("Especifica la categoría de la no conformidad.");
+      if (!details.immediateActions.trim()) throw new Error("Describe las acciones inmediatas.");
+      if (!details.riskSeverity.trim() || !details.riskOccurrence.trim()) throw new Error("Completa la evaluación de severidad y ocurrencia.");
+      if (details.dispositions.length === 0) throw new Error("Selecciona al menos una disposición.");
+      if (details.dispositions.includes("other") && !details.dispositionOtherText?.trim()) throw new Error("Especifica la otra disposición.");
+      if (!details.dispositionJustification.trim()) throw new Error("Agrega la justificación de la disposición.");
     }
     const lotReference = doc(db, "inspection_incoming_lots", context.scopeKey, "lots", lot.id);
     const batch = writeBatch(db);
     batch.update(lotReference, {
         status: "finalized",
-        inspectionResult: lot.inspectionResult === "pending" ? "within_limit" : lot.inspectionResult,
-        finalRejectedPieces,
+        inspectionResult: requiresNonconformance ? "will_fail" : (lot.inspectionResult === "pending" ? "within_limit" : lot.inspectionResult),
+        finalRejectedPieces: input.finalRejectedPieces,
+        ...(requiresNonconformance && input.nonconformanceDetails
+          ? { nonconformanceDetails: input.nonconformanceDetails }
+          : {}),
         finalizedByUid: user.uid,
         finalizedByEmail: user.email || "",
         finalizedByName: displayName || user.displayName || user.email || "Usuario",

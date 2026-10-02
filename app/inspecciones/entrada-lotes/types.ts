@@ -58,10 +58,49 @@ export type IncomingLotResponsible = {
   name: string;
 };
 
+export type IncomingNonconformanceCategory =
+  | "labeling"
+  | "quality"
+  | "performance"
+  | "safety"
+  | "other";
+
+export type IncomingRiskLevel = "high" | "medium" | "low";
+
+export type IncomingDisposition =
+  | "rework"
+  | "return_supplier"
+  | "use_as_is"
+  | "rnd"
+  | "scrap"
+  | "other";
+
+export type IncomingNonconformanceDetails = {
+  category: IncomingNonconformanceCategory;
+  categoryOtherText?: string;
+  immediateActions: string;
+  riskSeverity: string;
+  riskOccurrence: string;
+  riskLevel: IncomingRiskLevel;
+  capaRequired: boolean;
+  dispositions: IncomingDisposition[];
+  dispositionOtherText?: string;
+  dispositionJustification: string;
+  iifReference?: string;
+  qciReference?: string;
+  capaReference?: string;
+  scarReference?: string;
+  recallReference?: string;
+  otherReferences?: string;
+  correctiveActions?: string;
+  additionalComments?: string;
+};
+
 export type IncomingInspectionLot = {
   id: string;
   lotName: string;
   normalizedLotName: string;
+  purchaseOrder: string;
   totalLotQuantity: number;
   inspectedQuantity: number;
   inspectionType: IncomingInspectionType;
@@ -111,6 +150,7 @@ export type IncomingInspectionLot = {
   }>;
   rejectionClarifications?: IncomingLotRejectionClarification[];
   methodReviewState?: Partial<Record<IncomingInspectionMethod, { confirmedUniqueQuantity?: number; lastReviewedReportedQuantity?: number; result?: IncomingLotResult }>>;
+  nonconformanceDetails?: IncomingNonconformanceDetails;
 };
 
 export type IncomingLotRejectionClarification = {
@@ -125,9 +165,15 @@ export type IncomingLotRejectionClarification = {
 
 export type CreateIncomingInspectionLotInput = {
   lotName: string;
+  purchaseOrder: string;
   totalLotQuantity: number;
   methodPlans: IncomingInspectionMethodPlan[];
   responsiblePm: IncomingLotResponsible;
+};
+
+export type FinalizeIncomingLotInput = {
+  finalRejectedPieces: number;
+  nonconformanceDetails?: IncomingNonconformanceDetails;
 };
 
 export type IncomingLotFindingKind =
