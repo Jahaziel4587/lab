@@ -14,6 +14,7 @@ const FILE_EXTENSION_PATTERN = /\.(pdf)$/i;
  * WI.007.00.312 Rev 4 Top Battery Housing.pdf
  * WI.007.07 REV 1 Retrabajo.pdf
  * WI.007.07 Rev. 2 Retrabajo.pdf
+ * WI.001.00.INT.001.302_Rev1_Insert_Pin.pdf
  *
  * La revisión se guarda internamente, pero no aparece
  * dentro de displayName.
@@ -32,7 +33,7 @@ export function normalizeWorkInstruction(
     .trim();
 
   const documentMatch = nameWithoutExtension.match(
-    /^(WI(?:\.[A-Za-z0-9-]+)+)\s+(.+)$/i,
+    /^(WI(?:\.[A-Za-z0-9-]+)+)[\s_]+(.+)$/i,
   );
 
   if (!documentMatch) {
@@ -40,7 +41,9 @@ export function normalizeWorkInstruction(
   }
 
   const documentCode = documentMatch[1].toUpperCase();
-  const remainingName = documentMatch[2].trim();
+  const remainingName = documentMatch[2]
+    .replace(/_/g, " ")
+    .trim();
 
   const revisionMatch = remainingName.match(
     /^REV(?:ISION)?\.?\s*[-:]?\s*(\d+)\s*(.*)$/i,
