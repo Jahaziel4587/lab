@@ -177,7 +177,7 @@ export async function POST(request: NextRequest) {
     })) as unknown as IncomingLotReport[];
     const { partNumber, partName } = extractIncomingPartInfo(context);
     const generatedBy = await getDisplayNameForUid(decoded.uid, decoded.email);
-    const photos = await loadReportPhotos(body.selectedPhotos, reports);
+    const photos = await loadReportPhotos(body.selectedPhotos, reports.filter(report => report.kind === "spec_rejection"));
     const description = buildNonconformanceDescription(lot, reports);
     const additionalComments = [details.additionalComments, clean(body.extraComment)]
       .filter(Boolean)
