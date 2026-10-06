@@ -62,8 +62,9 @@ function isInspectionFolder(
     normalizeFolderName(folderName);
 
   if (type === "incoming") {
-    return normalized.startsWith(
-      "incoming inspection wi",
+    return (
+      normalized.startsWith("incoming inspection wi") ||
+      normalized.includes("iiwi")
     );
   }
 
