@@ -11,6 +11,9 @@ import type { IncomingInspectionContext } from "@/app/inspecciones/entrada-lotes
 import { adminAuth, adminDB } from "@/lib/firebaseAdmin";
 import { getDisplayNameForUid } from "@/lib/pushNotifications";
 
+import { loadReportPhotos, addRejectionPhotoSheets } from "@/lib/inspections/officialReportPhotos";
+import type { IncomingLotReport } from "@/app/inspecciones/entrada-lotes/types";
+
 function clean(value: unknown) {
   return String(value ?? "").trim();
 }
@@ -119,6 +122,11 @@ export async function POST(request: NextRequest) {
         });
         zip.file(name, xml);
       });
+
+    const reportsSnapshot = await lotReference.collection("reports").get();
+    const reports = reportsSnapshot.docs.map(entry => ({ ...entry.data(), id: entry.id })) as IncomingLotReport[];
+    const photos = await loadReportPhotos(body.selectedPhotos, reports);
+    addRejectionPhotoSheets(zip, photos, clean(lot.lotName));
 
     const result = zip.generate({ type: "nodebuffer", compression: "DEFLATE" });
     const fileName = `Reporte_rechazo_${safeFileName(clean(lot.lotName) || lotId)}.xlsx`;

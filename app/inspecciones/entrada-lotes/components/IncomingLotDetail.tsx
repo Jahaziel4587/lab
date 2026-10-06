@@ -36,6 +36,8 @@ import {
   buildNonconformanceDescription,
 } from "../qmsReportData";
 
+import OfficialReportPhotoSelector, { type SelectedReportPhoto } from "./OfficialReportPhotoSelector";
+
 type Props = { context: IncomingInspectionContext; lot: IncomingInspectionLot };
 
 function formatDate(value: unknown) {
@@ -406,6 +408,8 @@ export default function IncomingLotDetail({ context, lot }: Props) {
   const [decisionComment, setDecisionComment] = useState("");
   const [actionError, setActionError] = useState("");
   const [generatingPdf, setGeneratingPdf] = useState<string | null>(null);
+  const [rejectionPhotos, setRejectionPhotos] = useState<SelectedReportPhoto[]>([]);
+  const [nonconformancePhotos, setNonconformancePhotos] = useState<SelectedReportPhoto[]>([]);
   const [rejectionPdfOpen, setRejectionPdfOpen] = useState(false);
   const [nonconformancePdfOpen, setNonconformancePdfOpen] = useState(false);
   const [rejectionSummary, setRejectionSummary] = useState("");
@@ -1144,8 +1148,9 @@ export default function IncomingLotDetail({ context, lot }: Props) {
               <label className="block text-sm text-white/70">Descripción general<textarea rows={4} value={rejectionSummary} onChange={(event) => setRejectionSummary(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white" /><span className="mt-1 block text-xs text-white/40">Se sugieren los títulos registrados; puedes redactar cómo quedará en el reporte.</span></label>
               <div><p className="text-sm text-white/70">Disposición</p><div className="mt-2 grid grid-cols-2 gap-2"><button type="button" onClick={() => setRejectionDisposition("scrap")} className={`rounded-xl border px-4 py-3 text-sm ${rejectionDisposition === "scrap" ? "border-red-400/35 bg-red-400/10 text-red-100" : "border-white/10 text-white/50"}`}>SCRAP</button><button type="button" onClick={() => setRejectionDisposition("other")} className={`rounded-xl border px-4 py-3 text-sm ${rejectionDisposition === "other" ? "border-red-400/35 bg-red-400/10 text-red-100" : "border-white/10 text-white/50"}`}>Otra</button></div>{rejectionDisposition === "other" && <input value={rejectionOtherDisposition} onChange={(event) => setRejectionOtherDisposition(event.target.value)} placeholder="Especifica la disposición" className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white" />}</div>
               <label className="block text-sm text-white/70">Observaciones (opcional)<textarea rows={3} value={rejectionObservations} onChange={(event) => setRejectionObservations(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white" /></label>
+              <OfficialReportPhotoSelector reports={reportsState.reports} selected={rejectionPhotos} onChange={setRejectionPhotos} placement="Se agregarán en hojas aparte, hasta seis fotos por hoja. Al imprimir, selecciona todo el libro para incluirlas." />
               {actionError && <p className="rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-100">{actionError}</p>}
-              <button type="button" onClick={() => run(async () => { if (!rejectionSummary.trim()) throw new Error("Agrega la descripción general."); if (rejectionDisposition === "other" && !rejectionOtherDisposition.trim()) throw new Error("Especifica la otra disposición."); await downloadOfficialReport("rejection-report", { rejectionSummary, disposition: rejectionDisposition, otherDisposition: rejectionOtherDisposition, rejectionObservations }, `Reporte_rechazo_${lot.lotName}.xlsx`); }, "No fue posible generar el reporte de rechazo.")} className="w-full rounded-xl border border-red-400/30 bg-red-400/15 px-5 py-3 text-sm font-medium text-red-100"><FileDown size={16} className="mr-2 inline" />Descargar XLSX oficial</button>
+              <button type="button" onClick={() => run(async () => { if (!rejectionSummary.trim()) throw new Error("Agrega la descripción general."); if (rejectionDisposition === "other" && !rejectionOtherDisposition.trim()) throw new Error("Especifica la otra disposición."); await downloadOfficialReport("rejection-report", { selectedPhotos: rejectionPhotos, rejectionSummary, disposition: rejectionDisposition, otherDisposition: rejectionOtherDisposition, rejectionObservations }, `Reporte_rechazo_${lot.lotName}.xlsx`); }, "No fue posible generar el reporte de rechazo.")} className="w-full rounded-xl border border-red-400/30 bg-red-400/15 px-5 py-3 text-sm font-medium text-red-100"><FileDown size={16} className="mr-2 inline" />Descargar XLSX oficial</button>
             </div>
           </div>
         </div>, document.body)}
@@ -1156,8 +1161,9 @@ export default function IncomingLotDetail({ context, lot }: Props) {
             <div className="mt-6 space-y-4">
               <div className="rounded-2xl border border-white/10 bg-black/15 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-emerald-300">Descripción predeterminada</p><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-white/65">{buildNonconformanceDescription(lot, reportsState.reports)}</p><p className="mt-2 text-xs text-white/35">Esta parte se genera con la inspección y no se puede editar.</p></div>
               <label className="block text-sm text-white/70">Comentario o detalle adicional (opcional)<textarea rows={4} value={nonconformanceExtraComment} onChange={(event) => setNonconformanceExtraComment(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white" /></label>
+              <OfficialReportPhotoSelector reports={reportsState.reports.filter(report => report.kind === "spec_rejection")} selected={nonconformancePhotos} onChange={setNonconformancePhotos} placement="Se incluirán dentro de la descripción de la no conformidad." />
               {actionError && <p className="rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-100">{actionError}</p>}
-              <button type="button" onClick={() => run(() => downloadOfficialReport("nonconformance-report", { extraComment: nonconformanceExtraComment }, `No_conformidad_${lot.lotName}.docx`), "No fue posible generar la no conformidad.")} className="w-full rounded-xl border border-red-400/30 bg-red-400/15 px-5 py-3 text-sm font-medium text-red-100"><FileDown size={16} className="mr-2 inline" />Descargar DOCX oficial</button>
+              <button type="button" onClick={() => run(() => downloadOfficialReport("nonconformance-report", { selectedPhotos: nonconformancePhotos, extraComment: nonconformanceExtraComment }, `No_conformidad_${lot.lotName}.docx`), "No fue posible generar la no conformidad.")} className="w-full rounded-xl border border-red-400/30 bg-red-400/15 px-5 py-3 text-sm font-medium text-red-100"><FileDown size={16} className="mr-2 inline" />Descargar DOCX oficial</button>
             </div>
           </div>
         </div>, document.body)}

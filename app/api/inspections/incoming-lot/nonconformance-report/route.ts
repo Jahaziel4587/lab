@@ -21,6 +21,8 @@ import type {
 import { adminAuth, adminDB } from "@/lib/firebaseAdmin";
 import { getDisplayNameForUid } from "@/lib/pushNotifications";
 
+import { loadReportPhotos, addNonconformancePhotos, PHOTO_MARKER } from "@/lib/inspections/officialReportPhotos";
+
 function clean(value: unknown) {
   return String(value ?? "").trim();
 }
@@ -175,6 +177,7 @@ export async function POST(request: NextRequest) {
     })) as unknown as IncomingLotReport[];
     const { partNumber, partName } = extractIncomingPartInfo(context);
     const generatedBy = await getDisplayNameForUid(decoded.uid, decoded.email);
+    const photos = await loadReportPhotos(body.selectedPhotos, reports.filter(report => report.kind === "spec_rejection"));
     const description = buildNonconformanceDescription(lot, reports);
     const additionalComments = [details.additionalComments, clean(body.extraComment)]
       .filter(Boolean)
@@ -185,7 +188,7 @@ export async function POST(request: NextRequest) {
     const zip = new PizZip(await fs.readFile(templatePath));
     const templateDocument = zip.file("word/document.xml");
     if (templateDocument) {
-      zip.file("word/document.xml", repairTemplateTags(templateDocument.asText()));
+      zip.file("word/document.xml", repairTemplateTags(templateDocument.asText()).replace(/<w:tc[ >][\s\S]*?<\/w:tc>/g, cell => cell.includes("nonconformanceDescription") ? cell.replace("</w:tc>", `<w:p><w:r><w:t>${PHOTO_MARKER}</w:t></w:r></w:p></w:tc>`) : cell));
     }
     const docx = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
     docx.render({
@@ -231,6 +234,7 @@ export async function POST(request: NextRequest) {
     if (documentFile) {
       outputZip.file("word/document.xml", fillLegacyCheckboxes(documentFile.asText(), details));
     }
+    addNonconformancePhotos(outputZip, photos);
     const result = outputZip.generate({ type: "nodebuffer", compression: "DEFLATE" });
     const fileName = `No_conformidad_${safeFileName(clean(lot.lotName) || lotId)}.docx`;
     return new NextResponse(new Uint8Array(result), {
