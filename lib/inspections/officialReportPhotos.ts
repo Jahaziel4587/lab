@@ -1,3 +1,4 @@
+import { findingLabel } from "@/app/inspecciones/entrada-lotes/types";
 import PizZip from "pizzip";
 import sharp from "sharp";
 import { adminStorage } from "@/lib/firebaseAdmin";
@@ -36,7 +37,7 @@ export async function loadReportPhotos(selection: unknown, reports: IncomingLotR
     if (Number(metadata.size) > 20 * 1024 * 1024) throw new Error("Una foto supera 20 MB. Selecciona una versión más pequeña.");
     const [source] = await file.download();
     const { data, info } = await sharp(source, { limitInputPixels: 40000000 }).rotate().resize({ width: 1200, height: 1200, fit: "inside", withoutEnlargement: true }).jpeg({ quality: 80 }).toBuffer({ resolveWithObject: true });
-    result.push({ data, width: info.width, height: info.height, caption: `${report!.kind === "anomaly" ? "Anormalidad" : "Rechazo por SPEC"}: ${report!.title} · Foto ${ref.photoIndex + 1}` });
+    result.push({ data, width: info.width, height: info.height, caption: `${findingLabel(report!.kind)}: ${report!.title} · Foto ${ref.photoIndex + 1}` });
   }
   return result;
 }

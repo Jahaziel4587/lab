@@ -1,6 +1,7 @@
 export type IncomingInspectionSource =
   | "entrada_mts"
-  | "entrada_proyecto";
+  | "entrada_proyecto"
+  | "proceso_proyecto";
 
 export type IncomingInspectionType =
   | "normal"
@@ -178,7 +179,9 @@ export type FinalizeIncomingLotInput = {
 
 export type IncomingLotFindingKind =
   | "anomaly"
-  | "spec_rejection";
+  | "spec_rejection"
+  | "line_rejection"
+  | "component_rejection";
 
 export type IncomingLotReportMode =
   | "quantity"
@@ -234,3 +237,7 @@ export type CreateIncomingLotReportInput = {
   inspectionMethod: IncomingInspectionMethod;
   photos: File[];
 };
+
+export function findingLabel(kind: IncomingLotFindingKind) {
+  return kind === "anomaly" ? "Anormalidad" : kind === "line_rejection" ? "Rechazo en línea" : kind === "component_rejection" ? "Rechazo por componente" : "Rechazo por SPEC";
+}

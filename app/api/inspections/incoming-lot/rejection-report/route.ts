@@ -120,6 +120,7 @@ export async function POST(request: NextRequest) {
         Object.entries(replacements).forEach(([key, value]) => {
           xml = xml.split(`{${key}}`).join(escapeXml(value));
         });
+        if (scope.sourceType === "proceso_proyecto") xml = xml.replace(/Inspección de entrada/g, "Inspección de proceso");
         zip.file(name, xml);
       });
 

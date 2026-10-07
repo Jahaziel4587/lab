@@ -20,7 +20,8 @@ function buildUrl(scope: FirebaseFirestore.DocumentData, lotId: string) {
   if (scope.projectId) query.set("proyecto", clean(scope.projectId));
   if (scope.wiCode) query.set("wi", clean(scope.wiCode));
   query.set("loteEntrada", lotId);
-  return `/inspecciones/entrada?${query.toString()}`;
+  if (scope.sourceType === "proceso_proyecto") query.set("componente", clean(scope.componentId));
+  return `/inspecciones/${scope.sourceType === "proceso_proyecto" ? "proceso" : "entrada"}?${query.toString()}`;
 }
 
 export async function POST(request: NextRequest) {
@@ -55,7 +56,8 @@ export async function POST(request: NextRequest) {
     const relativeUrl = buildUrl(scope, lotId);
     const absoluteUrl = new URL(relativeUrl, origin(request)).toString();
     let recipients: string[] = [];
-    let title = "Inspección de entrada";
+    const inspectionLabel = scope.sourceType === "proceso_proyecto" ? "proceso" : "entrada";
+    let title = `Inspección de ${inspectionLabel}`;
     let notificationBody = "";
     let type = "inspection_incoming_lot";
     let reportReference: FirebaseFirestore.DocumentReference | null = null;
@@ -73,7 +75,7 @@ export async function POST(request: NextRequest) {
       if (report.kind !== "anomaly" || clean(report.createdByUid) !== decoded.uid) return NextResponse.json({ ok: false, error: "No puedes enviar esta notificación." }, { status: 403 });
       if (report.notifications?.createdSent === true) return NextResponse.json({ ok: true, alreadyNotified: true });
       recipients = [pmEmail];
-      title = "Nueva anormalidad en inspección de entrada";
+      title = `Nueva anormalidad en inspección de ${inspectionLabel}`;
       notificationBody = `${senderName} reportó una anormalidad en el lote ${clean(lot.lotName)} de ${clean(scope.componentTitle) || clean(scope.wiTitle)}.`;
       type = "inspection_incoming_anomaly_created";
     }

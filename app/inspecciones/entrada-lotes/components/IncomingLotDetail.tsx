@@ -1,4 +1,5 @@
 "use client";
+import { findingLabel } from "../types";
 
 import {
   AlertTriangle,
@@ -249,7 +250,7 @@ function ReportCard({
           <p
             className={`text-xs font-semibold uppercase tracking-wider ${report.decision === "fail" ? "text-red-300/70" : "text-white/35"}`}
           >
-            {report.kind === "anomaly" ? "Anormalidad" : "Rechazo por SPEC"}
+            {findingLabel(report.kind)}
           </p>
           <h4 className="mt-1 break-words font-semibold text-white">
             {report.title || "Pendiente de título"}
@@ -484,7 +485,7 @@ export default function IncomingLotDetail({ context, lot }: Props) {
         reportsState.reports
           .filter(
             (report) =>
-              report.kind === "anomaly" && report.decision === "fail",
+              (report.kind === "anomaly" && report.decision === "fail") || report.kind === "line_rejection" || report.kind === "component_rejection",
           )
           .reduce((groups, report) => {
             const title = report.title.trim() || "Sin título";
@@ -521,7 +522,7 @@ export default function IncomingLotDetail({ context, lot }: Props) {
   };
   const generatorName = user?.displayName || user?.email || "Usuario";
   const openRejectionPdf = () => {
-    setRejectionSummary(buildSuggestedRejectionSummary(reportsState.reports));
+    setRejectionSummary(buildSuggestedRejectionSummary(reportsState.reports, context.sourceType === "proceso_proyecto"));
     setActionError("");
     setRejectionPdfOpen(true);
   };
@@ -666,6 +667,7 @@ export default function IncomingLotDetail({ context, lot }: Props) {
             Rechazos por SPEC{" "}
             <span className="opacity-60">({counts.spec})</span>
           </button>
+          {context.sourceType === "proceso_proyecto" && (["line_rejection", "component_rejection"] as const).map(kind => <button key={kind} type="button" onClick={() => setActiveKind(kind)} className={`rounded-xl px-3 py-3 text-sm font-medium ${activeKind === kind ? "bg-red-400/15 text-red-100 ring-1 ring-red-400/30" : "text-white/45"}`}>{findingLabel(kind)} ({reportsState.reports.filter(r => r.kind === kind).length})</button>)}
         </div>
         <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap">
           {lot.status === "in_progress" && (
@@ -679,9 +681,7 @@ export default function IncomingLotDetail({ context, lot }: Props) {
               ) : (
                 <ShieldAlert size={16} />
               )}
-              {activeKind === "anomaly"
-                ? "Reportar anormalidad"
-                : "Reportar rechazo por SPEC"}
+              {`Reportar ${findingLabel(activeKind).toLowerCase()}`}
             </button>
           )}
         </div>
@@ -842,7 +842,7 @@ export default function IncomingLotDetail({ context, lot }: Props) {
         <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3">
             <h3 className="text-lg font-semibold text-white">
-              {activeKind === "anomaly" ? "Anormalidades" : "Rechazos por SPEC"}
+              {findingLabel(activeKind)}
             </h3>
             <span className="text-sm text-white/35">
               {visibleReports.length}
@@ -860,11 +860,11 @@ export default function IncomingLotDetail({ context, lot }: Props) {
           ) : (
             <button
               type="button"
-              onClick={() => generatePdf("spec")}
-              disabled={generatingPdf !== null || counts.spec === 0}
+              onClick={() => generatePdf(activeKind === "line_rejection" || activeKind === "component_rejection" ? activeKind : "spec")}
+              disabled={generatingPdf !== null || visibleReports.length === 0}
               className="inline-flex items-center justify-center gap-2 rounded-xl border border-red-400/20 px-4 py-2.5 text-sm text-red-100 disabled:opacity-40"
             >
-              <FileDown size={16} /> PDF de SPEC
+              <FileDown size={16} /> PDF de {findingLabel(activeKind)}
             </button>
           )}
         </div>
@@ -1159,7 +1159,7 @@ export default function IncomingLotDetail({ context, lot }: Props) {
           <div className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-3xl border border-red-400/25 bg-[#0d1512] p-5 shadow-2xl sm:p-7">
             <div className="flex items-start justify-between gap-4"><div><p className="text-xs font-semibold uppercase tracking-[0.2em] text-red-300">Formato oficial</p><h2 className="mt-2 text-xl font-semibold text-white">Reporte de no conformidad</h2></div><button type="button" onClick={() => setNonconformancePdfOpen(false)} className="rounded-xl border border-white/10 p-2 text-white/60"><X size={18} /></button></div>
             <div className="mt-6 space-y-4">
-              <div className="rounded-2xl border border-white/10 bg-black/15 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-emerald-300">Descripción predeterminada</p><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-white/65">{buildNonconformanceDescription(lot, reportsState.reports)}</p><p className="mt-2 text-xs text-white/35">Esta parte se genera con la inspección y no se puede editar.</p></div>
+              <div className="rounded-2xl border border-white/10 bg-black/15 p-4"><p className="text-xs font-semibold uppercase tracking-wider text-emerald-300">Descripción predeterminada</p><p className="mt-3 whitespace-pre-wrap text-sm leading-6 text-white/65">{buildNonconformanceDescription(lot, reportsState.reports, context.sourceType === "proceso_proyecto")}</p><p className="mt-2 text-xs text-white/35">Esta parte se genera con la inspección y no se puede editar.</p></div>
               <label className="block text-sm text-white/70">Comentario o detalle adicional (opcional)<textarea rows={4} value={nonconformanceExtraComment} onChange={(event) => setNonconformanceExtraComment(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white" /></label>
               <OfficialReportPhotoSelector reports={reportsState.reports.filter(report => report.kind === "spec_rejection")} selected={nonconformancePhotos} onChange={setNonconformancePhotos} placement="Se incluirán dentro de la descripción de la no conformidad." />
               {actionError && <p className="rounded-xl border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-100">{actionError}</p>}

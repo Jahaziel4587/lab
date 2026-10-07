@@ -1,7 +1,8 @@
+import { findingLabel } from "../types";
 import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb } from "pdf-lib";
 import type { IncomingInspectionContext, IncomingInspectionLot, IncomingLotAnomalyMessage, IncomingLotReport } from "../types";
 
-export type IncomingLotPdfMode = "summary" | "spec" | "anomalies" | "anomaly";
+export type IncomingLotPdfMode = "summary" | "spec" | "anomalies" | "anomaly" | "line_rejection" | "component_rejection";
 
 type Params = {
   mode: IncomingLotPdfMode;
@@ -147,6 +148,23 @@ export async function generateIncomingLotPdf({ mode, context, lot, reports, mess
       await photos(report); if (index < spec.length - 1) rule();
     }
   };
+  const drawOtherRejections = async () => {
+    for (const kind of ["line_rejection", "component_rejection"] as const) {
+      if (mode !== "summary" && mode !== kind) continue;
+      const items = reports.filter(report => report.kind === kind).sort(byMethodThenDate);
+      if (!items.length) continue;
+      section(findingLabel(kind), RED);
+      for (const report of items) {
+        text(report.title, { font: bold });
+        text(`Método: ${methodLabel(report.inspectionMethod || "visual")}`);
+        text(report.mode === "quantity" ? `Cantidad reportada: ${report.quantity || 0}` : `Número de muestra: ${report.sampleNumber}`);
+        if (report.description) text(report.description);
+        text(`Reportó: ${report.createdByName} | ${time(report.createdAt)}`, { size: 9, color: GRAY });
+        await photos(report);
+        rule();
+      }
+    }
+  };
   const drawAnomalies = async () => {
     section(mode === "anomaly" ? "Anormalidad" : "Anormalidades", rgb(0.68, 0.43, 0.04));
     let currentMethod = "";
@@ -165,7 +183,7 @@ export async function generateIncomingLotPdf({ mode, context, lot, reports, mess
   };
 
   addPage();
-  const titles: Record<IncomingLotPdfMode, string> = { summary: "RESUMEN GENERAL DE INSPECCIÓN", spec: "REPORTE DE RECHAZOS POR SPEC", anomalies: "REPORTE DE ANORMALIDADES", anomaly: "REPORTE INDIVIDUAL DE ANORMALIDAD" };
+  const titles: Record<IncomingLotPdfMode, string> = { summary: "RESUMEN GENERAL DE INSPECCIÓN", spec: "REPORTE DE RECHAZOS POR SPEC", anomalies: "REPORTE DE ANORMALIDADES", anomaly: "REPORTE INDIVIDUAL DE ANORMALIDAD", line_rejection: "RECHAZOS EN LÍNEA", component_rejection: "RECHAZOS POR COMPONENTE" };
   text(titles[mode], { size: 17, font: bold, color: GREEN, gap: 12 });
   text(lot.lotName, { size: 20, font: bold, gap: 8 });
   text(`Componente: ${context.componentTitle}`, { font: bold });
@@ -181,9 +199,10 @@ export async function generateIncomingLotPdf({ mode, context, lot, reports, mess
   if (mode === "summary" && spec.length && reports.some((report) => report.kind === "anomaly")) rule();
   if (mode === "summary" || mode === "anomalies" || mode === "anomaly") await drawAnomalies();
 
+  await drawOtherRejections();
   const pages = pdf.getPages();
   pages.forEach((current, index) => current.drawText(`Página ${index + 1} de ${pages.length}`, { x: WIDTH - MX - 65, y: 24, size: 8.5, font: regular, color: GRAY }));
   const bytes = await pdf.save();
-  const suffix = mode === "summary" ? "Resumen_general" : mode === "spec" ? "Rechazos_SPEC" : mode === "anomalies" ? "Anormalidades" : `Anormalidad_${anomalies[0]?.title || "individual"}`;
+  const suffix = mode === "summary" ? "Resumen_general" : mode === "spec" ? "Rechazos_SPEC" : mode === "line_rejection" || mode === "component_rejection" ? mode : mode === "anomalies" ? "Anormalidades" : `Anormalidad_${anomalies[0]?.title || "individual"}`;
   download(bytes, `${safeName(suffix)}_${safeName(lot.lotName)}.pdf`);
 }

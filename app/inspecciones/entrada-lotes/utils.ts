@@ -4,6 +4,9 @@ import type {
 } from "./types";
 type BuildContextParams = {
   origin?: string | null;
+  isProcess?: boolean;
+  componentId?: string | null;
+  componentTitle?: string | null;
   projectId?: string | null;
   projectName?: string | null;
   wiCode?: string | null;
@@ -19,6 +22,9 @@ function safeKeyPart(value: string) {
 
 export function buildIncomingInspectionContext({
   origin,
+  isProcess,
+  componentId,
+  componentTitle,
   projectId,
   projectName,
   wiCode,
@@ -30,12 +36,12 @@ export function buildIncomingInspectionContext({
   }
 
   const sourceType =
-    origin === "mts"
+    isProcess ? "proceso_proyecto" : origin === "mts"
       ? "entrada_mts"
       : "entrada_proyecto";
 
   if (
-    sourceType === "entrada_proyecto" &&
+    sourceType !== "entrada_mts" &&
     (!projectId || !projectName)
   ) {
     return null;
@@ -47,6 +53,7 @@ export function buildIncomingInspectionContext({
       sourceType,
       projectId || "shared",
       wiCode,
+      ...(isProcess ? [componentId || ""] : []),
     ]
       .map(safeKeyPart)
       .join("__"),
@@ -54,8 +61,8 @@ export function buildIncomingInspectionContext({
     projectName: projectName || undefined,
     wiCode,
     wiTitle,
-    componentId: wiCode,
-    componentTitle: wiTitle,
+    componentId: componentId || wiCode,
+    componentTitle: componentTitle || wiTitle,
   };
 }
 export function normalizeIncomingLotName(

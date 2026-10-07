@@ -30,6 +30,7 @@ import type {
   IncomingInspectionMethod,
   IncomingLotAnomalyMessage,
   IncomingLotReport,
+  IncomingLotFindingKind,
   IncomingLotReportPhoto,
 } from "../types";
 
@@ -49,8 +50,8 @@ function mapReport(
   return {
     id,
     kind:
-      data.kind === "spec_rejection"
-        ? "spec_rejection"
+      ["spec_rejection", "line_rejection", "component_rejection"].includes(data.kind as string)
+        ? data.kind as IncomingLotFindingKind
         : "anomaly",
     mode:
       data.mode === "sample_number"
@@ -222,12 +223,13 @@ export function useIncomingLotReports({
       throw new Error("Este lote ya fue finalizado.");
     }
 
+    if (context.sourceType !== "proceso_proyecto" && ["line_rejection", "component_rejection"].includes(input.kind)) throw new Error("Este tipo de rechazo solo está disponible en Proceso.");
     const title = input.title.trim();
     const description = input.description.trim();
     const methodPlan = lot.methodPlans.find((plan) => plan.method === input.inspectionMethod);
     if (!methodPlan) throw new Error("Selecciona un método de inspección válido.");
-    if (input.kind === "spec_rejection" && !title) {
-      throw new Error("Agrega el título del rechazo por SPEC.");
+    if (input.kind !== "anomaly" && !title) {
+      throw new Error("Agrega el título del rechazo.");
     }
 
     const amount = input.mode === "quantity"

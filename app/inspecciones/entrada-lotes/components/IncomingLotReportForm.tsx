@@ -1,4 +1,5 @@
 "use client";
+import { findingLabel } from "../types";
 
 import {
   Camera,
@@ -84,7 +85,7 @@ export default function IncomingLotReportForm({
     const parsedSample = Number(sampleNumber);
     const selectedPlan = methodPlans.find((plan) => plan.method === inspectionMethod) || methodPlans[0];
 
-    if (initialKind === "spec_rejection" && !title.trim()) {
+    if (initialKind !== "anomaly" && !title.trim()) {
       setFormError("Agrega el título del rechazo por SPEC.");
       return;
     }
@@ -132,7 +133,7 @@ export default function IncomingLotReportForm({
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">Nuevo reporte</p>
             <h2 className="mt-2 text-2xl font-semibold text-white">
-              {initialKind === "anomaly" ? "Registrar anormalidad" : "Registrar rechazo por SPEC"}
+              {`Registrar ${findingLabel(initialKind).toLowerCase()}`}
             </h2>
           </div>
           <button type="button" onClick={onCancel} className="rounded-xl border border-white/10 p-2 text-white/60 hover:bg-white/5">
@@ -165,7 +166,7 @@ export default function IncomingLotReportForm({
             )}
           </div>
 
-          {initialKind === "spec_rejection" && (
+          {initialKind !== "anomaly" && (
             <label className="block text-sm text-white/70">
               Título del rechazo
               <input value={title} onChange={(event) => setTitle(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none focus:border-emerald-400/40" placeholder="Ej. Piezas amarillas" />
