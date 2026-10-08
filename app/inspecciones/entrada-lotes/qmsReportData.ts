@@ -24,9 +24,9 @@ export function incomingMethodLabel(method?: IncomingInspectionMethod) {
 export function buildSuggestedRejectionSummary(reports: IncomingLotReport[], isProcess = false) {
   const safeReports = Array.isArray(reports) ? reports : [];
   const titles = Array.from(new Set(
-    safeReports
+    [...safeReports].sort((a,b)=>["spec_rejection","line_rejection","component_rejection","anomaly"].indexOf(a.kind)-["spec_rejection","line_rejection","component_rejection","anomaly"].indexOf(b.kind))
       .filter((report) => report.kind === "spec_rejection" || report.kind === "line_rejection" || report.kind === "component_rejection" || (report.kind === "anomaly" && report.decision === "fail"))
-      .map((report) => report.title.trim())
+      .map((report) => `${report.kind === "anomaly" ? "Anormalidad" : report.kind === "line_rejection" ? "Rechazo en línea" : report.kind === "component_rejection" ? "Rechazo por componente" : "Rechazo por SPEC"}: ${report.title.trim()}${report.mode === "quantity" ? ` (${report.quantity || 0} piezas)` : ` (muestra #${report.sampleNumber})`}${report.shiftIdentifier ? ` · Por turno: ${report.shiftIdentifier}, inspección #${report.shiftInspectionNumber}` : ""}`)
       .filter(Boolean),
   ));
   return titles.length ? titles.join(", ") : `Piezas rechazadas durante la inspección de ${isProcess ? "proceso" : "entrada"}.`;
@@ -42,6 +42,7 @@ export function buildNonconformanceDescription(
     (plan) => lot.methodReviewState?.[plan.method]?.result === "will_fail",
   );
   const methodDetails = failedMethods.map((plan) => {
+    if (plan.perShift) return `${incomingMethodLabel(plan.method)}: se registró un rechazo por SPEC durante una de las ${plan.inspectionsPerShift} inspecciones programadas por turno.`;
     const review = lot.methodReviewState?.[plan.method];
     return `${incomingMethodLabel(plan.method)}: ${review?.confirmedUniqueQuantity ?? 0} piezas rechazadas únicas frente a ${plan.allowedRejectedQuantity} permitidas (muestra de ${plan.inspectedQuantity}, AQL ${plan.aql}, inspección ${plan.inspectionType === "special" ? "especial" : "normal"}, nivel ${plan.inspectionLevel}).`;
   }).join(" ");

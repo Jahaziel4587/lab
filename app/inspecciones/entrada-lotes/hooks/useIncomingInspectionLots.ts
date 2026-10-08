@@ -134,7 +134,7 @@ export function useIncomingInspectionLots({
       }
 
       if (!input.purchaseOrder.trim()) {
-        throw new Error("Agrega el PDO / PO del lote.");
+        throw new Error(`Agrega la ${context.sourceType === "proceso_proyecto" ? "PDO" : "PO"} del lote.`);
       }
 
       if (
@@ -147,7 +147,7 @@ export function useIncomingInspectionLots({
         );
       }
 
-      if (!primaryPlan || methodPlans.some((plan) => plan.isFullInspection
+      if (!primaryPlan || methodPlans.some((plan) => plan.perShift ? (context.sourceType !== "proceso_proyecto" || !Number.isInteger(plan.inspectionsPerShift) || Number(plan.inspectionsPerShift) < 1) : plan.isFullInspection
         ? plan.inspectedQuantity !== input.totalLotQuantity
         : !isPositiveInteger(plan.inspectedQuantity) || plan.inspectedQuantity > input.totalLotQuantity || !plan.aql.trim() || !isNonNegativeInteger(plan.allowedRejectedQuantity) || plan.allowedRejectedQuantity > plan.inspectedQuantity)) throw new Error("Completa correctamente el plan de cada método de inspección.");
 

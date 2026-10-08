@@ -1693,6 +1693,7 @@ export default function InspectionTypePage() {
     if (incomingLotAction === "nuevo") {
       return (
         <IncomingLotForm
+          isProcess={!isEntrada}
           responsiblePms={
             incomingPmsState.responsiblePms
           }

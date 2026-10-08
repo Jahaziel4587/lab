@@ -93,7 +93,7 @@ function download(bytes: Uint8Array, filename: string) {
 export async function generateIncomingLotPdf({ mode, context, lot, reports, messagesByReport, idToken, anomalyId }: Params) {
   const methodOrder = lot.methodPlans.map((plan) => plan.method);
   const methodLabel = (method?: string) => method === "documentary" ? "Documental" : method === "dimensional" ? "Dimensional" : method === "functional" ? "Funcional" : "Visual";
-  const methodPlanText = (plan: IncomingInspectionLot["methodPlans"][number], includeAllowed = false) => plan.isFullInspection
+  const methodPlanText = (plan: IncomingInspectionLot["methodPlans"][number], includeAllowed = false) => plan.perShift ? `${plan.inspectionsPerShift} inspecciones por turno` : plan.isFullInspection
     ? "Inspección del 100%"
     : `Muestra: ${plan.inspectedQuantity} | Tipo: ${plan.inspectionType === "special" ? "Especial" : "Normal"} | Nivel: ${plan.inspectionLevel} | AQL: ${plan.aql}${includeAllowed ? ` | Permitidos: ${plan.allowedRejectedQuantity}` : ""}`;
   const byMethodThenDate = (a: IncomingLotReport, b: IncomingLotReport) => methodOrder.indexOf(a.inspectionMethod || "visual") - methodOrder.indexOf(b.inspectionMethod || "visual") || stamp(a.createdAt) - stamp(b.createdAt);
@@ -143,6 +143,7 @@ export async function generateIncomingLotPdf({ mode, context, lot, reports, mess
       if ((report.inspectionMethod || "visual") !== currentMethod) { currentMethod = report.inspectionMethod || "visual"; const plan = lot.methodPlans.find((item) => item.method === currentMethod); text(`Método: ${methodLabel(currentMethod)}${plan ? ` | ${methodPlanText(plan,true)}` : ""}`, { size: 11.5, font: bold, color: GREEN }); }
       text(`SPEC ${index + 1}: ${report.title}`, { size: 12.5, font: bold, color: RED });
       text(report.mode === "quantity" ? `Cantidad reportada: ${report.quantity || 0} piezas` : `Número de muestra: ${report.sampleNumber}`, { font: bold });
+      if (report.shiftIdentifier) text(`Por turno: ${report.shiftIdentifier} | Inspección #${report.shiftInspectionNumber}`);
       if (report.description) text(report.description, { color: GRAY });
       text(`Reportó: ${report.createdByName} | ${time(report.createdAt)}`, { size: 9, color: GRAY });
       await photos(report); if (index < spec.length - 1) rule();
@@ -156,7 +157,7 @@ export async function generateIncomingLotPdf({ mode, context, lot, reports, mess
       section(findingLabel(kind), RED);
       for (const report of items) {
         text(report.title, { font: bold });
-        text(`Método: ${methodLabel(report.inspectionMethod || "visual")}`);
+
         text(report.mode === "quantity" ? `Cantidad reportada: ${report.quantity || 0}` : `Número de muestra: ${report.sampleNumber}`);
         if (report.description) text(report.description);
         text(`Reportó: ${report.createdByName} | ${time(report.createdAt)}`, { size: 9, color: GRAY });
@@ -187,7 +188,7 @@ export async function generateIncomingLotPdf({ mode, context, lot, reports, mess
   text(titles[mode], { size: 17, font: bold, color: GREEN, gap: 12 });
   text(lot.lotName, { size: 20, font: bold, gap: 8 });
   text(`Componente: ${context.componentTitle}`, { font: bold });
-  text(`PDO / PO #: ${lot.purchaseOrder || "Sin registrar"}`);
+  text(`${context.sourceType === "proceso_proyecto" ? "PDO" : "PO"} #: ${lot.purchaseOrder || "Sin registrar"}`);
   text(`Cantidad total del lote: ${lot.totalLotQuantity}`);
   lot.methodPlans.forEach((plan) => text(`${methodLabel(plan.method)}: ${plan.isFullInspection?`Inspección del 100% | ${plan.inspectedQuantity} piezas por inspeccionar`:`${plan.inspectedQuantity} por inspeccionar | ${plan.inspectionType === "special" ? "Especial" : "Normal"} | Nivel ${plan.inspectionLevel} | AQL ${plan.aql} | ${plan.allowedRejectedQuantity} rechazos permitidos`}`, { size: 9.5, color: GRAY }));
   text(`Estado: ${lot.status === "finalized" ? "Finalizado" : "En curso"} | Resultado: ${lot.inspectionResult === "will_fail" ? "No pasará" : lot.inspectionResult === "within_limit" ? "Dentro del límite" : "Pendiente"}`, { color: lot.inspectionResult === "will_fail" ? RED : GRAY });
@@ -200,6 +201,7 @@ export async function generateIncomingLotPdf({ mode, context, lot, reports, mess
   if (mode === "summary" || mode === "anomalies" || mode === "anomaly") await drawAnomalies();
 
   await drawOtherRejections();
+  if (mode === "summary" && lot.shiftChecks?.length) { section("Inspecciones por turno aprobadas"); for (const check of lot.shiftChecks) text(`${methodLabel(check.method)} | ${check.shiftIdentifier} | #${check.inspectionNumber}: pasó | ${check.createdBy}`); }
   const pages = pdf.getPages();
   pages.forEach((current, index) => current.drawText(`Página ${index + 1} de ${pages.length}`, { x: WIDTH - MX - 65, y: 24, size: 8.5, font: regular, color: GRAY }));
   const bytes = await pdf.save();

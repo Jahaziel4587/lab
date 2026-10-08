@@ -11,7 +11,7 @@ import type { IncomingInspectionContext } from "@/app/inspecciones/entrada-lotes
 import { adminAuth, adminDB } from "@/lib/firebaseAdmin";
 import { getDisplayNameForUid } from "@/lib/pushNotifications";
 
-import { loadReportPhotos, addRejectionPhotoSheets } from "@/lib/inspections/officialReportPhotos";
+import { loadReportPhotos, addRejectionPhotoSheets, addRejectionDetails } from "@/lib/inspections/officialReportPhotos";
 import type { IncomingLotReport } from "@/app/inspecciones/entrada-lotes/types";
 
 function clean(value: unknown) {
@@ -120,7 +120,8 @@ export async function POST(request: NextRequest) {
         Object.entries(replacements).forEach(([key, value]) => {
           xml = xml.split(`{${key}}`).join(escapeXml(value));
         });
-        if (scope.sourceType === "proceso_proyecto") xml = xml.replace(/Inspección de entrada/g, "Inspección de proceso");
+        if (scope.sourceType === "proceso_proyecto") xml = xml.replace(/Inspección de entrada/g, "Inspección de proceso").replace(/PDO\s*\/\s*PO|PO\s*\/\s*PDO|PO #/g, "PDO #");
+        if (scope.sourceType !== "proceso_proyecto") xml = xml.replace(/PDO\s*\/\s*PO|PO\s*\/\s*PDO/g, "PO");
         zip.file(name, xml);
       });
 
@@ -129,6 +130,7 @@ export async function POST(request: NextRequest) {
     const photos = await loadReportPhotos(body.selectedPhotos, reports);
     addRejectionPhotoSheets(zip, photos, clean(lot.lotName));
 
+    addRejectionDetails(zip, reports, scope.sourceType === "proceso_proyecto" ? "PDO" : "PO", clean(lot.purchaseOrder));
     const result = zip.generate({ type: "nodebuffer", compression: "DEFLATE" });
     const fileName = `Reporte_rechazo_${safeFileName(clean(lot.lotName) || lotId)}.xlsx`;
     return new NextResponse(new Uint8Array(result), {

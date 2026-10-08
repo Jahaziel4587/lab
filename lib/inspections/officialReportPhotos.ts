@@ -97,3 +97,28 @@ export function addNonconformancePhotos(zip: PizZip, photos: ReportPhoto[]) {
   xml = xml.replace(/<w:tr[ >][\s\S]*?<\/w:tr>/g,row=>row.includes("officialPhoto") ? row.replace(/<w:trHeight\b[^>]*\/>/g,"").replace(/<w:cantSplit\b[^>]*\/>/g,"") : row);
   zip.file("word/document.xml",xml);
 }
+
+export function addRejectionDetails(zip: PizZip, reports: IncomingLotReport[], orderLabel: string, orderNumber: string) {
+  const lines = [`Detalle de rechazos · ${orderLabel}: ${orderNumber}`];
+  for (const kind of ["spec_rejection", "line_rejection", "component_rejection", "anomaly"] as const) {
+    const items = reports.filter(r => r.kind === kind && (kind !== "anomaly" || r.decision === "fail"));
+    if (!items.length) continue;
+    lines.push("", findingLabel(kind).toUpperCase());
+    for (const report of items) {
+      lines.push(report.title, report.mode === "quantity" ? `Cantidad: ${report.quantity || 0} piezas` : `Muestra #${report.sampleNumber}`);
+      if (report.inspectionMethod && kind !== "line_rejection" && kind !== "component_rejection") lines.push(`Método: ${report.inspectionMethod}`);
+      if (report.shiftIdentifier) lines.push(`Por turno: ${report.shiftIdentifier} · Inspección #${report.shiftInspectionNumber}`);
+      if (report.description) lines.push(...(report.description.match(/.{1,95}(?:\s|$)|.{1,95}/g) || [report.description]));
+      lines.push(`Reportó: ${report.createdByName}`, "");
+    }
+  }
+  if (lines.length < 2) return;
+  const id = "officialRejectionDetails";
+  const workbook = zip.file("xl/workbook.xml")!.asText();
+  const sheetId = Math.max(...Array.from(workbook.matchAll(/sheetId="(\d+)"/g), m => Number(m[1]))) + 1;
+  const rows = lines.map((line,i)=>`<row r="${i+1}" ht="20" customHeight="1"><c r="A${i+1}" t="inlineStr"><is><t xml:space="preserve">${esc(line)}</t></is></c></row>`).join("");
+  zip.file(`xl/worksheets/${id}.xml`,`<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetPr><pageSetUpPr fitToPage="1"/></sheetPr><cols><col min="1" max="1" width="100" customWidth="1"/></cols><sheetData>${rows}</sheetData><pageMargins left="0.3" right="0.3" top="0.4" bottom="0.4" header="0.1" footer="0.1"/><pageSetup paperSize="1" orientation="portrait" fitToWidth="1" fitToHeight="0"/></worksheet>`);
+  append(zip,"xl/workbook.xml","</sheets>",`<sheet name="Detalle de rechazos" sheetId="${sheetId}" r:id="${id}"/>`);
+  append(zip,"xl/_rels/workbook.xml.rels","</Relationships>",`<Relationship Id="${id}" Type="${officeRel}/worksheet" Target="worksheets/${id}.xml"/>`);
+  append(zip,"[Content_Types].xml","</Types>",`<Override PartName="/xl/worksheets/${id}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`);
+}

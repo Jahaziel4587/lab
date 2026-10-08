@@ -21,6 +21,8 @@ export type IncomingInspectionMethod = "documentary" | "visual" | "dimensional" 
 export type IncomingInspectionMethodPlan = {
   method: IncomingInspectionMethod;
   isFullInspection?: boolean;
+  perShift?: boolean;
+  inspectionsPerShift?: number;
   inspectedQuantity: number;
   inspectionType: IncomingInspectionType;
   inspectionLevel: IncomingInspectionLevel;
@@ -99,6 +101,7 @@ export type IncomingNonconformanceDetails = {
 
 export type IncomingInspectionLot = {
   id: string;
+  shiftChecks?: Array<{ method: IncomingInspectionMethod; shiftIdentifier: string; inspectionNumber: number; result: "pass"; createdBy: string; createdAt: string }>;
   lotName: string;
   normalizedLotName: string;
   purchaseOrder: string;
@@ -203,6 +206,8 @@ export type IncomingLotReport = {
   sampleNumber?: number;
   finalRejectedQuantity?: number;
   inspectionMethod?: IncomingInspectionMethod;
+  shiftIdentifier?: string;
+  shiftInspectionNumber?: number;
   photos: IncomingLotReportPhoto[];
   status?: "pending_title" | "pending_decision" | "resolved";
   decision?: "pass" | "fail" | null;
@@ -234,7 +239,9 @@ export type CreateIncomingLotReportInput = {
   description: string;
   quantity?: number;
   sampleNumber?: number;
-  inspectionMethod: IncomingInspectionMethod;
+  shiftIdentifier?: string;
+  shiftInspectionNumber?: number;
+  inspectionMethod?: IncomingInspectionMethod;
   photos: File[];
 };
 
