@@ -4,6 +4,9 @@ import type {
 } from "./types";
 type BuildContextParams = {
   origin?: string | null;
+  isProcess?: boolean;
+  componentId?: string | null;
+  componentTitle?: string | null;
   projectId?: string | null;
   projectName?: string | null;
   wiCode?: string | null;
@@ -19,6 +22,9 @@ function safeKeyPart(value: string) {
 
 export function buildIncomingInspectionContext({
   origin,
+  isProcess,
+  componentId,
+  componentTitle,
   projectId,
   projectName,
   wiCode,
@@ -30,12 +36,12 @@ export function buildIncomingInspectionContext({
   }
 
   const sourceType =
-    origin === "mts"
+    isProcess ? "proceso_proyecto" : origin === "mts"
       ? "entrada_mts"
       : "entrada_proyecto";
 
   if (
-    sourceType === "entrada_proyecto" &&
+    sourceType !== "entrada_mts" &&
     (!projectId || !projectName)
   ) {
     return null;
@@ -47,6 +53,7 @@ export function buildIncomingInspectionContext({
       sourceType,
       projectId || "shared",
       wiCode,
+      ...(isProcess ? [componentId || ""] : []),
     ]
       .map(safeKeyPart)
       .join("__"),
@@ -54,8 +61,8 @@ export function buildIncomingInspectionContext({
     projectName: projectName || undefined,
     wiCode,
     wiTitle,
-    componentId: wiCode,
-    componentTitle: wiTitle,
+    componentId: componentId || wiCode,
+    componentTitle: componentTitle || wiTitle,
   };
 }
 export function normalizeIncomingLotName(
@@ -102,10 +109,11 @@ export function mapIncomingLot(
     ? data.methodPlans.map((entry) => {
         const item = entry as Record<string, unknown>;
         const method = ["documentary", "visual", "dimensional", "functional"].includes(String(item.method)) ? String(item.method) as IncomingInspectionLot["methodPlans"][number]["method"] : "visual";
-        return { method, isFullInspection: item.isFullInspection === true, inspectedQuantity: Number(item.inspectedQuantity || 0), inspectionType: item.inspectionType === "special" ? "special" as const : "normal" as const, inspectionLevel: String(item.inspectionLevel || "II") as IncomingInspectionLot["inspectionLevel"], aql: String(item.aql || ""), allowedRejectedQuantity: Number(item.allowedRejectedQuantity || 0) };
+        return { method, perShift: item.perShift === true, inspectionsPerShift: Number(item.inspectionsPerShift || 0), isFullInspection: item.isFullInspection === true, inspectedQuantity: Number(item.inspectedQuantity || 0), inspectionType: item.inspectionType === "special" ? "special" as const : "normal" as const, inspectionLevel: String(item.inspectionLevel || "II") as IncomingInspectionLot["inspectionLevel"], aql: String(item.aql || ""), allowedRejectedQuantity: Number(item.allowedRejectedQuantity || 0) };
       }) : [fallbackPlan];
   return {
     id,
+    shiftChecks: Array.isArray(data.shiftChecks) ? data.shiftChecks as IncomingInspectionLot["shiftChecks"] : [],
     lotName: String(data.lotName || ""),
     normalizedLotName: String(
       data.normalizedLotName || "",

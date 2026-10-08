@@ -1,4 +1,5 @@
 "use client";
+import { findingLabel } from "../types";
 
 import {
   Camera,
@@ -42,11 +43,14 @@ export default function IncomingLotReportForm({
   onSubmit,
   onCancel,
 }: Props) {
+  const openRejection = initialKind === "line_rejection" || initialKind === "component_rejection";
+  const [shiftIdentifier, setShiftIdentifier] = useState("");
+  const [shiftInspectionNumber, setShiftInspectionNumber] = useState("");
   const fileReference = useRef<HTMLInputElement | null>(null);
   const [mode, setMode] = useState<IncomingLotReportMode>(
-    initialKind === "spec_rejection" && lockedSpecMode
+    initialKind === "spec_rejection" && lockedSpecMode && !methodPlans[0]?.perShift
       ? lockedSpecMode
-      : initialMode,
+      : openRejection ? "quantity" : initialMode,
   );
   const [title, setTitle] = useState("");
   const [inspectionMethod, setInspectionMethod] = useState(methodPlans[0]?.method || "visual");
@@ -57,10 +61,10 @@ export default function IncomingLotReportForm({
   const [formError, setFormError] = useState("");
 
   useEffect(() => {
-    if (initialKind === "spec_rejection" && lockedSpecMode) {
+    if (initialKind === "spec_rejection" && lockedSpecMode && !methodPlans.find(p=>p.method===inspectionMethod)?.perShift) {
       setMode(lockedSpecMode);
     }
-  }, [initialKind, lockedSpecMode]);
+  }, [initialKind, lockedSpecMode, inspectionMethod, methodPlans]);
 
   const previews = useMemo(() => photos.map((file) => ({
     file,
@@ -84,7 +88,8 @@ export default function IncomingLotReportForm({
     const parsedSample = Number(sampleNumber);
     const selectedPlan = methodPlans.find((plan) => plan.method === inspectionMethod) || methodPlans[0];
 
-    if (initialKind === "spec_rejection" && !title.trim()) {
+    if (initialKind === "spec_rejection" && selectedPlan?.perShift && (!shiftIdentifier.trim() || !Number.isInteger(Number(shiftInspectionNumber)) || Number(shiftInspectionNumber) < 1 || Number(shiftInspectionNumber) > Number(selectedPlan.inspectionsPerShift))) { setFormError("Identifica el turno y el número de inspección válido."); return; }
+    if (initialKind !== "anomaly" && !title.trim()) {
       setFormError("Agrega el título del rechazo por SPEC.");
       return;
     }
@@ -100,7 +105,7 @@ export default function IncomingLotReportForm({
       (
         !Number.isInteger(parsedSample) ||
         parsedSample < 1 ||
-        parsedSample > selectedPlan.inspectedQuantity
+        (!selectedPlan.perShift && !selectedPlan.isFullInspection && parsedSample > selectedPlan.inspectedQuantity)
       )
     ) {
       setFormError(
@@ -118,7 +123,8 @@ export default function IncomingLotReportForm({
         quantity: mode === "quantity" ? parsedQuantity : undefined,
         sampleNumber: mode === "sample_number" ? parsedSample : undefined,
         photos,
-        inspectionMethod,
+        ...(!openRejection ? { inspectionMethod } : {}),
+        ...(initialKind === "spec_rejection" && selectedPlan.perShift ? { shiftIdentifier: shiftIdentifier.trim(), shiftInspectionNumber: Number(shiftInspectionNumber) } : {}),
       });
     } catch (cause) {
       setFormError(cause instanceof Error ? cause.message : "No fue posible guardar el reporte.");
@@ -132,7 +138,7 @@ export default function IncomingLotReportForm({
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">Nuevo reporte</p>
             <h2 className="mt-2 text-2xl font-semibold text-white">
-              {initialKind === "anomaly" ? "Registrar anormalidad" : "Registrar rechazo por SPEC"}
+              {`Registrar ${findingLabel(initialKind).toLowerCase()}`}
             </h2>
           </div>
           <button type="button" onClick={onCancel} className="rounded-xl border border-white/10 p-2 text-white/60 hover:bg-white/5">
@@ -141,12 +147,12 @@ export default function IncomingLotReportForm({
         </div>
 
         <form onSubmit={submit} className="mt-6 space-y-5">
-          {methodPlans.length > 1 && <div><p className="mb-2 text-sm text-white/70">Método de inspección del reporte</p><div className="grid grid-cols-2 gap-2">{methodPlans.map((plan) => <button key={plan.method} type="button" onClick={() => setInspectionMethod(plan.method)} className={`rounded-xl border px-3 py-3 text-sm ${inspectionMethod === plan.method ? "border-emerald-400/35 bg-emerald-400/10 text-emerald-100" : "border-white/10 text-white/45"}`}>{plan.method === "documentary" ? "Documental" : plan.method === "visual" ? "Visual" : plan.method === "dimensional" ? "Dimensional" : "Funcional"}</button>)}</div></div>}
-          <div>
+          {!openRejection && methodPlans.length > 1 && <div><p className="mb-2 text-sm text-white/70">Método de inspección del reporte</p><div className="grid grid-cols-2 gap-2">{methodPlans.map((plan) => <button key={plan.method} type="button" onClick={() => setInspectionMethod(plan.method)} className={`rounded-xl border px-3 py-3 text-sm ${inspectionMethod === plan.method ? "border-emerald-400/35 bg-emerald-400/10 text-emerald-100" : "border-white/10 text-white/45"}`}>{plan.method === "documentary" ? "Documental" : plan.method === "visual" ? "Visual" : plan.method === "dimensional" ? "Dimensional" : "Funcional"}</button>)}</div></div>}
+          {!openRejection && <div>
             <p className="mb-2 text-sm text-white/70">Manera de reportar</p>
             <div className="grid grid-cols-2 gap-2">
               {(["quantity", "sample_number"] as IncomingLotReportMode[]).map((value) => {
-                const disabled = initialKind === "spec_rejection" && Boolean(lockedSpecMode) && lockedSpecMode !== value;
+                const disabled = initialKind === "spec_rejection" && Boolean(lockedSpecMode) && !methodPlans.find(p=>p.method===inspectionMethod)?.perShift && lockedSpecMode !== value;
                 return (
                   <button
                     key={value}
@@ -160,12 +166,14 @@ export default function IncomingLotReportForm({
                 );
               })}
             </div>
-            {initialKind === "spec_rejection" && lockedSpecMode && (
+            {initialKind === "spec_rejection" && lockedSpecMode && !methodPlans.find(p=>p.method===inspectionMethod)?.perShift && (
               <p className="mt-2 text-xs text-amber-200/70">La modalidad quedó definida por el primer rechazo registrado.</p>
             )}
           </div>
 
-          {initialKind === "spec_rejection" && (
+          }
+          {initialKind === "spec_rejection" && methodPlans.find(p => p.method === inspectionMethod)?.perShift && <div className="grid gap-3 sm:grid-cols-2"><label className="text-sm text-white/70">Por turno: día / identificación<input value={shiftIdentifier} onChange={e=>setShiftIdentifier(e.target.value)} placeholder="Ej. 8 oct 2026 · Turno mañana" className="mt-2 w-full rounded border border-white/20 bg-black/20 p-3"/></label><label className="text-sm text-white/70"># de inspección en el turno<input type="number" min="1" max={methodPlans.find(p=>p.method===inspectionMethod)?.inspectionsPerShift} value={shiftInspectionNumber} onChange={e=>setShiftInspectionNumber(e.target.value)} className="mt-2 w-full rounded border border-white/20 bg-black/20 p-3"/></label></div>}
+          {initialKind !== "anomaly" && (
             <label className="block text-sm text-white/70">
               Título del rechazo
               <input value={title} onChange={(event) => setTitle(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none focus:border-emerald-400/40" placeholder="Ej. Piezas amarillas" />

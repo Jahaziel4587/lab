@@ -1,6 +1,7 @@
 export type IncomingInspectionSource =
   | "entrada_mts"
-  | "entrada_proyecto";
+  | "entrada_proyecto"
+  | "proceso_proyecto";
 
 export type IncomingInspectionType =
   | "normal"
@@ -20,6 +21,8 @@ export type IncomingInspectionMethod = "documentary" | "visual" | "dimensional" 
 export type IncomingInspectionMethodPlan = {
   method: IncomingInspectionMethod;
   isFullInspection?: boolean;
+  perShift?: boolean;
+  inspectionsPerShift?: number;
   inspectedQuantity: number;
   inspectionType: IncomingInspectionType;
   inspectionLevel: IncomingInspectionLevel;
@@ -98,6 +101,7 @@ export type IncomingNonconformanceDetails = {
 
 export type IncomingInspectionLot = {
   id: string;
+  shiftChecks?: Array<{ method: IncomingInspectionMethod; shiftIdentifier: string; inspectionNumber: number; result: "pass"; createdBy: string; createdAt: string }>;
   lotName: string;
   normalizedLotName: string;
   purchaseOrder: string;
@@ -178,7 +182,9 @@ export type FinalizeIncomingLotInput = {
 
 export type IncomingLotFindingKind =
   | "anomaly"
-  | "spec_rejection";
+  | "spec_rejection"
+  | "line_rejection"
+  | "component_rejection";
 
 export type IncomingLotReportMode =
   | "quantity"
@@ -200,6 +206,8 @@ export type IncomingLotReport = {
   sampleNumber?: number;
   finalRejectedQuantity?: number;
   inspectionMethod?: IncomingInspectionMethod;
+  shiftIdentifier?: string;
+  shiftInspectionNumber?: number;
   photos: IncomingLotReportPhoto[];
   status?: "pending_title" | "pending_decision" | "resolved";
   decision?: "pass" | "fail" | null;
@@ -231,6 +239,12 @@ export type CreateIncomingLotReportInput = {
   description: string;
   quantity?: number;
   sampleNumber?: number;
-  inspectionMethod: IncomingInspectionMethod;
+  shiftIdentifier?: string;
+  shiftInspectionNumber?: number;
+  inspectionMethod?: IncomingInspectionMethod;
   photos: File[];
 };
+
+export function findingLabel(kind: IncomingLotFindingKind) {
+  return kind === "anomaly" ? "Anormalidad" : kind === "line_rejection" ? "Rechazo en línea" : kind === "component_rejection" ? "Rechazo por componente" : "Rechazo por SPEC";
+}

@@ -215,48 +215,6 @@ export default function InspectionTypePage() {
           workInstruction.id === wiId,
       );
 
-  const incomingLotContext = useMemo(
-    () =>
-      isEntrada
-        ? buildIncomingInspectionContext({
-            origin,
-            projectId,
-            projectName:
-              selectedProject?.title,
-            wiCode: selectedWi?.id,
-            wiTitle: selectedWi?.title,
-          })
-        : null,
-    [
-      isEntrada,
-      origin,
-      projectId,
-      selectedProject?.title,
-      selectedWi?.id,
-      selectedWi?.title,
-    ],
-  );
-
-  const incomingLotsState =
-    useIncomingInspectionLots({
-      context: incomingLotContext,
-      enabled:
-        isEntrada &&
-        Boolean(incomingLotContext),
-    });
-
-  const incomingPmsState =
-    useIncomingResponsiblePms(
-      incomingLotContext,
-      isEntrada &&
-        Boolean(incomingLotContext),
-    );
-
-  const selectedIncomingLot =
-    incomingLotsState.lots.find(
-      (lot) => lot.id === incomingLotId,
-    ) || null;
-
   const processComponentsState =
     useProcessComponents({
       projectId,
@@ -293,6 +251,51 @@ export default function InspectionTypePage() {
         component.id ===
         processComponentId,
     );
+
+  const incomingLotContext = useMemo(
+    () =>
+      (isEntrada || selectedProcessComponent)
+        ? buildIncomingInspectionContext({
+            origin,
+            isProcess: !isEntrada,
+            componentId: selectedProcessComponent?.id,
+            componentTitle: selectedProcessComponent?.title,
+            projectId,
+            projectName:
+              selectedProject?.title,
+            wiCode: selectedWi?.id,
+            wiTitle: selectedWi?.title,
+          })
+        : null,
+    [
+      isEntrada,
+      selectedProcessComponent?.id,
+      selectedProcessComponent?.title,
+      origin,
+      projectId,
+      selectedProject?.title,
+      selectedWi?.id,
+      selectedWi?.title,
+    ],
+  );
+
+  const incomingLotsState =
+    useIncomingInspectionLots({
+      context: incomingLotContext,
+      enabled:
+        Boolean(incomingLotContext),
+    });
+
+  const incomingPmsState =
+    useIncomingResponsiblePms(
+      incomingLotContext,
+      Boolean(incomingLotContext),
+    );
+
+  const selectedIncomingLot =
+    incomingLotsState.lots.find(
+      (lot) => lot.id === incomingLotId,
+    ) || null;
 
   /*
    * Crea una identidad estable para las
@@ -488,7 +491,7 @@ export default function InspectionTypePage() {
 
   const goBack = () => {
     if (
-      isEntrada &&
+      incomingLotContext &&
       (incomingLotId ||
         incomingLotAction === "nuevo")
     ) {
@@ -1683,13 +1686,14 @@ export default function InspectionTypePage() {
   const renderIncomingLotContent = () => {
     if (!incomingLotContext) {
       return renderError(
-        "Falta información del componente de entrada.",
+        "Falta información del componente.",
       );
     }
 
     if (incomingLotAction === "nuevo") {
       return (
         <IncomingLotForm
+          isProcess={!isEntrada}
           responsiblePms={
             incomingPmsState.responsiblePms
           }
@@ -1963,7 +1967,7 @@ export default function InspectionTypePage() {
      * anteriores de hallazgos quedan solamente
      * para inspecciones de proceso.
      */
-    if (isEntrada && selectedWi) {
+    if (selectedWi && (isEntrada || (selectedProcessComponent && !findingType))) {
       return renderIncomingLotContent();
     }
 
@@ -2145,7 +2149,7 @@ export default function InspectionTypePage() {
   };
 
   const getTitle = () => {
-    if (isEntrada && selectedWi) {
+    if (selectedWi && (isEntrada || incomingLotContext)) {
       if (incomingLotAction === "nuevo") {
         return "Agregar lote";
       }
@@ -2246,7 +2250,7 @@ export default function InspectionTypePage() {
   };
 
   const getDescription = () => {
-    if (isEntrada && selectedWi) {
+    if (selectedWi && (isEntrada || incomingLotContext)) {
       if (incomingLotAction === "nuevo") {
         return "Registra la información y el criterio de aceptación de la inspección.";
       }
@@ -2424,11 +2428,11 @@ export default function InspectionTypePage() {
         "Proyecto",
         "Work instruction",
         "Componente",
-        "Tipo de hallazgo",
-        "Registro",
+        "Lotes",
+        "Detalle",
       ],
       currentStep:
-        findingType
+        incomingLotId
           ? 5
           : processComponentId
             ? 4
@@ -2478,7 +2482,7 @@ export default function InspectionTypePage() {
             : "Proceso"}
         </p>
 
-        {!(isEntrada && selectedIncomingLot) && <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        {!(selectedIncomingLot != null) && <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <h1
             className="text-2xl font-semibold sm:text-3xl"
           >
@@ -2505,7 +2509,7 @@ export default function InspectionTypePage() {
             )}
         </div>}
 
-        {!(isEntrada && selectedIncomingLot) && <p
+        {!(selectedIncomingLot != null) && <p
           className="mt-3 max-w-2xl
             text-sm leading-relaxed
             text-white/65 sm:text-base"

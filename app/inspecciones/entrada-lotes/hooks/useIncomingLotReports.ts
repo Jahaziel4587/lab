@@ -30,6 +30,7 @@ import type {
   IncomingInspectionMethod,
   IncomingLotAnomalyMessage,
   IncomingLotReport,
+  IncomingLotFindingKind,
   IncomingLotReportPhoto,
 } from "../types";
 
@@ -49,8 +50,8 @@ function mapReport(
   return {
     id,
     kind:
-      data.kind === "spec_rejection"
-        ? "spec_rejection"
+      ["spec_rejection", "line_rejection", "component_rejection"].includes(data.kind as string)
+        ? data.kind as IncomingLotFindingKind
         : "anomaly",
     mode:
       data.mode === "sample_number"
@@ -70,7 +71,9 @@ function mapReport(
       typeof data.finalRejectedQuantity === "number"
         ? data.finalRejectedQuantity
         : undefined,
-    inspectionMethod: ["documentary", "visual", "dimensional", "functional"].includes(String(data.inspectionMethod)) ? data.inspectionMethod as IncomingLotReport["inspectionMethod"] : "visual",
+    inspectionMethod: !["line_rejection", "component_rejection"].includes(String(data.kind)) && ["documentary", "visual", "dimensional", "functional"].includes(String(data.inspectionMethod)) ? data.inspectionMethod as IncomingLotReport["inspectionMethod"] : undefined,
+    shiftIdentifier: String(data.shiftIdentifier || ""),
+    shiftInspectionNumber: Number(data.shiftInspectionNumber || 0),
     photos: Array.isArray(data.photos)
       ? data.photos as IncomingLotReportPhoto[]
       : [],
@@ -222,14 +225,18 @@ export function useIncomingLotReports({
       throw new Error("Este lote ya fue finalizado.");
     }
 
+    if (context.sourceType !== "proceso_proyecto" && ["line_rejection", "component_rejection"].includes(input.kind)) throw new Error("Este tipo de rechazo solo está disponible en Proceso.");
     const title = input.title.trim();
     const description = input.description.trim();
+    const openRejection = input.kind === "line_rejection" || input.kind === "component_rejection";
+    if (openRejection && input.mode !== "quantity") throw new Error("Este rechazo se registra por cantidad de piezas.");
     const methodPlan = lot.methodPlans.find((plan) => plan.method === input.inspectionMethod);
-    if (!methodPlan) throw new Error("Selecciona un método de inspección válido.");
-    if (input.kind === "spec_rejection" && !title) {
-      throw new Error("Agrega el título del rechazo por SPEC.");
+    if (!openRejection && !methodPlan) throw new Error("Selecciona un método de inspección válido.");
+    if (input.kind !== "anomaly" && !title) {
+      throw new Error("Agrega el título del rechazo.");
     }
 
+    if (input.kind === "spec_rejection" && methodPlan?.perShift && (!input.shiftIdentifier?.trim() || !Number.isInteger(input.shiftInspectionNumber) || Number(input.shiftInspectionNumber) < 1 || Number(input.shiftInspectionNumber) > Number(methodPlan.inspectionsPerShift))) throw new Error("Identifica el turno y el número de inspección.");
     const amount = input.mode === "quantity"
       ? Number(input.quantity)
       : 1;
@@ -238,7 +245,7 @@ export function useIncomingLotReports({
     }
     if (
       input.mode === "sample_number" &&
-      (!Number.isInteger(input.sampleNumber) || Number(input.sampleNumber) < 1 || Number(input.sampleNumber) > methodPlan.inspectedQuantity)
+      (!Number.isInteger(input.sampleNumber) || Number(input.sampleNumber) < 1 || (!methodPlan?.perShift && Number(input.sampleNumber) > Number(methodPlan?.inspectedQuantity)))
     ) {
       throw new Error("El número de muestra debe ser mayor a cero.");
     }
@@ -300,6 +307,7 @@ export function useIncomingLotReports({
 
         if (
           input.kind === "spec_rejection" &&
+          !methodPlan?.perShift &&
           current.specCountingMode &&
           current.specCountingMode !== input.mode
         ) {
@@ -313,7 +321,8 @@ export function useIncomingLotReports({
           mode: input.mode,
           title,
           description,
-          inspectionMethod: input.inspectionMethod,
+          ...(!openRejection ? { inspectionMethod: input.inspectionMethod } : {}),
+          ...(input.kind === "spec_rejection" && methodPlan?.perShift ? { shiftIdentifier: input.shiftIdentifier!.trim(), shiftInspectionNumber: input.shiftInspectionNumber } : {}),
           ...(input.mode === "quantity"
             ? { quantity: amount }
             : { sampleNumber: Number(input.sampleNumber) }),
@@ -329,9 +338,13 @@ export function useIncomingLotReports({
           updatedAt: serverTimestamp(),
         });
 
+        if (input.kind === "spec_rejection" && methodPlan?.perShift) {
+          if ((current.shiftChecks || []).some((check: {method: string; shiftIdentifier: string; inspectionNumber: number}) => check.method === input.inspectionMethod && check.shiftIdentifier === input.shiftIdentifier?.trim() && check.inspectionNumber === input.shiftInspectionNumber)) throw new Error("Esta inspección ya está registrada como aprobada.");
+          transaction.update(lotReference, { inspectionResult: "will_fail", [`methodReviewState.${methodPlan.method}`]: { result: "will_fail", confirmedUniqueQuantity: amount, lastReviewedReportedQuantity: Number(current.reportedRejectedQuantity || 0) + amount } });
+        }
         if (input.kind === "spec_rejection") {
           transaction.update(lotReference, {
-            specCountingMode: input.mode,
+            ...(!methodPlan?.perShift ? {specCountingMode: input.mode} : {}),
             reportedRejectedQuantity:
               Number(current.reportedRejectedQuantity || 0) + amount,
             updatedAt: serverTimestamp(),
@@ -343,6 +356,7 @@ export function useIncomingLotReports({
         }
       });
 
+      if (input.kind === "spec_rejection" && methodPlan?.perShift) await notify("threshold_exceeded", { inspectionMethod: methodPlan.method }).catch(console.error);
       if (input.kind === "anomaly") {
         await notify("anomaly_created", { reportId: reportReference.id }).catch((cause) => {
           console.error("La anormalidad se guardó, pero no pudo notificarse:", cause);
@@ -595,7 +609,7 @@ export function useIncomingLotReports({
       throw new Error("Falta la sesión o la información del lote.");
     }
     const hasUnreviewedThreshold = lot.methodPlans.some((plan) => {
-      if (plan.isFullInspection) return false;
+      if (plan.isFullInspection || plan.perShift) return false;
       const reported = reports.filter((report) => report.kind === "spec_rejection" && (report.inspectionMethod || "visual") === plan.method).reduce((sum, report) => sum + (report.mode === "quantity" ? report.quantity || 0 : 1), 0);
       return reported > plan.allowedRejectedQuantity && reported > Number(lot.methodReviewState?.[plan.method]?.lastReviewedReportedQuantity || 0);
     });

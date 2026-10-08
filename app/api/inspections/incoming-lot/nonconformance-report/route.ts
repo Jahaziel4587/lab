@@ -84,7 +84,7 @@ function fillRiskCheckboxes(cellXml: string, details: IncomingNonconformanceDeta
   });
 }
 
-function fillLegacyCheckboxes(xml: string, details: IncomingNonconformanceDetails) {
+function fillLegacyCheckboxes(xml: string, details: IncomingNonconformanceDetails, isProcess = false) {
   const dispositions = Array.isArray(details.dispositions) ? details.dispositions : [];
   let otherCheckboxIndex = 0;
   return xml.replace(/<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>/g, (paragraphXml) => {
@@ -98,8 +98,8 @@ function fillLegacyCheckboxes(xml: string, details: IncomingNonconformanceDetail
     if (text.includes("Calidad")) return setCheckboxDefault(paragraphXml, details.category === "quality");
     if (text.includes("Desempeño")) return setCheckboxDefault(paragraphXml, details.category === "performance");
     if (text.includes("Seguridad")) return setCheckboxDefault(paragraphXml, details.category === "safety");
-    if (text.includes("Producción")) return setCheckboxDefault(paragraphXml, false);
-    if (text.includes("Inspecciones de entrada")) return setCheckboxDefault(paragraphXml, true);
+    if (text.includes("Producción")) return setCheckboxDefault(paragraphXml, isProcess);
+    if (text.includes("Inspecciones de entrada")) return setCheckboxDefault(paragraphXml, !isProcess);
     if (text.includes("Antes de la entrega")) return setCheckboxDefault(paragraphXml, true);
     if (text.includes("Después de la entrega")) return setCheckboxDefault(paragraphXml, false);
     if (text === "Si") return setCheckboxDefault(paragraphXml, details.capaRequired);
@@ -178,7 +178,7 @@ export async function POST(request: NextRequest) {
     const { partNumber, partName } = extractIncomingPartInfo(context);
     const generatedBy = await getDisplayNameForUid(decoded.uid, decoded.email);
     const photos = await loadReportPhotos(body.selectedPhotos, reports.filter(report => report.kind === "spec_rejection"));
-    const description = buildNonconformanceDescription(lot, reports);
+    const description = buildNonconformanceDescription(lot, reports, scope.sourceType === "proceso_proyecto");
     const additionalComments = [details.additionalComments, clean(body.extraComment)]
       .filter(Boolean)
       .join("\n");
@@ -232,7 +232,7 @@ export async function POST(request: NextRequest) {
     const outputZip = docx.getZip();
     const documentFile = outputZip.file("word/document.xml");
     if (documentFile) {
-      outputZip.file("word/document.xml", fillLegacyCheckboxes(documentFile.asText(), details));
+      outputZip.file("word/document.xml", fillLegacyCheckboxes(documentFile.asText(), details, scope.sourceType === "proceso_proyecto"));
     }
     addNonconformancePhotos(outputZip, photos);
     const result = outputZip.generate({ type: "nodebuffer", compression: "DEFLATE" });
