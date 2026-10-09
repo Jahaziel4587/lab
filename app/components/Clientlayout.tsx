@@ -317,6 +317,7 @@ export default function ClientLayout({
 >
   Inspections
 </Link>
+<Link href="/inventario" className="hover:text-white transition">Inventory</Link>
             <Link
               data-tutorial="nav-analytics"
               href="/analitica"
@@ -529,6 +530,7 @@ export default function ClientLayout({
 >
   Inspections
 </Link>
+<Link href="/inventario" onClick={cerrarMenu} className={mobileLinkClass}>Inventory</Link>
               <Link
                 href="/analitica"
                 onClick={cerrarMenu}
