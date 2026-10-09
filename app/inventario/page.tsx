@@ -1,8 +1,10 @@
 "use client";
-import Link from "next/link";
+import { Plus, X, Warehouse } from "lucide-react";
+import SearchInput from "@/app/calendario/components/SearchInput";
+import InventoryTable from "@/app/components/inventario/InventoryTable";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import InventoryShell, { useInventory, inputClass, panelClass, buttonClass } from "@/app/components/inventario/InventoryShell";
+import InventoryShell, { useInventory, inputClass, panelClass, buttonClass, Field } from "@/app/components/inventario/InventoryShell";
 import ComponentForm from "@/app/components/inventario/ComponentForm";
 import QrScanner from "@/app/components/inventario/QrScanner";
 import { WAREHOUSES, TYPES } from "@/lib/inventario/catalogs";
@@ -11,12 +13,26 @@ export default function InventoryPage() {
   const [warehouse, setWarehouse] = useState(""), [project, setProject] = useState(""), [type, setType] = useState(""), [search, setSearch] = useState(""), [create, setCreate] = useState(false);
   const projects = [...new Set(components.map(c => c.project).filter(Boolean))].sort();
   const filtered = components.filter(c => (!project || c.project === project) && (!type || c.type === type) && (!warehouse || c.lots.some(l => (l.stock[warehouse] || 0) > 0)) && `${c.code} ${c.name} ${c.lots.map(l => l.name).join(" ")}`.toLowerCase().includes(search.toLowerCase()));
-  return <InventoryShell><div className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-3xl font-semibold">Inventario</h1><p className="text-white/60">Materiales y componentes por almacén</p></div><button className={buttonClass} onClick={() => setCreate(!create)}>{create ? "Cerrar formulario" : "Nuevo artículo"}</button></div>
-    <div className="grid gap-2 sm:grid-cols-3 lg:grid-cols-5">{WAREHOUSES.map(w => <button key={w.id} onClick={() => setWarehouse(warehouse === w.id ? "" : w.id)} className={`rounded-xl border p-4 text-left ${warehouse === w.id ? "border-emerald-400 bg-emerald-400/15" : "border-white/15 bg-slate-900/80"}`}><strong>{w.name}</strong><p className="mt-1 text-xs text-white/60">{components.filter(c => c.lots.some(l => (l.stock[w.id] || 0) > 0)).length} artículos</p></button>)}</div>
-    <div className="grid gap-3 sm:grid-cols-3"><input aria-label="Buscar código, nombre o lote" className={inputClass} placeholder="Buscar código, nombre o lote" value={search} onChange={e => setSearch(e.target.value)} /><select aria-label="Proyecto" className={inputClass} value={project} onChange={e => setProject(e.target.value)}><option value="">Todos los proyectos</option>{projects.map(p => <option key={p}>{p}</option>)}</select><select aria-label="Tipo" className={inputClass} value={type} onChange={e => setType(e.target.value)}><option value="">Todos los tipos</option>{Object.entries(TYPES).map(([id, name]) => <option key={id} value={id}>{id} · {name}</option>)}</select></div>
-    <QrScanner onScan={id => router.push(`/inventario/components/${id}`)} />
+  return <InventoryShell>
+    <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+      <div><h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Inventario</h1><p className="mt-2 text-sm text-white/50">Consulta materiales, componentes y lotes por almacén.</p></div>
+      <button className={buttonClass} onClick={() => setCreate(!create)}>{create ? <X size={16} /> : <Plus size={16} />}{create ? "Cerrar formulario" : "Nuevo artículo"}</button>
+    </div>
+    <section className="space-y-3"><div className="flex items-center justify-between"><h2 className="text-sm font-semibold text-white/80">Almacenes</h2>{warehouse && <button className="text-xs text-emerald-300 hover:text-emerald-100" onClick={() => setWarehouse("")}>Ver todos</button>}</div>
+      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">{WAREHOUSES.map(w => {
+        const active = warehouse === w.id;
+        return <button key={w.id} aria-pressed={active} onClick={() => setWarehouse(active ? "" : w.id)} className={`min-h-28 rounded-2xl border p-4 text-left backdrop-blur-xl transition sm:rounded-3xl ${active ? "border-emerald-400/35 bg-emerald-500/10" : "border-white/10 bg-white/[0.035] hover:border-white/20 hover:bg-white/[0.06]"}`}>
+          <Warehouse size={16} className={active ? "mb-3 text-emerald-300" : "mb-3 text-white/35"} /><span className={`block text-xs font-semibold leading-snug sm:text-sm ${active ? "text-emerald-100" : "text-white/80"}`}>{w.name}</span><span className="mt-2 block text-[11px] text-white/40">{components.filter(c => c.lots.some(l => (l.stock[w.id] || 0) > 0)).length} artículos</span>
+        </button>;
+      })}</div>
+    </section>
+    <section className={panelClass}><div className="grid items-end gap-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,1fr)_minmax(0,1fr)]">
+      <Field label="Buscar artículos"><SearchInput value={search} onChange={setSearch} placeholder="Buscar código, nombre o lote…" /></Field>
+      <Field label="Filtrar por proyecto"><select aria-label="Proyecto" className={inputClass} value={project} onChange={e => setProject(e.target.value)}><option value="">Todos los proyectos</option>{projects.map(p => <option key={p}>{p}</option>)}</select></Field>
+      <Field label="Tipo de artículo"><select aria-label="Tipo" className={inputClass} value={type} onChange={e => setType(e.target.value)}><option value="">Todos los tipos</option>{Object.entries(TYPES).map(([id, name]) => <option key={id} value={id}>{id} · {name}</option>)}</select></Field>
+    </div><div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4"><QrScanner onScan={id => router.push(`/inventario/components/${id}`)} /><p className="text-xs text-white/45">Mostrando {filtered.length} artículos</p></div></section>
     {create && <ComponentForm onSaved={id => router.push(`/inventario/components/${id}`)} />}
-    {error && <p role="alert" className="text-red-300">{error} <button className="underline" onClick={reload}>Reintentar</button></p>}
-    <section className={panelClass}><h2 className="mb-4 text-xl">{WAREHOUSES.find(w => w.id === warehouse)?.name || "Todos los almacenes"}</h2>{loading ? <p>Cargando…</p> : filtered.length === 0 ? <p className="text-white/60">Sin artículos para esta selección. Crea un artículo y registra su primer lote.</p> : <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead className="text-white/60"><tr>{["Código", "Nombre", "Proyecto", "Tipo", "Cantidad", "Lotes"].map(h => <th className="p-3" key={h}>{h}</th>)}</tr></thead><tbody>{filtered.map(c => <tr key={c.id} className="border-t border-white/10"><td className="p-3"><Link className="text-emerald-300 underline" href={`/inventario/components/${c.id}`}>{c.code}</Link></td><td className="p-3">{c.name}</td><td className="p-3">{c.project || "General / MTS"}</td><td className="p-3">{c.type}</td><td className="p-3">{Number(c.lots.reduce((sum, l) => sum + (warehouse ? l.stock[warehouse] || 0 : Object.values(l.stock).reduce((a, b) => a + b, 0)), 0).toFixed(6))} {c.unit}</td><td className="p-3">{c.lots.filter(l => !warehouse || (l.stock[warehouse] || 0) > 0).length}</td></tr>)}</tbody></table></div>}</section>
+    {error && <p role="alert" className="rounded-2xl border border-red-400/20 bg-red-400/5 p-4 text-sm text-red-200">{error} <button className="underline" onClick={reload}>Reintentar</button></p>}
+    <div className="space-y-3"><h2 className="text-sm font-semibold text-white/80">{WAREHOUSES.find(w => w.id === warehouse)?.name || "Todos los almacenes"}</h2><InventoryTable components={filtered} warehouse={warehouse} loading={loading} /></div>
   </InventoryShell>;
 }
