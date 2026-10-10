@@ -133,8 +133,10 @@ export async function POST(req: NextRequest) {
           addLine(origin, destination, c, lot, q);
         }
       } else fail("Acción inválida.");
-      const requestedBy = str(b.requestedBy || actor), receivedBy = str(b.receivedBy || "", false), project = str(b.project || "", false), notes = str(b.notes || "", false);
-      if ([...groups.values()].some(g => g.origin === "externo:otro" || g.destination === "externo:otro") && !notes) fail("Indica la ubicación Otro en los comentarios.");
+      const requestedBy = str(b.requestedBy || "", false), receivedBy = str(b.receivedBy || "", false), project = str(b.project || "", false), notes = str(b.notes || "", false);
+      const originOther = str(b.originOther || "", false), destinationOther = str(b.destinationOther || "", false);
+      if ([...groups.values()].some(g => g.origin === "externo:otro") && !originOther && !notes) fail("Especifica el origen Otro.");
+      if ([...groups.values()].some(g => g.destination === "externo:otro") && !destinationOther && !notes) fail("Especifica el destino Otro.");
       const voucherIds: string[] = [];
       for (const c of changed.values()) {
         if (c.lots.length > 500) fail("Este artículo alcanzó el límite de 500 lotes de esta versión.");
@@ -142,7 +144,7 @@ export async function POST(req: NextRequest) {
       }
       for (const g of groups.values()) {
         const ref = vouchers.doc(); voucherIds.push(ref.id);
-        const v: Voucher = { id: ref.id, site, operationId, kind: b.action === "lot" ? "entrada" : b.kind, origin: g.origin, destination: g.destination, createdAt: now, actor, actorUid: user.uid, requestedBy, receivedBy, project, notes, lines: g.lines };
+        const v: Voucher = { id: ref.id, site, operationId, kind: b.action === "lot" ? "entrada" : b.kind, origin: g.origin, destination: g.destination, createdAt: now, actor, actorUid: user.uid, requestedBy, receivedBy, project, notes, originOther, destinationOther, lines: g.lines };
         t.create(ref, v);
       }
       t.create(operationRef, { uid: user.uid, fingerprint, site, voucherIds, createdAt: now });
