@@ -5,4 +5,4 @@ export type InventoryComponent = { id: string; site?: InventorySite; code: strin
 export type MovementKind = "salida" | "entrada" | "traslado";
 export type CartLine = { componentId: string; quantity: number; origin: string; destination: string; lotId?: string };
 export type VoucherLine = { componentId: string; code: string; name: string; project: string; unit: string; lot: string; lotId: string; expiry: string; quantity: number; comments: string };
-export type Voucher = { id: string; site?: InventorySite; operationId: string; kind: MovementKind; origin: string; destination: string; createdAt: string; actor: string; actorUid: string; requestedBy: string; receivedBy: string; project: string; notes: string; lines: VoucherLine[] };
+export type Voucher = { originOther?: string; destinationOther?: string; id: string; site?: InventorySite; operationId: string; kind: MovementKind; origin: string; destination: string; createdAt: string; actor: string; actorUid: string; requestedBy: string; receivedBy: string; project: string; notes: string; lines: VoucherLine[] };

@@ -36,6 +36,13 @@ export async function GET(req: NextRequest) {
       if (!doc.exists) return NextResponse.json({ error: "Vale no encontrado." }, { status: 404 });
       return NextResponse.json({ voucher: { ...doc.data(), id: doc.id } });
     }
+    const historyComponent = req.nextUrl.searchParams.get("historyComponent");
+    if (historyComponent) {
+      if (!/^[a-zA-Z0-9]{10,100}$/.test(historyComponent)) return NextResponse.json({ error: "Componente inválido." }, { status: 400 });
+      // Include legacy vouchers too: their component IDs exist only inside lines.
+      const history = await vouchers.orderBy("createdAt", "desc").get();
+      return NextResponse.json({ vouchers: history.docs.map(d => ({ ...d.data(), id: d.id } as Voucher)).filter(v => v.lines.some(l => l.componentId === historyComponent)) });
+    }
     const [cs, vs] = await Promise.all([components.get(), vouchers.orderBy("createdAt", "desc").limit(300).get()]);
     return NextResponse.json({ components: cs.docs.map(d => ({ ...d.data(), id: d.id })), vouchers: vs.docs.map(d => ({ ...d.data(), id: d.id })) });
   } catch (e) { console.error("Inventario GET", e); return NextResponse.json({ error: "No se pudo cargar el inventario." }, { status: 500 }); }
@@ -113,7 +120,7 @@ export async function POST(req: NextRequest) {
           let lot: Lot | undefined;
           if (b.kind === "salida") {
             if (!WAREHOUSES.find(w => w.id === origin)?.usable) fail("Este almacén no está habilitado para retiros de uso. Usa Traslado para cambiar su ubicación.");
-            lot = selectLot(c.lots, origin, q, mexicoToday());
+            lot = selectLot(c.lots, origin, q, mexicoToday(), line.lotId);
             if (!lot) fail(`${c.code}: ningún lote vigente tiene ${q} ${c.unit} en el almacén seleccionado. No se combinaron lotes.`);
           } else {
             lot = c.lots.find(l => l.id === line.lotId); if (!lot) fail("Selecciona el lote al que pertenecen las piezas.");
@@ -126,8 +133,10 @@ export async function POST(req: NextRequest) {
           addLine(origin, destination, c, lot, q);
         }
       } else fail("Acción inválida.");
-      const requestedBy = str(b.requestedBy || actor), receivedBy = str(b.receivedBy || "", false), project = str(b.project || "", false), notes = str(b.notes || "", false);
-      if ([...groups.values()].some(g => g.origin === "externo:otro" || g.destination === "externo:otro") && !notes) fail("Indica la ubicación Otro en los comentarios.");
+      const requestedBy = str(b.requestedBy || "", false), receivedBy = str(b.receivedBy || "", false), project = str(b.project || "", false), notes = str(b.notes || "", false);
+      const originOther = str(b.originOther || "", false), destinationOther = str(b.destinationOther || "", false);
+      if ([...groups.values()].some(g => g.origin === "externo:otro") && !originOther && !notes) fail("Especifica el origen Otro.");
+      if ([...groups.values()].some(g => g.destination === "externo:otro") && !destinationOther && !notes) fail("Especifica el destino Otro.");
       const voucherIds: string[] = [];
       for (const c of changed.values()) {
         if (c.lots.length > 500) fail("Este artículo alcanzó el límite de 500 lotes de esta versión.");
@@ -135,7 +144,7 @@ export async function POST(req: NextRequest) {
       }
       for (const g of groups.values()) {
         const ref = vouchers.doc(); voucherIds.push(ref.id);
-        const v: Voucher = { id: ref.id, site, operationId, kind: b.action === "lot" ? "entrada" : b.kind, origin: g.origin, destination: g.destination, createdAt: now, actor, actorUid: user.uid, requestedBy, receivedBy, project, notes, lines: g.lines };
+        const v: Voucher = { id: ref.id, site, operationId, kind: b.action === "lot" ? "entrada" : b.kind, origin: g.origin, destination: g.destination, createdAt: now, actor, actorUid: user.uid, requestedBy, receivedBy, project, notes, originOther, destinationOther, lines: g.lines };
         t.create(ref, v);
       }
       t.create(operationRef, { uid: user.uid, fingerprint, site, voucherIds, createdAt: now });

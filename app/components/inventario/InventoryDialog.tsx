@@ -25,6 +25,6 @@ export default function InventoryDialog({ title, onClose, children }: {
       <button type="button" onClick={onClose} aria-label="Cerrar ventana"
         className="rounded-xl border border-white/10 p-2 text-white/60 hover:bg-white/5 focus-visible:outline-emerald-300"><X size={18} /></button>
     </div>
-    <div className="[&>form]:rounded-none [&>form]:border-0 [&>form]:bg-transparent [&>form]:p-0 [&>form]:backdrop-blur-none">{children}</div>
+    <div className="[&>:is(form,section)]:rounded-none [&>:is(form,section)]:border-0 [&>:is(form,section)]:bg-transparent [&>:is(form,section)]:p-0 [&>:is(form,section)]:backdrop-blur-none">{children}</div>
   </dialog>, document.body);
 }

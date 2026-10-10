@@ -20,8 +20,6 @@ export default function LotForm({ component, onSaved }: { component: InventoryCo
     <Field label="Almacén de ingreso"><select name="destination" className={inputClass}>{WAREHOUSES.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
     <Field label="Origen"><select name="origin" className={inputClass}>{EXTERNAL_LOCATIONS.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
     <Field label="Proveedor"><input name="supplier" className={inputClass} /></Field>
-    <Field label="Solicitado por"><input name="requestedBy" className={inputClass} placeholder="Vacío = usuario actual" /></Field>
-    <Field label="Recibido por"><input name="receivedBy" className={inputClass} /></Field>
     <Field label="Comentarios / ubicación Otro"><input name="notes" maxLength={1000} className={inputClass} /></Field>
   </div>{error && <p role="alert" className="rounded-xl border border-red-400/20 bg-red-400/5 p-3 text-sm text-red-200">{error}</p>}<button disabled={busy} className={buttonClass}>{busy ? "Registrando…" : "Crear lote y vale de entrada"}</button></form>;
 }

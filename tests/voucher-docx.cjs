@@ -19,3 +19,11 @@ for(const properties of xml.match(/<w:tblPr>[\s\S]*?<\/w:tblPr>/g)){
  assert(properties.indexOf('<w:jc')<properties.indexOf('<w:tblInd'));
  assert(properties.indexOf('<w:tblInd')<properties.indexOf('<w:tblLook'));
 }
+
+const separated=new Zip(renderVoucher(template,{...v,origin:'externo:otro',destination:'externo:otro',originOther:'Mesa de recepción',destinationOther:'Área de prueba',requestedBy:'',receivedBy:'',notes:'Nota exclusiva de artículos'})).file('word/document.xml').asText();
+const general=separated.slice(0,separated.indexOf('</w:tbl>'));
+assert(general.includes('Mesa de recepción'));
+assert(general.includes('Área de prueba'));
+assert(!general.includes('Nota exclusiva de artículos'));
+assert(separated.includes('Nota exclusiva de artículos'));
+console.log('Other locations and article comments are rendered separately.');
