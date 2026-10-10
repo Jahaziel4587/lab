@@ -9,14 +9,15 @@ import { inventoryRequest } from "@/lib/inventario/service";
 import type { CartLine, InventoryComponent, MovementKind } from "@/lib/inventario/types";
 import { buttonClass, inputClass, panelClass, Field } from "./InventoryShell";
 import QrScanner from "./QrScanner";
-export default function MovementCart({ components, initialId = "", onSaved }: { components: InventoryComponent[]; initialId?: string; onSaved: () => void }) {
+export default function MovementCart({ components, initialId = "", fixedLotId = "", onSaved }: { components: InventoryComponent[]; initialId?: string; fixedLotId?: string; onSaved: () => void }) {
   const { site } = useInventorySite();
   const [kind, setKind] = useState<MovementKind>("salida"), [componentId, setComponentId] = useState(initialId), [quantity, setQuantity] = useState("");
   const [origin, setOrigin] = useState(""), [destination, setDestination] = useState("externo:produccion"), [lotId, setLotId] = useState("");
   const [lines, setLines] = useState<CartLine[]>([]), [busy, setBusy] = useState(false), [error, setError] = useState(""), [voucherIds, setVoucherIds] = useState<string[]>([]);
   const pending = useRef<{ signature: string; id: string } | null>(null);
   const c = components.find(x => x.id === componentId);
-  const origins = kind === "entrada" ? EXTERNAL_LOCATIONS : WAREHOUSES.filter(w => (kind !== "salida" || w.usable) && c?.lots.some(l => (l.stock[w.id] || 0) > 0));
+  const selectedLot = c?.lots.find(l => l.id === fixedLotId);
+  const origins = kind === "entrada" ? EXTERNAL_LOCATIONS : WAREHOUSES.filter(w => (kind !== "salida" || w.usable) && (fixedLotId ? (selectedLot?.stock[w.id] || 0) > 0 : c?.lots.some(l => (l.stock[w.id] || 0) > 0)));
   const actualOrigin = origins.some(w => w.id === origin) ? origin : origins[0]?.id || "";
   const destinations = kind === "salida" ? EXTERNAL_LOCATIONS : WAREHOUSES;
   const actualDestination = destinations.some(w => w.id === destination) ? destination : destinations[0]?.id || "";
@@ -24,24 +25,24 @@ export default function MovementCart({ components, initialId = "", onSaved }: { 
     const article = components.find(x => x.id === line.componentId); if (!article) return;
     const lots = JSON.parse(JSON.stringify(article.lots)) as InventoryComponent["lots"];
     for (const p of prior.filter(x => x.componentId === line.componentId)) {
-      const chosen = kind === "salida" ? selectLot(lots, p.origin, p.quantity, mexicoToday()) : lots.find(l => l.id === p.lotId);
+      const chosen = kind === "salida" && !p.lotId ? selectLot(lots, p.origin, p.quantity, mexicoToday()) : lots.find(l => l.id === p.lotId);
       if (chosen && kind !== "entrada") chosen.stock[p.origin] = (chosen.stock[p.origin] || 0) - p.quantity;
     }
-    return kind === "salida" ? selectLot(lots, line.origin, line.quantity, mexicoToday()) : lots.find(l => l.id === line.lotId);
+    return kind === "salida" && !line.lotId ? selectLot(lots, line.origin, line.quantity, mexicoToday()) : lots.find(l => l.id === line.lotId);
   }
-  return <section className={`${panelClass} space-y-5`}><div className="border-b border-white/10 pb-4"><h2 className="text-lg font-semibold">Registrar movimiento</h2><p className="mt-1 text-xs text-white/45">Selecciona los artículos y cantidades que vas a mover.</p></div>
+  return <section className={`${panelClass} space-y-5`}><div className="border-b border-white/10 pb-4"><h2 className="text-lg font-semibold">Registrar movimiento</h2><p className="mt-1 text-xs text-white/45">{fixedLotId ? `${c?.code} · Lote ${selectedLot?.name}` : "Selecciona los artículos y cantidades que vas a mover."}</p></div>
     <Field label="Tipo de movimiento"><select disabled={busy || lines.length > 0} className={inputClass} value={kind} onChange={e => { setKind(e.target.value as MovementKind); setOrigin(""); setLotId(""); }}>{["salida", "entrada", "traslado"].map(k => <option key={k} value={k}>{k === "entrada" ? "Entrada / devolución" : k === "traslado" ? "Traslado entre almacenes" : "Retiro / salida"}</option>)}</select></Field>
-    <QrScanner onScan={(id, scannedSite) => { if ((scannedSite || "B1") !== site) { setError("Este QR pertenece a otro almacén. Selecciona el almacén correspondiente."); return; } if (components.some(x => x.id === id)) { setComponentId(id); setOrigin(""); setLotId(""); } else setError("El componente no existe."); }} />
-    <div className="grid gap-4 sm:grid-cols-2"><Field label="Artículo"><select disabled={busy} className={inputClass} value={componentId} onChange={e => { setComponentId(e.target.value); setOrigin(""); setLotId(""); }}><option value="">Selecciona un artículo</option>{components.map(x => <option key={x.id} value={x.id}>{x.code} · {x.name}</option>)}</select></Field>
+    {!fixedLotId && <QrScanner onScan={(id, scannedSite) => { if ((scannedSite || "B1") !== site) { setError("Este QR pertenece a otro almacén. Selecciona el almacén correspondiente."); return; } if (components.some(x => x.id === id)) { setComponentId(id); setOrigin(""); setLotId(""); } else setError("El componente no existe."); }} />}
+    <div className="grid gap-4 sm:grid-cols-2"><Field label="Artículo"><select disabled={busy || !!fixedLotId} className={inputClass} value={componentId} onChange={e => { setComponentId(e.target.value); setOrigin(""); setLotId(""); }}><option value="">Selecciona un artículo</option>{components.map(x => <option key={x.id} value={x.id}>{x.code} · {x.name}</option>)}</select></Field>
     <Field label={`Cantidad ${c ? `(${c.unit})` : ""}`}><input disabled={busy} className={inputClass} type="number" min="0.000001" step={c?.unit === "pz" ? 1 : "0.000001"} value={quantity} onChange={e => setQuantity(e.target.value)} /></Field>
     <Field label={origins.length === 1 ? "Origen identificado" : "Origen · ubicaciones disponibles"}><select disabled={busy || origins.length === 1} className={inputClass} value={actualOrigin} onChange={e => setOrigin(e.target.value)}>{!origins.length && <option value="">Sin existencias habilitadas</option>}{origins.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
     <Field label="Destino"><select disabled={busy} className={inputClass} value={actualDestination} onChange={e => setDestination(e.target.value)}>{destinations.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
-    {kind !== "salida" && <Field label="Lote al que pertenecen las piezas"><select disabled={busy} className={inputClass} value={lotId} onChange={e => setLotId(e.target.value)}><option value="">Seleccionar lote</option>{c?.lots.map(l => <option key={l.id} value={l.id}>{l.name} · {l.stock[actualOrigin] || 0} en origen · {l.expiry || "Sin caducidad"}</option>)}</select></Field>}</div>
+    {kind !== "salida" && !fixedLotId && <Field label="Lote al que pertenecen las piezas"><select disabled={busy} className={inputClass} value={lotId} onChange={e => setLotId(e.target.value)}><option value="">Seleccionar lote</option>{c?.lots.map(l => <option key={l.id} value={l.id}>{l.name} · {l.stock[actualOrigin] || 0} en origen · {l.expiry || "Sin caducidad"}</option>)}</select></Field>}</div>
     <button type="button" disabled={busy} className={buttonClass} onClick={() => {
       setError(""); const q = Number(quantity); if (!c || !Number.isFinite(q) || q <= 0 || !actualOrigin || (c.unit === "pz" && !Number.isInteger(q))) { setError("Selecciona artículo, origen y una cantidad válida."); return; }
       if (actualOrigin === actualDestination) { setError("Origen y destino deben ser diferentes."); return; }
-      const line = { componentId, quantity: q, origin: actualOrigin, destination: actualDestination, ...(kind !== "salida" ? { lotId } : {}) };
-      const chosen = predicted(line, lines); if (!chosen || (kind !== "entrada" && (chosen.stock[actualOrigin] || 0) < q)) { setError("Ningún lote tiene la cantidad suficiente para este movimiento y los artículos ya agregados. No se combinaron lotes."); return; }
+      const line = { componentId, quantity: q, origin: actualOrigin, destination: actualDestination, ...(fixedLotId ? { lotId: fixedLotId } : kind !== "salida" ? { lotId } : {}) };
+      const chosen = predicted(line, lines); if (kind === "salida" && chosen?.expiry && chosen.expiry < mexicoToday()) { setError("Este lote está vencido y no se puede retirar para uso."); return; } if (!chosen || (kind !== "entrada" && (chosen.stock[actualOrigin] || 0) < q)) { setError("Ningún lote tiene la cantidad suficiente para este movimiento y los artículos ya agregados. No se combinaron lotes."); return; }
       if (lines.length >= 50) { setError("Máximo 50 artículos por movimiento."); return; }
       setLines([...lines, line]); setQuantity(""); setVoucherIds([]);
     }}>Agregar al carrito</button>
