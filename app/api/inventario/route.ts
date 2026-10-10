@@ -3,14 +3,12 @@ import { adminAuth, adminDB } from "@/lib/firebaseAdmin";
 import { LOCATIONS, WAREHOUSES, TYPES } from "@/lib/inventario/catalogs";
 import { mexicoToday, selectLot } from "@/lib/inventario/selection";
 import type { InventoryComponent, Lot, Voucher, VoucherLine, CartLine } from "@/lib/inventario/types";
+import { inventorySite, inventoryCollections } from "@/lib/inventario/sites";
 import { parseComponentCode } from "@/lib/operacional/catalog";
 import { projectCatalog } from "@/lib/operacional/server";
 import { createHash, randomUUID } from "node:crypto";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-const components = adminDB.collection("inventario_componentes");
-const vouchers = adminDB.collection("inventario_vales");
-const operations = adminDB.collection("inventario_operaciones");
 function fail(message: string): never { throw new Error(message); }
 function str(value: unknown, required = true): string {
   if (typeof value !== "string" || value.length > 1000) fail("Texto inválido.");
@@ -28,6 +26,9 @@ async function identity(req: NextRequest) {
 export async function GET(req: NextRequest) {
   if (!await identity(req)) return NextResponse.json({ error: "Inicia sesión." }, { status: 401 });
   try {
+    const site = inventorySite(req.nextUrl.searchParams.get("site"));
+    const names = inventoryCollections(site);
+    const components = adminDB.collection(names.components), vouchers = adminDB.collection(names.vouchers);
     const voucherId = req.nextUrl.searchParams.get("voucherId");
     if (voucherId) {
       if (!/^[a-zA-Z0-9]{10,100}$/.test(voucherId)) return NextResponse.json({ error: "Folio inválido." }, { status: 400 });
@@ -44,6 +45,11 @@ export async function POST(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Inicia sesión." }, { status: 401 });
   try {
     const b = await req.json();
+    const site = inventorySite(b.site);
+    const querySite = req.nextUrl?.searchParams.get("site");
+    if (querySite && inventorySite(querySite) !== site) fail("El almacén de la operación no coincide.");
+    const names = inventoryCollections(site);
+    const components = adminDB.collection(names.components), vouchers = adminDB.collection(names.vouchers), operations = adminDB.collection(names.operations);
     const now = new Date().toISOString();
     const actor = user.name || user.email || user.uid;
     if (b.action === "component") {
@@ -58,7 +64,7 @@ export async function POST(req: NextRequest) {
       const ref = components.doc(id);
       await adminDB.runTransaction(async t => {
         if ((await t.get(ref)).exists) fail("Ya existe un artículo con ese código.");
-        t.create(ref, { code, name, project, unit, type, lots: [], createdAt: now, createdBy: user.uid });
+        t.create(ref, { site, code, name, project, unit, type, lots: [], createdAt: now, createdBy: user.uid });
       });
       return NextResponse.json({ id });
     }
@@ -129,10 +135,10 @@ export async function POST(req: NextRequest) {
       }
       for (const g of groups.values()) {
         const ref = vouchers.doc(); voucherIds.push(ref.id);
-        const v: Voucher = { id: ref.id, operationId, kind: b.action === "lot" ? "entrada" : b.kind, origin: g.origin, destination: g.destination, createdAt: now, actor, actorUid: user.uid, requestedBy, receivedBy, project, notes, lines: g.lines };
+        const v: Voucher = { id: ref.id, site, operationId, kind: b.action === "lot" ? "entrada" : b.kind, origin: g.origin, destination: g.destination, createdAt: now, actor, actorUid: user.uid, requestedBy, receivedBy, project, notes, lines: g.lines };
         t.create(ref, v);
       }
-      t.create(operationRef, { uid: user.uid, fingerprint, voucherIds, createdAt: now });
+      t.create(operationRef, { uid: user.uid, fingerprint, site, voucherIds, createdAt: now });
       return voucherIds;
     });
     return NextResponse.json({ voucherIds: result });
