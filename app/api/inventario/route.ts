@@ -3,6 +3,8 @@ import { adminAuth, adminDB } from "@/lib/firebaseAdmin";
 import { LOCATIONS, WAREHOUSES, TYPES } from "@/lib/inventario/catalogs";
 import { mexicoToday, selectLot } from "@/lib/inventario/selection";
 import type { InventoryComponent, Lot, Voucher, VoucherLine, CartLine } from "@/lib/inventario/types";
+import { parseComponentCode } from "@/lib/operacional/catalog";
+import { projectCatalog } from "@/lib/operacional/server";
 import { createHash, randomUUID } from "node:crypto";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -45,7 +47,12 @@ export async function POST(req: NextRequest) {
     const now = new Date().toISOString();
     const actor = user.name || user.email || user.uid;
     if (b.action === "component") {
-      const code = str(b.code), name = str(b.name), project = str(b.project, false), unit = str(b.unit), type = str(b.type);
+      const parsed = parseComponentCode(str(b.code));
+      const { code, type } = parsed;
+      const catalog = await projectCatalog();
+      const found = catalog.find(p => p.code === parsed.projectCode);
+      if (parsed.projectCode && !found) fail("Registra primero el proyecto en Operacional.");
+      const project = found?.label || "", name = str(b.name), unit = str(b.unit);
       if (!(type in TYPES)) fail("Tipo de artículo inválido.");
       const id = createHash("sha256").update(code.toUpperCase()).digest("hex");
       const ref = components.doc(id);

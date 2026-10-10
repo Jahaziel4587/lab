@@ -1,5 +1,6 @@
 "use client";
 
+import { useProjects } from "@/lib/operacional/client";
 import Link from "next/link";
 import type { ProyectoStats } from "../types";
 
@@ -35,6 +36,7 @@ export default function ProyectoCard({
         ? "Hoy"
         : `Hace ${diasDesdeActividad} días`;
 
+  const { displayProject } = useProjects();
   return (
     <Link
       href={`/calendario/proyectos/${encodeURIComponent(proyecto)}`}
@@ -44,7 +46,7 @@ export default function ProyectoCard({
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0">
             <div className="text-xl font-semibold text-white truncate">
-              {proyecto}
+              {displayProject(proyecto)}
             </div>
 
             <div className="text-sm text-white/60">

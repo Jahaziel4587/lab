@@ -5,51 +5,8 @@ import { useRouter } from "next/navigation";
 import { FiArrowRight, FiSearch, FiSliders } from "react-icons/fi";
 import { auth } from "@/src/firebase/firebaseConfig";
 import { onAuthStateChanged } from "firebase/auth";
+import { useProjects } from "@/lib/operacional/client";
 import OrderFlowHeader from "../components/OrderFlowHeader";
-
-type Proyecto = {
-  nombre: string;
-  imagen: string;
-};
-
-const proyectos: Proyecto[] = [
-  { nombre: "001.Ocumetics", imagen: "/ocumetics.jpeg" },
-  { nombre: "002.Labella", imagen: "/Bioana.jpeg" },
-  { nombre: "004.Solvein", imagen: "/Bioana.jpeg" },
-  { nombre: "005.XSONXS Wound Heads", imagen: "/XSONX.png" },
-  { nombre: "006.AGMI", imagen: "/Bioana.jpeg" },
-  { nombre: "007.LumeNXT", imagen: "/LumeNXT.jpg" },
-  { nombre: "008.Panter", imagen: "/Bioana.jpeg" },
-  { nombre: "009.Recopad", imagen: "/Bioana.jpeg" },
-  { nombre: "010.Juno", imagen: "/Bioana.jpeg" },
-  { nombre: "013.T-EZ", imagen: "/Bioana.jpeg" },
-  { nombre: "014.QIKCap handle", imagen: "/Bioana.jpeg" },
-  { nombre: "015.QIKCap disposible", imagen: "/Bioana.jpeg" },
-  { nombre: "016.Portacad shield", imagen: "/Bioana.jpeg" },
-  { nombre: "017.JNM", imagen: "/Bioana.jpeg" },
-  { nombre: "020.Hero Cap", imagen: "/Bioana.jpeg" },
-  { nombre: "027.XSCRUB", imagen: "/XSCRUB.jpeg" },
-  { nombre: "036.Scalp Clip gun", imagen: "/XSCRUB.jpeg" },
-  { nombre: "038.Peritoneal introducer", imagen: "/XSCRUB.jpeg" },
-  { nombre: "030.MUV", imagen: "/Bioana.jpeg" },
-  { nombre: "E011.Orthodoxo Anclas", imagen: "/Bioana.jpeg" },
-  { nombre: "E012.Falcon View", imagen: "/Bioana.jpeg" },
-  { nombre: "E018.Sleep Fascia", imagen: "/Bioana.jpeg" },
-  { nombre: "E019.Orthotek", imagen: "/Bioana.jpeg" },
-  { nombre: "E022.Injectable Dermis", imagen: "/Bioana.jpeg" },
-  { nombre: "E023.DiViDiaper", imagen: "/Bioana.jpeg" },
-  { nombre: "E025.InjectMate", imagen: "/Bioana.jpeg" },
-  { nombre: "E026.Birchconcepts", imagen: "/Bioana.jpeg" },
-  { nombre: "E028.Peniflex", imagen: "/Bioana.jpeg" },
-  { nombre: "E029.Zipstich", imagen: "/Bioana.jpeg" },
-  { nombre: "E031.Orthodoxo Cople", imagen: "/Bioana.jpeg" },
-  { nombre: "E033.Sport Care Blister Packaging", imagen: "/Bioana.jpeg" },
-  { nombre: "E034.Sage guard", imagen: "/Bioana.jpeg" },
-  { nombre: "E035.Sheplus", imagen: "/Bioana.jpeg" },
-  { nombre: "E036.OsteoOne", imagen: "/Bioana.jpeg" },
-  { nombre: "E037.CAFE", imagen: "/Bioana.jpeg" },
-  { nombre: "Otro", imagen: "/otro.jpg" },
-];
 
 function splitProyectoLabel(full: string) {
   const dotIdx = full.indexOf(".");
@@ -71,6 +28,8 @@ function splitProyectoLabel(full: string) {
 
 export default function ProyectoPage() {
   const router = useRouter();
+  const { projects } = useProjects();
+  const proyectos = projects.filter(p => p.active).map(p => ({ nombre: p.label, imagen: p.image, displayLabel: p.code === "OTRO" ? p.name : `${p.code}.${p.name}` }));
   const [searchTerm, setSearchTerm] = useState("");
   const [hiddenProjects, setHiddenProjects] = useState<string[]>([]);
   const [storageKey, setStorageKey] = useState<string | null>(null);
@@ -142,7 +101,7 @@ export default function ProyectoPage() {
 
   const proyectosFiltrados = proyectos.filter((p) => {
     if (hiddenProjects.includes(p.nombre)) return false;
-    return p.nombre.toLowerCase().includes(searchTerm.toLowerCase());
+    return p.displayLabel.toLowerCase().includes(searchTerm.toLowerCase());
   });
 
   return (
@@ -181,7 +140,7 @@ export default function ProyectoPage() {
       <div className="overflow-hidden rounded-2xl border border-white/10 bg-white/[0.025] sm:hidden">
         <div className="divide-y divide-white/10">
           {proyectosFiltrados.map((p) => {
-            const { code, name } = splitProyectoLabel(p.nombre);
+            const { code, name } = splitProyectoLabel(p.displayLabel);
             return (
               <button
                 key={p.nombre}
@@ -207,7 +166,7 @@ export default function ProyectoPage() {
       {/* Tablet / escritorio: conserva las tarjetas amplias. */}
       <div className="hidden grid-cols-2 gap-5 sm:grid md:grid-cols-3">
         {proyectosFiltrados.map((p) => {
-          const { code, name } = splitProyectoLabel(p.nombre);
+          const { code, name } = splitProyectoLabel(p.displayLabel);
           return (
             <button
               key={p.nombre}
@@ -268,7 +227,7 @@ export default function ProyectoPage() {
                 </label>
 
                 {proyectos
-                  .filter((p) => p.nombre.toLowerCase().includes(filterSearch.toLowerCase()))
+                  .filter((p) => p.displayLabel.toLowerCase().includes(filterSearch.toLowerCase()))
                   .map((p) => (
                     <label
                       key={p.nombre}
@@ -280,7 +239,7 @@ export default function ProyectoPage() {
                         onChange={() => toggleSeleccionProyecto(p.nombre)}
                         className="h-4 w-4"
                       />
-                      <span>{p.nombre}</span>
+                      <span>{p.displayLabel}</span>
                     </label>
                   ))}
               </div>

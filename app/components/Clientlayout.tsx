@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import { canOperate } from "@/lib/operacional/catalog";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "../../src/Context/AuthContext";
@@ -318,6 +319,7 @@ export default function ClientLayout({
   Inspections
 </Link>
 <Link href="/inventario" className="hover:text-white transition">Inventory</Link>
+{canOperate(user?.email) && <Link href="/operacional" className="hover:text-white transition">Operacional</Link>}
             <Link
               data-tutorial="nav-analytics"
               href="/analitica"
@@ -531,6 +533,7 @@ export default function ClientLayout({
   Inspections
 </Link>
 <Link href="/inventario" onClick={cerrarMenu} className={mobileLinkClass}>Inventory</Link>
+{canOperate(user?.email) && <Link href="/operacional" onClick={cerrarMenu} className={mobileLinkClass}>Operacional</Link>}
               <Link
                 href="/analitica"
                 onClick={cerrarMenu}
