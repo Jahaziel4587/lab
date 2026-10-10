@@ -1,13 +1,14 @@
 "use client";
 import { useInventorySite } from "@/app/components/inventario/InventoryProvider";
 import { inventoryHref } from "@/lib/inventario/sites";
-import { Plus, X, Warehouse } from "lucide-react";
+import { Plus, Warehouse } from "lucide-react";
 import SearchInput from "@/app/calendario/components/SearchInput";
 import InventoryTable from "@/app/components/inventario/InventoryTable";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import InventoryShell, { useInventory, inputClass, panelClass, buttonClass, Field } from "@/app/components/inventario/InventoryShell";
 import InventoryDownload from "@/app/components/inventario/InventoryDownload";
+import InventoryDialog from "@/app/components/inventario/InventoryDialog";
 import ComponentForm from "@/app/components/inventario/ComponentForm";
 import QrScanner from "@/app/components/inventario/QrScanner";
 import { WAREHOUSES, TYPES } from "@/lib/inventario/catalogs";
@@ -20,7 +21,7 @@ export default function InventoryPage() {
   return <InventoryShell>
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div><h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">Inventario</h1><p className="mt-2 text-sm text-white/50">Consulta materiales, componentes y lotes por almacén.</p></div>
-      <div className="flex flex-wrap items-start gap-2"><InventoryDownload/><button className={buttonClass} onClick={() => setCreate(!create)}>{create ? <X size={16} /> : <Plus size={16} />}{create ? "Cerrar formulario" : "Nuevo artículo"}</button></div>
+      <div className="flex flex-wrap items-start gap-2"><InventoryDownload/><button className={buttonClass} onClick={() => setCreate(true)}><Plus size={16} />Nuevo artículo</button></div>
     </div>
     <section className="space-y-3"><div className="flex items-center justify-between"><h2 className="text-sm font-semibold text-white/80">Almacenes</h2>{warehouse && <button className="text-xs text-emerald-300 hover:text-emerald-100" onClick={() => setWarehouse("")}>Ver todos</button>}</div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">{WAREHOUSES.map(w => {
@@ -35,7 +36,7 @@ export default function InventoryPage() {
       <Field label="Filtrar por proyecto"><select aria-label="Proyecto" className={inputClass} value={project} onChange={e => setProject(e.target.value)}><option value="">Todos los proyectos</option>{projects.map(p => <option key={p}>{p}</option>)}</select></Field>
       <Field label="Tipo de artículo"><select aria-label="Tipo" className={inputClass} value={type} onChange={e => setType(e.target.value)}><option value="">Todos los tipos</option>{Object.entries(TYPES).map(([id, name]) => <option key={id} value={id}>{id} · {name}</option>)}</select></Field>
     </div><div className="mt-4 flex flex-wrap items-center justify-between gap-3 border-t border-white/10 pt-4"><QrScanner onScan={(id, scannedSite) => router.push(inventoryHref(`/inventario/components/${id}`, scannedSite || "B1"))} /><p className="text-xs text-white/45">Mostrando {filtered.length} artículos</p></div></section>
-    {create && <ComponentForm onSaved={id => router.push(inventoryHref(`/inventario/components/${id}`, site))} />}
+    {create && <InventoryDialog title="Nuevo artículo" onClose={() => setCreate(false)}><ComponentForm onSaved={id => { setCreate(false); router.push(inventoryHref(`/inventario/components/${id}`, site)); }} /></InventoryDialog>}
     {error && <p role="alert" className="rounded-2xl border border-red-400/20 bg-red-400/5 p-4 text-sm text-red-200">{error} <button className="underline" onClick={reload}>Reintentar</button></p>}
     <div className="space-y-3"><h2 className="text-sm font-semibold text-white/80">{WAREHOUSES.find(w => w.id === warehouse)?.name || "Todos los almacenes"}</h2><InventoryTable components={filtered} warehouse={warehouse} loading={loading} /></div>
   </InventoryShell>;
