@@ -9,7 +9,12 @@ function checks(cell:string,values:boolean[]){let index=0;return cell.replace(/<
 export function renderVoucher(template:Buffer,v:Voucher){
  const zip=new PizZip(template);const file=zip.file("word/document.xml");if(!file)throw new Error("Formato de vale inválido.");
  let xml=file.asText().replace(/<w:tblpPr\b[^>]*\/>/g, "");let count=0;
- xml=xml.replace(/<w:tblPr>/g,'<w:tblPr><w:tblInd w:w="-856" w:type="dxa"/>').replace(/<\/w:tbl>\s*<w:tbl>/g,'</w:tbl><w:p><w:pPr><w:spacing w:after="100" w:line="100" w:lineRule="exact"/></w:pPr></w:p><w:tbl>');
+ // Word requires tblInd after tblW in the table-properties schema.
+ // LibreOffice accepted it before tblStyle, but Word ignored that indentation.
+ xml=xml.replace(/<w:tblPr>[\s\S]*?<\/w:tblPr>/g,properties=>properties
+   .replace(/<w:(?:tblInd|jc)\b[^>]*\/>/g,"")
+   .replace(/(<w:tblW\b[^>]*\/>)/,'$1<w:jc w:val="left"/><w:tblInd w:w="-856" w:type="dxa"/>'))
+ .replace(/<\/w:tbl>\s*<w:tbl>/g,'</w:tbl><w:p><w:pPr><w:spacing w:after="100" w:line="100" w:lineRule="exact"/></w:pPr></w:p><w:tbl>');
  // Repeat the article headings on continuation pages and keep each article together.
  let tableIndex=0;
  xml=xml.replace(/<w:tbl\b[^>]*>[\s\S]*?<\/w:tbl>/g,table=>{

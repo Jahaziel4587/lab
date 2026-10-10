@@ -11,3 +11,11 @@ const multi=renderVoucher(template,many),archive=new Zip(multi);
 assert(archive.file('word/document.xml').asText().includes('<w:tblHeader/>'));
 assert(/numpages/i.test(archive.file('word/header2.xml').asText()));
 if(process.env.VOUCHER_QA_OUTPUT)fs.writeFileSync(process.env.VOUCHER_QA_OUTPUT,multi);
+
+for(const properties of xml.match(/<w:tblPr>[\s\S]*?<\/w:tblPr>/g)){
+ assert.equal((properties.match(/<w:tblInd\b/g)||[]).length,1);
+ assert(properties.indexOf('<w:tblStyle')<properties.indexOf('<w:tblW'));
+ assert(properties.indexOf('<w:tblW')<properties.indexOf('<w:jc'));
+ assert(properties.indexOf('<w:jc')<properties.indexOf('<w:tblInd'));
+ assert(properties.indexOf('<w:tblInd')<properties.indexOf('<w:tblLook'));
+}
