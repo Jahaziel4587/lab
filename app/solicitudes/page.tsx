@@ -1,5 +1,6 @@
 "use client";
 
+import { useProjects } from "@/lib/operacional/client";
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -71,6 +72,7 @@ function SegmentedProgress({
 }
 
 export default function SolicitudesPage() {
+  const { displayProject } = useProjects();
   const { user } = useAuth();
   const router = useRouter();
 
@@ -222,7 +224,7 @@ export default function SolicitudesPage() {
                 <div className="flex items-start justify-between gap-4">
                   <div className="min-w-0">
                     <h3 className="text-xl font-semibold text-white/90 truncate">
-                      {nombre}
+                      {displayProject(nombre)}
                     </h3>
                     <p className="mt-1 text-xs text-white/55">
                       Última actividad: {formatRelative(m.lastTs)}

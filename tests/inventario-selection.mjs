@@ -1,0 +1,18 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+import ts from "typescript";
+const source = fs.readFileSync(new URL("../lib/inventario/selection.ts", import.meta.url), "utf8");
+const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText;
+const { selectLot } = await import(`data:text/javascript;base64,${Buffer.from(compiled).toString("base64")}`);
+const lot = (id, n, expiry = "", extra = {}) => ({ id, name: id, expiry, createdAt: "2026-01-01", stock: { aprobado: n, ...extra } });
+const lots = [lot("A", 40, "2026-11-01"), lot("B", 75, "2026-11-02"), lot("C", 150, "2026-12-01")];
+assert.equal(selectLot(lots, "aprobado", 100, "2026-10-09").id, "C");
+assert.equal(selectLot(lots, "aprobado", 200, "2026-10-09"), undefined, "Never combine lots");
+assert.equal(selectLot([lot("no-expiry", 100), lot("earlier", 100, "2026-10-20"), lot("later", 200, "2026-11-01")], "aprobado", 100, "2026-10-09").id, "earlier");
+assert.equal(selectLot([lot("expired", 200, "2026-10-08"), lot("valid", 100, "2026-10-09")], "aprobado", 100, "2026-10-09").id, "valid");
+assert.equal(selectLot([lot("split", 60, "", { rechazado: 100 })], "aprobado", 100, "2026-10-09"), undefined, "Do not aggregate warehouses");
+const concurrent = [lot("only", 150)];
+const chosen = selectLot(concurrent, "aprobado", 100, "2026-10-09"); chosen.stock.aprobado -= 100;
+assert.equal(selectLot(concurrent, "aprobado", 100, "2026-10-09"), undefined, "Re-evaluate depleted stock");
+assert.equal(lots[2].stock.aprobado, 150, "Selection does not mutate stock");
+console.log("Inventory lot selection: 7 assertions passed.");
