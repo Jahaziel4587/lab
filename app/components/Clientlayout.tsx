@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { canOperate } from "@/lib/operacional/catalog";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "../../src/Context/AuthContext";
-import { FiUser, FiBell, FiMenu, FiX } from "react-icons/fi";
+import { FiUser, FiBell, FiMenu, FiX, FiChevronDown } from "react-icons/fi";
 import {
   collection,
   doc,
@@ -28,6 +28,60 @@ type NotiItem = {
   leido?: boolean;
   origen: "notifications" | "notifications_admin";
 };
+
+function NavigationGroup({
+  label,
+  mobile,
+  children,
+}: {
+  label: string;
+  mobile: boolean;
+  children: React.ReactNode;
+}) {
+  const ref = useRef<HTMLDetailsElement>(null);
+  const pathname = usePathname();
+
+  useEffect(() => {
+    ref.current?.removeAttribute("open");
+  }, [pathname]);
+
+  useEffect(() => {
+    const closeOutside = (event: PointerEvent) => {
+      if (!ref.current?.contains(event.target as Node)) {
+        ref.current?.removeAttribute("open");
+      }
+    };
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape" && ref.current?.open) {
+        ref.current.removeAttribute("open");
+        ref.current.querySelector("summary")?.focus();
+      }
+    };
+    document.addEventListener("pointerdown", closeOutside);
+    document.addEventListener("keydown", closeOnEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeOutside);
+      document.removeEventListener("keydown", closeOnEscape);
+    };
+  }, []);
+
+  return (
+    <details ref={ref} className={mobile ? "rounded-xl border border-white/10 bg-white/[0.03]" : "relative"}>
+      <summary className="flex min-h-11 cursor-pointer list-none items-center justify-between gap-2 rounded-xl px-3 text-white/80 transition hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400 [&::-webkit-details-marker]:hidden">
+        {label}
+        <FiChevronDown aria-hidden="true" />
+      </summary>
+      <div
+        onClick={() => ref.current?.removeAttribute("open")}
+        className={mobile
+          ? "grid gap-1 border-t border-white/10 p-2"
+          : "absolute left-0 top-full z-50 mt-2 grid w-56 gap-1 rounded-xl border border-white/10 bg-neutral-950 p-2 shadow-2xl"}
+      >
+        {children}
+      </div>
+    </details>
+  );
+}
 
 export default function ClientLayout({
   children,
@@ -212,8 +266,32 @@ export default function ClientLayout({
 
 
 
-  const mobileLinkClass =
-    "min-h-12 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-3 text-white/75 transition hover:bg-white/[0.07] hover:text-white active:bg-white/[0.10] flex items-center";
+  const navigation = (mobile: boolean) => {
+    const linkClass = "flex min-h-11 items-center rounded-lg px-3 py-2 text-white/80 transition hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400";
+    const comingSoonClass = "flex min-h-11 cursor-not-allowed items-center justify-between gap-3 rounded-lg px-3 py-2 text-white/45";
+    return (
+      <>
+        <NavigationGroup label="Prototyping Lab" mobile={mobile}>
+          <Link data-tutorial="nav-place-order" href="/hacer-pedido/proyecto" onClick={cerrarMenu} className={linkClass}>Place order</Link>
+          <Link data-tutorial="nav-calendar" href="/calendario" onClick={cerrarMenu} className={linkClass}>Record</Link>
+          <Link data-tutorial="nav-projects" href="/solicitudes" onClick={cerrarMenu} className={linkClass}>My projects</Link>
+          <Link data-tutorial="nav-about" href="/about" onClick={cerrarMenu} className={linkClass}>Information</Link>
+          {isAdmin && <Link data-tutorial="nav-quoter" href="/cotizador" onClick={cerrarMenu} className={linkClass}>Quoter</Link>}
+          <Link data-tutorial="nav-analytics" href="/analitica" onClick={cerrarMenu} className={linkClass}>Analytics</Link>
+        </NavigationGroup>
+        <NavigationGroup label="Quality" mobile={mobile}>
+          <Link data-tutorial="nav-inspections" href="/inspecciones" onClick={cerrarMenu} className={linkClass}>Inspecciones</Link>
+          <span aria-disabled="true" className={comingSoonClass}>DHR <span className="text-[10px]">Próximamente</span></span>
+        </NavigationGroup>
+        <NavigationGroup label="Inventory" mobile={mobile}>
+          <Link href="/inventario?site=B1" onClick={cerrarMenu} className={linkClass}>Inventory B1</Link>
+          <Link href="/inventario?site=B2" onClick={cerrarMenu} className={linkClass}>Inventory B2</Link>
+        </NavigationGroup>
+        {canOperate(user?.email) && <Link href="/operacional" onClick={cerrarMenu} className={linkClass}>Operational</Link>}
+        <span aria-disabled="true" title="Próximamente" className={comingSoonClass}>Production <span className="text-[10px]">Próximamente</span></span>
+      </>
+    );
+  };
 
   if (authLoading || (!user && !isLoginPage)) {
     return (
@@ -272,61 +350,8 @@ export default function ClientLayout({
             </span>
           </Link>
 
-          <nav className="hidden lg:flex items-center gap-6 text-sm text-white/75">
-            <Link
-              data-tutorial="nav-calendar"
-              href="/calendario"
-              className="hover:text-white transition"
-            >
-              Record
-            </Link>
-            <Link
-              data-tutorial="nav-about"
-              href="/about"
-              className="hover:text-white transition"
-            >
-              Information
-            </Link>
-            <Link
-              data-tutorial="nav-projects"
-              href="/solicitudes"
-              className="hover:text-white transition"
-            >
-              My Projects
-            </Link>
-            <Link
-              data-tutorial="nav-place-order"
-              href="/hacer-pedido/proyecto"
-              className="hover:text-white transition"
-            >
-              Place Order
-            </Link>
-
-            {isAdmin && (
-              <Link
-                data-tutorial="nav-quoter"
-                href="/cotizador"
-                className="hover:text-white transition"
-              >
-                Quoter
-              </Link>
-            )}
-<Link
-  data-tutorial="nav-inspections"
-  href="/inspecciones"
-  className="hover:text-white transition"
->
-  Inspections
-</Link>
-<Link href="/inventario" className="hover:text-white transition">Inventory</Link>
-{canOperate(user?.email) && <Link href="/operacional" className="hover:text-white transition">Operacional</Link>}
-            <Link
-              data-tutorial="nav-analytics"
-              href="/analitica"
-              className="hover:text-white transition"
-            >
-              Analytics
-            </Link>
+          <nav aria-label="Navegación principal" className="hidden xl:flex items-center gap-1 text-sm text-white/75">
+            {navigation(false)}
           </nav>
 
           <div className="flex shrink-0 items-center gap-2 sm:gap-3">
@@ -474,7 +499,7 @@ export default function ClientLayout({
               onClick={toggleMenu}
               aria-label={menuAbierto ? "Cerrar menú" : "Abrir menú"}
               aria-expanded={menuAbierto}
-              className="lg:hidden w-11 h-11 sm:w-9 sm:h-9 rounded-2xl border border-white/10 bg-white/[0.04] text-white flex items-center justify-center hover:bg-white/[0.07] active:bg-white/[0.10] transition"
+              className="xl:hidden w-11 h-11 sm:w-9 sm:h-9 rounded-2xl border border-white/10 bg-white/[0.04] text-white flex items-center justify-center hover:bg-white/[0.07] active:bg-white/[0.10] transition"
             >
               {menuAbierto ? <FiX size={20} /> : <FiMenu size={20} />}
             </button>
@@ -482,65 +507,9 @@ export default function ClientLayout({
         </div>
 
         {menuAbierto && (
-          <div className="lg:hidden border-t border-white/10 bg-black/45 px-3 sm:px-4 py-3 sm:py-4">
-            <nav className="grid grid-cols-1 min-[390px]:grid-cols-2 gap-2 text-sm">
-              <Link
-                href="/calendario"
-                onClick={cerrarMenu}
-                className={mobileLinkClass}
-              >
-                Record
-              </Link>
-
-              <Link
-                href="/about"
-                onClick={cerrarMenu}
-                className={mobileLinkClass}
-              >
-                Information
-              </Link>
-
-              <Link
-                href="/solicitudes"
-                onClick={cerrarMenu}
-                className={mobileLinkClass}
-              >
-                My Projects
-              </Link>
-
-              <Link
-                href="/hacer-pedido/proyecto"
-                onClick={cerrarMenu}
-                className="min-h-12 rounded-xl border border-emerald-400/30 bg-emerald-400/10 px-4 py-3 text-emerald-300 hover:bg-emerald-400/15 active:bg-emerald-400/20 transition flex items-center"
-              >
-                Place Order
-              </Link>
-
-              {isAdmin && (
-                <Link
-                  href="/cotizador"
-                  onClick={cerrarMenu}
-                  className={mobileLinkClass}
-                >
-                  Quoter
-                </Link>
-              )}
-<Link
-  href="/inspecciones"
-  onClick={cerrarMenu}
-  className={mobileLinkClass}
->
-  Inspections
-</Link>
-<Link href="/inventario" onClick={cerrarMenu} className={mobileLinkClass}>Inventory</Link>
-{canOperate(user?.email) && <Link href="/operacional" onClick={cerrarMenu} className={mobileLinkClass}>Operacional</Link>}
-              <Link
-                href="/analitica"
-                onClick={cerrarMenu}
-                className={mobileLinkClass}
-              >
-                Analytics
-              </Link>
+          <div className="xl:hidden border-t border-white/10 bg-black/45 px-3 sm:px-4 py-3 sm:py-4">
+            <nav aria-label="Navegación móvil" className="grid grid-cols-1 gap-2 text-sm">
+              {navigation(true)}
             </nav>
 
             {user && nombreUsuario && (
