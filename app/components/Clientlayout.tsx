@@ -283,7 +283,10 @@ export default function ClientLayout({
           <Link data-tutorial="nav-inspections" href="/inspecciones" onClick={cerrarMenu} className={linkClass}>Inspecciones</Link>
           <span aria-disabled="true" className={comingSoonClass}>DHR <span className="text-[10px]">Próximamente</span></span>
         </NavigationGroup>
-        <Link href="/inventario" onClick={cerrarMenu} className={linkClass}>Inventory</Link>
+        <NavigationGroup label="Inventory" mobile={mobile}>
+          <Link href="/inventario?site=B1" onClick={cerrarMenu} className={linkClass}>Inventory B1</Link>
+          <Link href="/inventario?site=B2" onClick={cerrarMenu} className={linkClass}>Inventory B2</Link>
+        </NavigationGroup>
         {canOperate(user?.email) && <Link href="/operacional" onClick={cerrarMenu} className={linkClass}>Operational</Link>}
         <span aria-disabled="true" title="Próximamente" className={comingSoonClass}>Production <span className="text-[10px]">Próximamente</span></span>
       </>
