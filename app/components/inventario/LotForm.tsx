@@ -7,6 +7,7 @@ import type { InventoryComponent } from "@/lib/inventario/types";
 import { Field, inputClass, buttonClass, panelClass } from "./InventoryShell";
 export default function LotForm({ component, onSaved }: { component: InventoryComponent; onSaved: (ids: string[]) => void }) {
   const { site } = useInventorySite();
+  const [destination, setDestination] = useState(WAREHOUSES[0].id);
   const [busy, setBusy] = useState(false), [error, setError] = useState(""); const pending = useRef<{ id: string; signature: string } | null>(null);
   return <form className={`${panelClass} space-y-5`} onSubmit={async e => {
     e.preventDefault(); const form = e.currentTarget; const data = Object.fromEntries(new FormData(form)); const signature = JSON.stringify(data);
@@ -17,7 +18,8 @@ export default function LotForm({ component, onSaved }: { component: InventoryCo
     <Field label="Lote"><input name="name" required className={inputClass} /></Field>
     <Field label={`Cantidad (${component.unit})`}><input name="quantity" type="number" min={component.unit === "pz" ? 1 : 0.000001} step={component.unit === "pz" ? 1 : "0.000001"} required className={inputClass} /></Field>
     <Field label="Caducidad / reanálisis (vacío = No aplica)"><input name="expiry" type="date" className={inputClass} /></Field>
-    <Field label="Almacén de ingreso"><select name="destination" className={inputClass}>{WAREHOUSES.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
+    <Field label="Almacén de ingreso"><select name="destination" value={destination} onChange={e => setDestination(e.target.value)} className={inputClass}>{WAREHOUSES.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
+    {destination === "ssc" && <><Field label="Condición de temperatura (°C)"><input required name="temperatureCondition" maxLength={200} className={inputClass} placeholder="Ej. 15–30, debajo de 25 o N/A" /></Field><Field label="Condición de humedad (%HR)"><input required name="humidityCondition" maxLength={200} className={inputClass} placeholder="Ej. debajo de 60, 20–80 o N/A" /></Field></>}
     <Field label="Origen"><select name="origin" className={inputClass}>{EXTERNAL_LOCATIONS.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
     <Field label="Proveedor"><input name="supplier" className={inputClass} /></Field>
     <Field label="Comentarios / ubicación Otro"><input name="notes" maxLength={1000} className={inputClass} /></Field>

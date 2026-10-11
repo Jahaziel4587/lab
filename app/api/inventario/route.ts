@@ -101,6 +101,7 @@ export async function POST(req: NextRequest) {
         if (c.unit === "pz" && !Number.isInteger(q)) fail("Las piezas deben ser cantidades enteras.");
         if (c.lots.some(l => l.name.toUpperCase() === name.toUpperCase())) fail("El lote ya existe. Usa Registrar entrada para agregar existencias.");
         const l: Lot = { id: randomUUID(), name, expiry, supplier: str(b.supplier || "", false), notes: str(b.notes || "", false), createdAt: now, stock: { [destination]: q } };
+        if (destination === "ssc") { l.temperatureCondition = str(b.temperatureCondition); l.humidityCondition = str(b.humidityCondition); }
         c.lots.push(l); changed.set(id, c); addLine(origin, destination, c, l, q);
       } else if (b.action === "movement") {
         if (!["salida", "entrada", "traslado"].includes(b.kind)) fail("Movimiento inválido.");
@@ -125,6 +126,7 @@ export async function POST(req: NextRequest) {
           } else {
             lot = c.lots.find(l => l.id === line.lotId); if (!lot) fail("Selecciona el lote al que pertenecen las piezas.");
           }
+          if (destination === "ssc") { lot.temperatureCondition = str(b.temperatureCondition); lot.humidityCondition = str(b.humidityCondition); }
           if (isWarehouse(origin)) {
             if ((lot.stock[origin] || 0) < q) fail(`${c.code}: existencias insuficientes.`);
             lot.stock[origin] = Math.round(((lot.stock[origin] || 0) - q) * 1e6) / 1e6;

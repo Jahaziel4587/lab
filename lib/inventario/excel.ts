@@ -27,7 +27,7 @@ export function exportInventory(components: InventoryComponent[], site: Inventor
                     "Artículo": c.code, "Descripción": c.name, "Unidad de medida": c.unit,
                     "Cantidad": quantity, "Lote": lot.name, "Comentarios": lot.notes || "N/A",
                     "Proveedor": lot.supplier || "N/A", "Fecha de expiración(reanálisis)": lot.expiry || "N/A",
-                    "Condición de temperatura (°C)": "N/A", "Condición de humedad (%HR)": "N/A",
+                    "Condición de temperatura (°C)": lot.temperatureCondition || "N/A", "Condición de humedad (%HR)": lot.humidityCondition || "N/A",
                 };
                 const cells = sheet.headers.map((label, i) => {
                     const ref = `${column(i)}${rowNumber}`, style = sheet.styles[i] || "0";
