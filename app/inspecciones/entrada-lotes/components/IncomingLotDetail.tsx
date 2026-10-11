@@ -591,7 +591,7 @@ export default function IncomingLotDetail({ context, lot }: Props) {
   return (
     <section className="space-y-6">
       <div className="rounded-2xl border border-emerald-400/20 bg-emerald-400/[0.06] p-5">
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wider text-emerald-300">
               {lot.status === "in_progress"
@@ -610,7 +610,7 @@ export default function IncomingLotDetail({ context, lot }: Props) {
               </p>
             )}
           </div>
-          <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+          <div className="flex flex-wrap gap-2">
             <button
               type="button"
               onClick={() => generatePdf("summary")}
