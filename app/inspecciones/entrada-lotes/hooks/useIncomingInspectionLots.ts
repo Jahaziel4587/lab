@@ -1,5 +1,6 @@
 "use client";
 
+import { validateInspectionFormData } from "../inspectionFormData";
 import {
   collection,
   doc,
@@ -151,6 +152,7 @@ export function useIncomingInspectionLots({
         ? plan.inspectedQuantity !== input.totalLotQuantity
         : !isPositiveInteger(plan.inspectedQuantity) || plan.inspectedQuantity > input.totalLotQuantity || !plan.aql.trim() || !isNonNegativeInteger(plan.allowedRejectedQuantity) || plan.allowedRejectedQuantity > plan.inspectedQuantity)) throw new Error("Completa correctamente el plan de cada método de inspección.");
 
+      if (context.sourceType !== "proceso_proyecto") validateInspectionFormData(input.inspectionFormData || {}, methodPlans);
       if (!input.responsiblePm.email) {
         throw new Error(
           "Selecciona al PM responsable.",
@@ -222,6 +224,7 @@ export function useIncomingInspectionLots({
         batch.set(lotReference, {
           lotName,
           normalizedLotName,
+          ...(input.inspectionFormData ? { inspectionFormData: input.inspectionFormData } : {}),
           purchaseOrder: input.purchaseOrder.trim(),
           totalLotQuantity:
             input.totalLotQuantity,

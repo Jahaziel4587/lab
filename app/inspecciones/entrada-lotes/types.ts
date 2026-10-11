@@ -99,7 +99,14 @@ export type IncomingNonconformanceDetails = {
   additionalComments?: string;
 };
 
+export type IncomingInspectionFormData = {
+  purchasedQuantity?: string; receivedDate?: string; supplierName?: string; expirationDate?: string; noExpiration?: boolean;
+  documentation?: string[]; otherDocumentation?: string; specReference?: string; wiRevision?: string;
+  failedQuantities?: Partial<Record<IncomingInspectionMethod, string>>; totalDefects?: string; lotDisposition?: "accepted" | "rejected" | "other"; lotComments?: string;
+};
+
 export type IncomingInspectionLot = {
+  inspectionFormData?: IncomingInspectionFormData;
   id: string;
   shiftChecks?: Array<{ method: IncomingInspectionMethod; shiftIdentifier: string; inspectionNumber: number; result: "pass"; createdBy: string; createdAt: string }>;
   lotName: string;
@@ -168,6 +175,7 @@ export type IncomingLotRejectionClarification = {
 };
 
 export type CreateIncomingInspectionLotInput = {
+  inspectionFormData?: IncomingInspectionFormData;
   lotName: string;
   purchaseOrder: string;
   totalLotQuantity: number;
@@ -176,6 +184,7 @@ export type CreateIncomingInspectionLotInput = {
 };
 
 export type FinalizeIncomingLotInput = {
+  inspectionFormData?: IncomingInspectionFormData;
   finalRejectedPieces: number;
   nonconformanceDetails?: IncomingNonconformanceDetails;
 };

@@ -1693,6 +1693,7 @@ export default function InspectionTypePage() {
     if (incomingLotAction === "nuevo") {
       return (
         <IncomingLotForm
+          wiRevision={selectedWi?.revision != null ? String(selectedWi.revision) : undefined}
           isProcess={!isEntrada}
           responsiblePms={
             incomingPmsState.responsiblePms
