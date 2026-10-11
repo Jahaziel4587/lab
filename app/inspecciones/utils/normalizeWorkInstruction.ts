@@ -33,7 +33,7 @@ export function normalizeWorkInstruction(
     .trim();
 
   const documentMatch = nameWithoutExtension.match(
-    /^(WI(?:\.[A-Za-z0-9-]+)+)[\s_]+(.+)$/i,
+    /^(WI(?:\.[A-Za-z0-9-]+)+)(?:[\s_]+(.*))?$/i,
   );
 
   if (!documentMatch) {
@@ -41,7 +41,7 @@ export function normalizeWorkInstruction(
   }
 
   const documentCode = documentMatch[1].toUpperCase();
-  const remainingName = documentMatch[2]
+  const remainingName = (documentMatch[2] ?? "")
     .replace(/_/g, " ")
     .trim();
 
@@ -57,15 +57,11 @@ export function normalizeWorkInstruction(
     ? revisionMatch[2].trim()
     : remainingName;
 
-  if (!itemName) {
-    return null;
-  }
-
   return {
     documentCode,
     revision,
     itemName,
-    displayName: `${documentCode} ${itemName}`,
+    displayName: itemName ? `${documentCode} ${itemName}` : documentCode,
     originalFileName,
   };
 }
