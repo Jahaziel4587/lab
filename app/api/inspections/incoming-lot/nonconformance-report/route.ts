@@ -14,7 +14,6 @@ import {
 import { mapIncomingLot } from "@/app/inspecciones/entrada-lotes/utils";
 import type {
   IncomingInspectionContext,
-  IncomingInspectionLot,
   IncomingLotReport,
   IncomingNonconformanceDetails,
 } from "@/app/inspecciones/entrada-lotes/types";
@@ -58,41 +57,13 @@ function setCheckboxDefault(cellXml: string, checked: boolean) {
   );
 }
 
-function setContentControlCheckbox(controlXml: string, checked: boolean) {
-  return controlXml
-    .replace(
-      /(<w14:checked\s+w14:val=")[01]("\s*\/>)/g,
-      `$1${checked ? "1" : "0"}$2`,
-    )
-    .replace(
-      /(<w:sdtContent>[\s\S]*?<w:t(?:\s[^>]*)?>)[☐☒](<\/w:t>[\s\S]*?<\/w:sdtContent>)/g,
-      `$1${checked ? "☒" : "☐"}$2`,
-    );
-}
-
-function fillRiskCheckboxes(cellXml: string, details: IncomingNonconformanceDetails) {
-  return cellXml.replace(/<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>/g, (paragraphXml) => {
-    const text = cellText(paragraphXml);
-    const selected =
-      (text.includes("Alto") && details.riskLevel === "high") ||
-      (text.includes("Medio") && details.riskLevel === "medium") ||
-      (text.includes("Bajo") && details.riskLevel === "low");
-    return paragraphXml.replace(
-      /<w:sdt(?:\s[^>]*)?>[\s\S]*?<\/w:sdt>/,
-      (controlXml) => setContentControlCheckbox(controlXml, selected),
-    );
-  });
-}
-
 function fillLegacyCheckboxes(xml: string, details: IncomingNonconformanceDetails, isProcess = false) {
-  const dispositions = Array.isArray(details.dispositions) ? details.dispositions : [];
   let otherCheckboxIndex = 0;
+  let identificationSection = true;
   return xml.replace(/<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>/g, (paragraphXml) => {
     const text = cellText(paragraphXml);
-    const compactText = text.replace(/\s+/g, "").toLocaleLowerCase("es-MX");
-    if (text.includes("Alto") || text.includes("Medio") || text.includes("Bajo")) {
-      return fillRiskCheckboxes(paragraphXml, details);
-    }
+    if (text.includes("EVALUACIÓN Y DISPOSICIÓN")) identificationSection = false;
+    if (!identificationSection) return paragraphXml;
     if (!paragraphXml.includes("<w:checkBox>")) return paragraphXml;
     if (text.includes("Etiquetado")) return setCheckboxDefault(paragraphXml, details.category === "labeling");
     if (text.includes("Calidad")) return setCheckboxDefault(paragraphXml, details.category === "quality");
@@ -102,30 +73,14 @@ function fillLegacyCheckboxes(xml: string, details: IncomingNonconformanceDetail
     if (text.includes("Inspecciones de entrada")) return setCheckboxDefault(paragraphXml, !isProcess);
     if (text.includes("Antes de la entrega")) return setCheckboxDefault(paragraphXml, true);
     if (text.includes("Después de la entrega")) return setCheckboxDefault(paragraphXml, false);
-    if (text === "Si") return setCheckboxDefault(paragraphXml, details.capaRequired);
-    if (text === "No") return setCheckboxDefault(paragraphXml, !details.capaRequired);
-    if (compactText.includes("re-trabajo")) return setCheckboxDefault(paragraphXml, dispositions.includes("rework"));
-    if (compactText.includes("devoluciónalproveedor")) return setCheckboxDefault(paragraphXml, dispositions.includes("return_supplier"));
-    if (compactText.includes("usartalcual")) return setCheckboxDefault(paragraphXml, dispositions.includes("use_as_is"));
-    if (compactText.includes("usoparar&d")) return setCheckboxDefault(paragraphXml, dispositions.includes("rnd"));
-    if (compactText.includes("merma")) return setCheckboxDefault(paragraphXml, dispositions.includes("scrap"));
     if (text.startsWith("Otro:")) {
       otherCheckboxIndex += 1;
       if (otherCheckboxIndex === 1) return setCheckboxDefault(paragraphXml, details.category === "other");
       if (otherCheckboxIndex === 2) return setCheckboxDefault(paragraphXml, false);
-      return setCheckboxDefault(paragraphXml, dispositions.includes("other"));
+      return paragraphXml;
     }
     return paragraphXml;
   });
-}
-
-function repairTemplateTags(xml: string) {
-  const dispositionTagHasOpening = /<w:t(?:\s[^>]*)?>\{<\/w:t>(?:(?!<\/w:tc>)[\s\S])*?<w:t(?:\s[^>]*)?>dispositionOtherText<\/w:t>/.test(xml);
-  if (dispositionTagHasOpening) return xml;
-  return xml.replace(
-    /(<w:t(?:\s[^>]*)?>)dispositionOtherText(<\/w:t>)/,
-    "$1{dispositionOtherText$2",
-  );
 }
 
 export async function POST(request: NextRequest) {
@@ -156,7 +111,7 @@ export async function POST(request: NextRequest) {
     const scope = scopeSnapshot.data() || {};
     const lotData = lotSnapshot.data() || {};
     const details = lotData.nonconformanceDetails as IncomingNonconformanceDetails | undefined;
-    if (lotData.status !== "finalized" || lotData.inspectionResult !== "will_fail" || !details) {
+    if (lotData.status !== "finalized" || lotData.inspectionResult !== "will_fail") {
       return NextResponse.json({ error: "Este lote no requiere o todavía no tiene completa la no conformidad." }, { status: 409 });
     }
 
@@ -179,16 +134,11 @@ export async function POST(request: NextRequest) {
     const generatedBy = await getDisplayNameForUid(decoded.uid, decoded.email);
     const photos = await loadReportPhotos(body.selectedPhotos, reports.filter(report => report.kind === "spec_rejection"));
     const description = buildNonconformanceDescription(lot, reports, scope.sourceType === "proceso_proyecto");
-    const additionalComments = [details.additionalComments, clean(body.extraComment)]
-      .filter(Boolean)
-      .join("\n");
-    const mark = (selected: boolean) => selected ? "X" : "";
-
-    const templatePath = path.join(process.cwd(), "public", "templates", "Reporte No conformidad Inspec Entrada.docx");
+    const templatePath = path.join(process.cwd(), "public", "templates", scope.sourceType === "proceso_proyecto" ? "Reporte No conformidad Inspec proceso.docx" : "Reporte No conformidad Inspec Entrada.docx");
     const zip = new PizZip(await fs.readFile(templatePath));
     const templateDocument = zip.file("word/document.xml");
     if (templateDocument) {
-      zip.file("word/document.xml", repairTemplateTags(templateDocument.asText()).replace(/<w:tc[ >][\s\S]*?<\/w:tc>/g, cell => cell.includes("nonconformanceDescription") ? cell.replace("</w:tc>", `<w:p><w:r><w:t>${PHOTO_MARKER}</w:t></w:r></w:p></w:tc>`) : cell));
+      zip.file("word/document.xml", templateDocument.asText().replace(/<w:tc[ >][\s\S]*?<\/w:tc>/g, cell => cell.includes("nonconformanceDescription") ? cell.replace("</w:tc>", `<w:p><w:r><w:t>${PHOTO_MARKER}</w:t></w:r></w:p></w:tc>`) : cell));
     }
     const docx = new Docxtemplater(zip, { paragraphLoop: true, linebreaks: true });
     docx.render({
@@ -203,36 +153,13 @@ export async function POST(request: NextRequest) {
       finalRejectedPieces: String(Number(lot.finalRejectedPieces || 0)),
       nonconformanceDescription: description,
       nonconformanceExtraComment: clean(body.extraComment),
-      immediateActions: clean(details.immediateActions) || "NA",
-      riskSeverity: clean(details.riskSeverity) || "NA",
-      riskOccurrence: clean(details.riskOccurrence) || "NA",
-      riskHigh: mark(details.riskLevel === "high"),
-      riskMedium: mark(details.riskLevel === "medium"),
-      riskLow: mark(details.riskLevel === "low"),
-      capaYes: mark(details.capaRequired),
-      capaNo: mark(!details.capaRequired),
-      dispositionRework: mark(details.dispositions?.includes("rework") ?? false),
-      dispositionReturn: mark(details.dispositions?.includes("return_supplier") ?? false),
-      dispositionUseAsIs: mark(details.dispositions?.includes("use_as_is") ?? false),
-      dispositionRandD: mark(details.dispositions?.includes("rnd") ?? false),
-      dispositionScrap: mark(details.dispositions?.includes("scrap") ?? false),
-      dispositionOther: mark(details.dispositions?.includes("other") ?? false),
-      dispositionOtherText: clean(details.dispositionOtherText),
-      dispositionJustification: clean(details.dispositionJustification) || "NA",
-      iifReference: clean(details.iifReference) || "NA",
-      qciReference: clean(details.qciReference) || "NA",
-      capaReference: clean(details.capaReference) || "NA",
-      scarReference: clean(details.scarReference) || "NA",
-      recallReference: clean(details.recallReference) || "NA",
-      otherReferences: clean(details.otherReferences) || "NA",
-      correctiveActions: clean(details.correctiveActions) || "NA",
-      additionalComments: additionalComments || "NA",
+      immediateActions: clean(details?.immediateActions),
     });
 
     const outputZip = docx.getZip();
     const documentFile = outputZip.file("word/document.xml");
     if (documentFile) {
-      outputZip.file("word/document.xml", fillLegacyCheckboxes(documentFile.asText(), details, scope.sourceType === "proceso_proyecto"));
+      outputZip.file("word/document.xml", fillLegacyCheckboxes(documentFile.asText(), details ?? { category: "quality" } as IncomingNonconformanceDetails, scope.sourceType === "proceso_proyecto"));
     }
     addNonconformancePhotos(outputZip, photos);
     const result = outputZip.generate({ type: "nodebuffer", compression: "DEFLATE" });

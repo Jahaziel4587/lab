@@ -424,12 +424,6 @@ export default function IncomingLotDetail({ context, lot }: Props) {
   const [nonconformanceDetails, setNonconformanceDetails] = useState<IncomingNonconformanceDetails>({
     category: "quality",
     immediateActions: "Se segregó y retuvo el lote; se notificó al PM responsable y a Quality Management.",
-    riskSeverity: "",
-    riskOccurrence: "",
-    riskLevel: "medium",
-    capaRequired: false,
-    dispositions: ["return_supplier"],
-    dispositionJustification: "",
   });
   const visibleReports = useMemo(
     () => reportsState.reports.filter((report) => report.kind === activeKind),

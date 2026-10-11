@@ -632,10 +632,6 @@ export function useIncomingLotReports({
       if (!details) throw new Error("Completa la información de la no conformidad.");
       if (details.category === "other" && !details.categoryOtherText?.trim()) throw new Error("Especifica la categoría de la no conformidad.");
       if (!details.immediateActions.trim()) throw new Error("Describe las acciones inmediatas.");
-      if (!details.riskSeverity.trim() || !details.riskOccurrence.trim()) throw new Error("Completa la evaluación de severidad y ocurrencia.");
-      if (details.dispositions.length === 0) throw new Error("Selecciona al menos una disposición.");
-      if (details.dispositions.includes("other") && !details.dispositionOtherText?.trim()) throw new Error("Especifica la otra disposición.");
-      if (!details.dispositionJustification.trim()) throw new Error("Agrega la justificación de la disposición.");
     }
     const lotReference = doc(db, "inspection_incoming_lots", context.scopeKey, "lots", lot.id);
     const batch = writeBatch(db);
@@ -644,7 +640,7 @@ export function useIncomingLotReports({
         inspectionResult: requiresNonconformance ? "will_fail" : (lot.inspectionResult === "pending" ? "within_limit" : lot.inspectionResult),
         finalRejectedPieces: input.finalRejectedPieces,
         ...(requiresNonconformance && input.nonconformanceDetails
-          ? { nonconformanceDetails: input.nonconformanceDetails }
+          ? { nonconformanceDetails: { category: input.nonconformanceDetails.category, ...(input.nonconformanceDetails.categoryOtherText ? { categoryOtherText: input.nonconformanceDetails.categoryOtherText } : {}), immediateActions: input.nonconformanceDetails.immediateActions } }
           : {}),
         finalizedByUid: user.uid,
         finalizedByEmail: user.email || "",
