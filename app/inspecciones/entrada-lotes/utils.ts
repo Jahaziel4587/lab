@@ -232,6 +232,7 @@ export function mapIncomingLot(
         })
       : undefined,
     methodReviewState: data.methodReviewState && typeof data.methodReviewState === "object" ? data.methodReviewState as IncomingInspectionLot["methodReviewState"] : undefined,
+    inspectionFormData: data.inspectionFormData && typeof data.inspectionFormData === "object" ? data.inspectionFormData as IncomingInspectionLot["inspectionFormData"] : undefined,
     nonconformanceDetails: data.nonconformanceDetails && typeof data.nonconformanceDetails === "object" ? data.nonconformanceDetails as IncomingInspectionLot["nonconformanceDetails"] : undefined,
     rejectionClarifications: Array.isArray(data.rejectionClarifications)
       ? data.rejectionClarifications.map((entry) => {

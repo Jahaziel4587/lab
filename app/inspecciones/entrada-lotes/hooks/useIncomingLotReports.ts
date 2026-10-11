@@ -1,4 +1,5 @@
 "use client";
+import { validateInspectionFormData } from "../inspectionFormData";
 
 import {
   addDoc,
@@ -633,9 +634,14 @@ export function useIncomingLotReports({
       if (details.category === "other" && !details.categoryOtherText?.trim()) throw new Error("Especifica la categoría de la no conformidad.");
       if (!details.immediateActions.trim()) throw new Error("Describe las acciones inmediatas.");
     }
+    if (context.sourceType !== "proceso_proyecto") {
+      validateInspectionFormData(input.inspectionFormData || {}, lot.methodPlans, true);
+      if (requiresNonconformance && input.inspectionFormData?.lotDisposition !== "rejected") throw new Error("El lote que no pasó por SPEC debe registrarse como rechazado.");
+    }
     const lotReference = doc(db, "inspection_incoming_lots", context.scopeKey, "lots", lot.id);
     const batch = writeBatch(db);
     batch.update(lotReference, {
+        ...(input.inspectionFormData ? { inspectionFormData: input.inspectionFormData } : {}),
         status: "finalized",
         inspectionResult: requiresNonconformance ? "will_fail" : (lot.inspectionResult === "pending" ? "within_limit" : lot.inspectionResult),
         finalRejectedPieces: input.finalRejectedPieces,

@@ -27,6 +27,9 @@ import type {
 } from "../types";
 import { useIncomingLotReports } from "../hooks/useIncomingLotReports";
 import IncomingLotReportForm from "./IncomingLotReportForm";
+import IncomingInspectionFormFields from "./IncomingInspectionFormFields";
+import { validateInspectionFormData } from "../inspectionFormData";
+import type { IncomingInspectionFormData } from "../types";
 import IncomingNonconformanceFields from "./IncomingNonconformanceFields";
 import {
   generateIncomingLotPdf,
@@ -420,6 +423,8 @@ export default function IncomingLotDetail({ context, lot }: Props) {
   const [rejectionDisposition, setRejectionDisposition] = useState<"scrap" | "other">("scrap");
   const [rejectionOtherDisposition, setRejectionOtherDisposition] = useState("");
   const [rejectionObservations, setRejectionObservations] = useState("");
+  const [inspectionFormOpen,setInspectionFormOpen]=useState(false);
+  const [inspectionFormData,setInspectionFormData]=useState<IncomingInspectionFormData>(lot.inspectionFormData || {documentation:[]});
   const [nonconformanceExtraComment, setNonconformanceExtraComment] = useState("");
   const [nonconformanceDetails, setNonconformanceDetails] = useState<IncomingNonconformanceDetails>({
     category: "quality",
@@ -512,6 +517,7 @@ export default function IncomingLotDetail({ context, lot }: Props) {
         finalRejectedPieces: finalRejectedPieces.trim() === ""
           ? Number.NaN
           : Number(finalRejectedPieces),
+        ...(context.sourceType !== "proceso_proyecto" ? { inspectionFormData } : {}),
         ...(requiresNonconformance ? { nonconformanceDetails } : {}),
       });
       setFinalizeOpen(false);
@@ -524,7 +530,7 @@ export default function IncomingLotDetail({ context, lot }: Props) {
     setRejectionPdfOpen(true);
   };
   const downloadOfficialReport = async (
-    endpoint: "rejection-report" | "nonconformance-report",
+    endpoint: "rejection-report" | "nonconformance-report" | "inspection-form",
     payload: Record<string, unknown>,
     fallbackFileName: string,
   ) => {
@@ -613,6 +619,7 @@ export default function IncomingLotDetail({ context, lot }: Props) {
             >
               <FileDown size={16} /> Resumen general
             </button>
+            {context.sourceType !== "proceso_proyecto" && lot.status === "finalized" && <button type="button" onClick={()=>{setActionError("");setInspectionFormOpen(true)}} className="rounded-xl border border-emerald-400/25 px-4 py-3 text-sm text-emerald-100"><FileDown size={16} className="mr-2 inline"/>Formato de inspección de entrada</button>}
             {lot.status === "finalized" && Number(lot.finalRejectedPieces || 0) > 0 && (
               <button
                 type="button"
@@ -1107,6 +1114,7 @@ export default function IncomingLotDetail({ context, lot }: Props) {
                       )}
                     </div>
                   </div>
+                  {context.sourceType !== "proceso_proyecto" && <IncomingInspectionFormFields value={inspectionFormData} onChange={setInspectionFormData} plans={lot.methodPlans} totalQuantity={lot.totalLotQuantity} results/>}
                   {requiresNonconformance && (
                     <IncomingNonconformanceFields
                       value={nonconformanceDetails}
@@ -1152,6 +1160,7 @@ export default function IncomingLotDetail({ context, lot }: Props) {
             </div>
           </div>
         </div>, document.body)}
+      {inspectionFormOpen && typeof document !== "undefined" && createPortal(<div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 p-4"><div className="max-h-[90vh] w-full max-w-3xl overflow-y-auto rounded-2xl border border-white/15 bg-[#111916] p-5"><div className="mb-4 flex items-center justify-between"><h2 className="text-xl text-white">Formato de inspección de entrada</h2><button type="button" onClick={()=>setInspectionFormOpen(false)} className="text-white"><X/></button></div><IncomingInspectionFormFields value={inspectionFormData} onChange={setInspectionFormData} plans={lot.methodPlans} totalQuantity={lot.totalLotQuantity} results/>{actionError&&<p className="mt-3 text-red-300">{actionError}</p>}<button type="button" onClick={()=>run(async()=>{validateInspectionFormData(inspectionFormData,lot.methodPlans,true);await downloadOfficialReport("inspection-form",{inspectionFormData},`Inspeccion_entrada_${lot.lotName}.docx`);},"No fue posible generar el formato.")} className="mt-4 w-full rounded-xl bg-emerald-400/15 p-3 text-emerald-100">Descargar DOCX oficial</button></div></div>,document.body)}
       {nonconformancePdfOpen && typeof document !== "undefined" && createPortal(
         <div className="fixed inset-0 z-[120] flex items-center justify-center overflow-y-auto bg-black/80 p-4 backdrop-blur-sm">
           <div className="max-h-[calc(100dvh-2rem)] w-full max-w-2xl overflow-y-auto rounded-3xl border border-red-400/25 bg-[#0d1512] p-5 shadow-2xl sm:p-7">
