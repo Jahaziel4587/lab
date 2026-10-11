@@ -47,6 +47,7 @@ export default function MovementCart({ components, initialId = "", fixedLotId = 
       catch (err) { setError(err instanceof Error ? err.message : "No se pudo registrar."); }
       finally { setBusy(false); }
     }}>
+      {actualDestination === "ssc" && <div key={`${componentId}:${fixedLotId || lotId}`} className="grid gap-4 sm:grid-cols-2"><Field label="Condición de temperatura (°C)"><input required disabled={busy} name="temperatureCondition" maxLength={200} defaultValue={c?.lots.find(l => l.id === (fixedLotId || lotId))?.temperatureCondition || ""} className={inputClass} placeholder="Ej. 15–30, debajo de 25 o N/A" /></Field><Field label="Condición de humedad (%HR)"><input required disabled={busy} name="humidityCondition" maxLength={200} defaultValue={c?.lots.find(l => l.id === (fixedLotId || lotId))?.humidityCondition || ""} className={inputClass} placeholder="Ej. debajo de 60, 20–80 o N/A" /></Field></div>}
       <Field label="Proyecto / proceso del vale"><input disabled={busy} name="project" className={inputClass} /></Field>
       <p className="text-xs text-white/50">Solicitado por y recibido por se llenan a mano en el vale impreso.</p>
       <Field label="Comentarios del vale (opcional)"><input disabled={busy} name="notes" className={inputClass} maxLength={1000} /><span className="block text-xs text-white/40">Se imprimen en la columna Comentarios de la tabla de artículos.</span></Field>
