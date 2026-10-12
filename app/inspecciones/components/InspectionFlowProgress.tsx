@@ -5,12 +5,14 @@ import {
 } from "lucide-react";
 
 type InspectionFlowProgressProps = {
+  label?: string;
   steps: string[];
   currentStep: number;
 };
 
 export default function InspectionFlowProgress({
   steps,
+  label = "Progreso de la inspección",
   currentStep,
 }: InspectionFlowProgressProps) {
   const safeStep = Math.min(
@@ -26,7 +28,7 @@ export default function InspectionFlowProgress({
       <div className="flex items-center justify-between gap-3 sm:hidden">
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
-            Progreso de la inspección
+            {label}
           </p>
           <p className="mt-1 text-sm font-medium text-emerald-200">
             {steps[safeStep - 1]}
@@ -53,7 +55,7 @@ export default function InspectionFlowProgress({
 
       <div className="hidden sm:block">
         <p className="mb-4 text-[11px] font-semibold uppercase tracking-[0.18em] text-white/40">
-          Progreso de la inspección
+          {label}
         </p>
 
         <ol
