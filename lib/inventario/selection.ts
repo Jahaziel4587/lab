@@ -4,3 +4,5 @@ export function selectLot(lots: Lot[], origin: string, quantity: number, today: 
     .sort((a, b) => (a.expiry || "9999-12-31").localeCompare(b.expiry || "9999-12-31") || a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id))[0];
 }
 export function mexicoToday() { return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Mexico_City", year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date()); }
+
+export function lotAvailableForProject(lot: Lot, project: string) { return !lot.reservedProject || lot.reservedProject === project; }

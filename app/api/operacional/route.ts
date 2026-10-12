@@ -7,7 +7,7 @@ export async function GET(req: NextRequest) { const u = await identify(req); if 
     return NextResponse.json({ error: "Inicia sesión." }, { status: 401 }); if (!canOperate(u.email))
     return NextResponse.json({ error: "Sin acceso al apartado operacional." }, { status: 403 }); try {
     const [projects, users] = await Promise.all([projectCatalog(), adminDB.collection("users").get()]);
-    return NextResponse.json({ projects, users: users.docs.map(d => { const x = d.data(); return { id: d.id, email: x.email || x.correo || "", name: x.displayName || [x.nombre, x.apellido].filter(Boolean).join(" "), role: x.role || "user", isDesigner: !!x.isDesigner, isQualityManager: !!x.isQualityManager, processOwnerOf: x.processOwnerOf || [], pmProjects: x.pmProjects || [], version: x.opsVersion || 0 }; }) });
+    return NextResponse.json({ projects, users: users.docs.map(d => { const x = d.data(); return { id: d.id, email: x.email || x.correo || "", name: x.displayName || [x.nombre, x.apellido].filter(Boolean).join(" "), role: x.role || "user", warehouseSites: x.warehouseSites || [], isDesigner: !!x.isDesigner, isQualityManager: !!x.isQualityManager, processOwnerOf: x.processOwnerOf || [], pmProjects: x.pmProjects || [], version: x.opsVersion || 0 }; }) });
 }
 catch {
     return NextResponse.json({ error: "No se pudo cargar Operacional." }, { status: 500 });
@@ -21,10 +21,11 @@ export async function POST(req: NextRequest) { const u = await identify(req); if
     if (b.action === "user") {
         if (typeof b.id !== "string" || !b.id || b.id.includes("/") || typeof b.isDesigner !== "boolean" || typeof b.isQualityManager !== "boolean" || !Array.isArray(b.processOwnerOf) || b.processOwnerOf.some((v: unknown) => typeof v !== "string" || !PROCESSES.includes(v)))
             throw new Error("Categorías inválidas.");
+        if (!Array.isArray(b.warehouseSites) || b.warehouseSites.some((s: string) => !["B1", "B2"].includes(s))) throw new Error("Almacén inválido.");
         const ref = adminDB.collection("users").doc(b.id);
         await adminDB.runTransaction(async (t) => { const s = await t.get(ref); if (!s.exists)
             throw new Error("Usuario inexistente."); if ((s.data()?.opsVersion || 0) !== b.version)
-            throw new Error("El usuario cambió. Recarga antes de guardar."); const fields = { isDesigner: b.isDesigner, isQualityManager: b.isQualityManager, processOwnerOf: [...new Set(b.processOwnerOf)], opsVersion: b.version + 1 }; t.update(ref, fields); t.create(audit, { action: "user", target: b.id, fields, before: { isDesigner: !!s.data()?.isDesigner, isQualityManager: !!s.data()?.isQualityManager, processOwnerOf: s.data()?.processOwnerOf || [] }, actor: u.uid, at }); });
+            throw new Error("El usuario cambió. Recarga antes de guardar."); const fields = { warehouseSites: [...new Set(b.warehouseSites)], isDesigner: b.isDesigner, isQualityManager: b.isQualityManager, processOwnerOf: [...new Set(b.processOwnerOf)], opsVersion: b.version + 1 }; t.update(ref, fields); t.create(audit, { action: "user", target: b.id, fields, before: { isDesigner: !!s.data()?.isDesigner, isQualityManager: !!s.data()?.isQualityManager, processOwnerOf: s.data()?.processOwnerOf || [] }, actor: u.uid, at }); });
     }
     else if (b.action === "project") {
         const code = String(b.code || "").trim().toUpperCase(), name = String(b.name || "").trim();

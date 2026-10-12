@@ -5,6 +5,9 @@ import { inventorySite, inventoryCollections } from "@/lib/inventario/sites";
 import { requiredQuantity, type RecipeLine } from "@/lib/production/calculate";
 import type { InventoryComponent } from "@/lib/inventario/types";
 import { createHash } from "node:crypto";
+import { projectCatalog } from "@/lib/operacional/server";
+import { FieldValue } from "firebase-admin/firestore";
+import { sendPushToEmails } from "@/lib/pushNotifications";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 function text(v: unknown) { if (typeof v !== "string" || !v.trim() || v.length > 300) throw new Error("Completa la información requerida."); return v.trim(); }
@@ -29,30 +32,44 @@ export async function POST(req: NextRequest) {
     if (!project) throw new Error("Proyecto no disponible en DMR.");
     const catalog = await getProjectWorkInstructions({ projectId, type: "process" }), wi = catalog.workInstructions.find(w => w.id === wiId);
     if (!wi) throw new Error("WI no disponible en el proyecto.");
+    const bom = (await adminDB.collection("production_boms").doc(createHash("sha256").update(projectId).digest("hex")).get()).data();
+    const prefix = bom?.projectCode || wi.id.match(/WI\.(\d{3})/)?.[1] || project.title.match(/(?:^|\D)(\d{3})(?:\D|$)/)?.[1];
+    const projectName = (await projectCatalog()).find(p=>p.code===prefix)?.label || project.title;
+    const allowed = (c: InventoryComponent) => (prefix && c.code.startsWith(prefix + ".")) || bom?.items?.some((i: {code:string})=>i.code===c.code);
     const now = new Date().toISOString();
     if (b.action === "recipe") {
       if (!Array.isArray(b.lines) || !b.lines.length || b.lines.length > 50) throw new Error("Agrega de 1 a 50 materiales.");
       const lines: RecipeLine[] = b.lines.map((l: RecipeLine) => ({ componentId: text(l.componentId), perUnit: l.perUnit, extraPercent: l.extraPercent }));
       if (new Set(lines.map(l => l.componentId)).size !== lines.length) throw new Error("El material está repetido.");
       const cs = await adminDB.getAll(...lines.map(l => adminDB.collection(inventoryCollections(site).components).doc(l.componentId)));
-      lines.forEach((l, i) => { if (!cs[i].exists) throw new Error("Material inexistente."); requiredQuantity(l.perUnit, 1, l.extraPercent, cs[i].data()!.unit); });
-      await adminDB.runTransaction(async t => { const old = await t.get(ref); if ((old.data()?.version || 0) !== b.version) throw new Error("La receta cambió. Recarga antes de guardar."); t.set(ref, { site, projectId, projectName: project.title, wiId, wiTitle: wi.title, lines, version: (old.data()?.version || 0) + 1, updatedAt: now, updatedBy: user.uid }); });
+      lines.forEach((l, i) => { if (!cs[i].exists) throw new Error("Material inexistente."); if (!allowed(cs[i].data() as InventoryComponent)) throw new Error("El material no corresponde al proyecto o BOM."); requiredQuantity(l.perUnit, 1, l.extraPercent, cs[i].data()!.unit); });
+      await adminDB.runTransaction(async t => { const old = await t.get(ref); if ((old.data()?.version || 0) !== b.version) throw new Error("La receta cambió. Recarga antes de guardar."); t.set(ref, { site, projectId, projectName, wiId, wiTitle: wi.title, lines, version: (old.data()?.version || 0) + 1, updatedAt: now, updatedBy: user.uid }); });
       return NextResponse.json({ ok: true });
     }
     if (b.action !== "order") throw new Error("Acción inválida.");
     const pdo = text(b.pdo), operationId = text(b.operationId);
     if (!/^[a-zA-Z0-9-]{10,100}$/.test(operationId)) throw new Error("Operación inválida.");
     const orderRef = adminDB.collection("production_orders").doc(operationId);
+    let created = false;
     const result = await adminDB.runTransaction(async t => {
+      created = false;
       const previous = await t.get(orderRef);
       if (previous.exists) { const d = previous.data()!; if (d.recipeId !== id || d.pdo !== pdo || d.units !== b.units || d.createdBy !== user.uid) throw new Error("Operación usada con otros datos."); return { ...d, id: previous.id }; }
       const recipe = (await t.get(ref)).data(); if (!recipe) throw new Error("Guarda primero la receta.");
       const rows = recipe.lines as RecipeLine[];
       const cs = await t.getAll(...rows.map(l => adminDB.collection(inventoryCollections(site).components).doc(l.componentId)));
       const lines = rows.map((l, i) => { if (!cs[i].exists) throw new Error("Un material ya no existe."); const c = cs[i].data() as InventoryComponent; return { ...l, code: c.code, name: c.name, unit: c.unit, ...requiredQuantity(l.perUnit, b.units, l.extraPercent, c.unit) }; });
-      const order = { recipeId: id, site, projectId, projectName: project.title, wiId, wiTitle: wi.title, recipeVersion: recipe.version, pdo, units: b.units, lines, createdAt: now, createdBy: user.uid };
-      t.create(orderRef, order); return { ...order, id: operationId };
+      const order = { recipeId: id, site, projectId, projectName, wiId, wiTitle: wi.title, recipeVersion: recipe.version, pdo, units: b.units, lines, createdAt: now, createdBy: user.uid };
+      t.create(orderRef, order); created = true; return { ...order, id: operationId };
     });
+    if (created) {
+      try { const users = await adminDB.collection("users").where("warehouseSites", "array-contains", site).get();
+      const emails = [...new Set(users.docs.map(d=>String(d.data().email || d.data().correo || "").toLowerCase()).filter(Boolean))];
+      const url = `/inventario/solicitudes?site=${site}`, message = `PDO ${pdo} · ${project.title} · ${wi.title}`;
+      await Promise.all(emails.map(email => adminDB.collection("notifications").doc(createHash("sha256").update(`${operationId}:${email}`).digest("hex")).set({ userEmail: email, tipo: "production_withdrawal", mensaje: message, requestId: operationId, url, createdAt: FieldValue.serverTimestamp(), leido: false })));
+      await sendPushToEmails({ emails, title: `Solicitud de retiro · Almacén ${site}`, body: message, url: new URL(url, req.url).toString() });
+      } catch (e) { console.error("Production warehouse push", e); }
+    }
     return NextResponse.json({ order: result });
   } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : "No se pudo guardar." }, { status: 400 }); }
 }

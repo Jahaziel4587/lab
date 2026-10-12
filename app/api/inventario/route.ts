@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDB } from "@/lib/firebaseAdmin";
 import { LOCATIONS, WAREHOUSES, TYPES } from "@/lib/inventario/catalogs";
-import { mexicoToday, selectLot } from "@/lib/inventario/selection";
+import { mexicoToday, selectLot, lotAvailableForProject } from "@/lib/inventario/selection";
 import type { InventoryComponent, Lot, Voucher, VoucherLine, CartLine } from "@/lib/inventario/types";
 import { inventorySite, inventoryCollections } from "@/lib/inventario/sites";
 import { parseComponentCode } from "@/lib/operacional/catalog";
@@ -79,6 +79,13 @@ export async function POST(req: NextRequest) {
     if (!/^[a-zA-Z0-9-]{10,100}$/.test(operationId)) fail("Identificador de operación inválido.");
     const operationRef = operations.doc(operationId);
     const fingerprint = createHash("sha256").update(JSON.stringify(b)).digest("hex");
+    if (b.requestId) {
+      if (b.requestId !== operationId || b.action !== "movement" || b.kind !== "salida") fail("Solicitud inválida.");
+      const [order, profile] = await Promise.all([adminDB.collection("production_orders").doc(operationId).get(), adminDB.collection("users").doc(user.uid).get()]);
+      const o = order.data();
+      if (!o || o.site !== site || !(profile.data()?.warehouseSites || []).includes(site)) fail("Solo el almacenista asignado puede atender esta solicitud.");
+      if (b.project !== o.projectName || !Array.isArray(b.lines) || b.lines.length !== o.lines.length || new Set(b.lines.map((l: CartLine)=>l.componentId)).size !== b.lines.length || o.lines.some((l: {componentId:string;total:number})=>!b.lines.some((x:CartLine)=>x.componentId===l.componentId && x.quantity===l.total && x.destination==="externo:produccion"))) fail("El retiro no coincide con la solicitud.");
+    } else if ((await adminDB.collection("production_orders").doc(operationId).get()).exists) fail("Atiende esta solicitud desde Solicitudes de retiro.");
     const result = await adminDB.runTransaction(async t => {
       const previous = await t.get(operationRef);
       if (previous.exists) {
@@ -121,7 +128,7 @@ export async function POST(req: NextRequest) {
           let lot: Lot | undefined;
           if (b.kind === "salida") {
             if (!WAREHOUSES.find(w => w.id === origin)?.usable) fail("Este almacén no está habilitado para retiros de uso. Usa Traslado para cambiar su ubicación.");
-            lot = selectLot(c.lots, origin, q, mexicoToday(), line.lotId);
+            lot = selectLot(c.lots.filter(l => lotAvailableForProject(l, b.project)), origin, q, mexicoToday(), line.lotId);
             if (!lot) fail(`${c.code}: ningún lote vigente tiene ${q} ${c.unit} en el almacén seleccionado. No se combinaron lotes.`);
           } else {
             lot = c.lots.find(l => l.id === line.lotId); if (!lot) fail("Selecciona el lote al que pertenecen las piezas.");

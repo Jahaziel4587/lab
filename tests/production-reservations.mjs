@@ -1,0 +1,13 @@
+import ts from 'typescript';
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/inventario/selection.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS}}).outputText,{exports});
+const free={id:'free',stock:{aprobado:50},expiry:'',createdAt:'2026-01-01'};
+const reserved={...free,id:'reserved',reservedProject:'001.Ocumetics'};
+assert.equal(exports.lotAvailableForProject(reserved,'002.Labella'),false);
+assert.equal(exports.lotAvailableForProject(reserved,'001.Ocumetics'),true);
+assert.equal(exports.lotAvailableForProject(free,'002.Labella'),true);
+assert.equal(exports.selectLot([reserved,free].filter(l=>exports.lotAvailableForProject(l,'002.Labella')),'aprobado',40,'2026-10-12').id,'free');
+assert.equal(exports.selectLot([reserved].filter(l=>exports.lotAvailableForProject(l,'002.Labella')),'aprobado',40,'2026-10-12'),undefined);
+console.log('Reserved MTS lots excluded for other projects; free lots remain available.');
