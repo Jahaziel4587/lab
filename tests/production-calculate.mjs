@@ -1,0 +1,15 @@
+import ts from 'typescript';
+import fs from 'node:fs';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+const exports = {};
+vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/production/calculate.ts', 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText, { exports });
+const q = exports.requiredQuantity;
+assert.equal(q(3, 500, 0, 'pz').total, 1500);
+assert.equal(q(6, 500, 10, 'pz').total, 3300);
+assert.equal(q(8, 500, 5, 'pz').total, 4200);
+assert.equal(q(1, 3, 10, 'pz').total, 4);
+assert.equal(q(0.25, 500, 10, 'ml').total, 137.5);
+assert.equal(q(100, 1, 10, 'pz').total, 110);
+for (const args of [[1, 0, 0, 'pz'], [1, 0.5, 0, 'pz'], [1, 2, -1, 'pz'], [NaN, 1, 0, 'pz'], [1e9, 500, 0, 'pz']]) assert.throws(() => q(...args));
+console.log('Production quantity, scrap, rounding and invalid input checks passed.');
