@@ -4,6 +4,7 @@ import { identify, projectCatalog } from "@/lib/operacional/server";
 import { getDmrProjects, getMtsWorkInstructions } from "@/lib/box/boxCatalog";
 import { inventorySite, inventoryCollections } from "@/lib/inventario/sites";
 import { ensureArticle, normalizedCode } from "@/lib/production/catalog";
+import { projectCodeFromDmr, legacyBomEntries, validateBomEntries } from "@/lib/production/bom";
 import { parseComponentCode } from "@/lib/operacional/catalog";
 import { createHash } from "node:crypto";
 export const dynamic = "force-dynamic";
@@ -13,7 +14,12 @@ export async function GET(req: NextRequest) {
   if (!user) return NextResponse.json({ error: "Inicia sesión." }, { status: 401 });
   try {
     const site = inventorySite(req.nextUrl.searchParams.get("site")), projectId = req.nextUrl.searchParams.get("projectId");
-    if (projectId) { const s = await adminDB.collection("production_boms").doc(bomId(projectId)).get(); return NextResponse.json({ bom: s.data() || { items: [], version: 0 } }); }
+    if (projectId) {
+      const project = (await getDmrProjects()).find(p=>p.id===projectId);
+      if (!project) throw new Error("Proyecto DMR inválido.");
+      const s = await adminDB.collection("production_boms").doc(bomId(projectId)).get(); const bom = s.data() || {items:[],version:0};
+      return NextResponse.json({bom:{...bom,projectCode:projectCodeFromDmr(project.title) || bom.projectCode || "",entries:bom.entries || legacyBomEntries(bom.items)}});
+    }
     if (req.nextUrl.searchParams.get("scope") === "projects") return NextResponse.json({ projects: await projectCatalog() });
     const wis = await getMtsWorkInstructions();
     const catalog = wis.map(w => ({ code: w.documentCode.match(/MTS-\d+/i)?.[0]?.toUpperCase(), name: w.itemName || w.title })).filter(w => w.code);
@@ -50,20 +56,11 @@ export async function POST(req: NextRequest) {
     if (b.action !== "bom" || typeof b.projectId !== "string") throw new Error("Acción inválida.");
     const project = (await getDmrProjects()).find(p => p.id === b.projectId);
     if (!project) throw new Error("Proyecto DMR inválido.");
-    const projectCode = String(b.projectCode || "");
-    const opProject = (await projectCatalog()).find(p => p.code === projectCode);
-    if (!opProject) throw new Error("Selecciona el número de proyecto en Operacional.");
-    if (!Array.isArray(b.items) || b.items.length > 200) throw new Error("BOM inválido (máximo 200 artículos).");
-    const items = b.items.map((x: {code:string;name:string;unit:string;children:string[]}) => ({ code: normalizedCode(x.code), name: String(x.name || "").trim(), unit: String(x.unit || "").trim(), children: Array.isArray(x.children) ? [...new Set(x.children.map(normalizedCode))] : [] }));
-    if (new Set(items.map((x: {code:string}) => x.code)).size !== items.length) throw new Error("Hay códigos repetidos.");
-    for (const x of items) {
-      if (!x.name || x.name.length > 300 || !x.unit || x.unit.length > 40) throw new Error("Completa nombre y unidad en todos los artículos.");
-      if (!x.code.startsWith(projectCode + ".") && !x.code.startsWith("MTS-")) throw new Error("El artículo no corresponde al proyecto.");
-      if (x.children.some((c: string) => !items.some((i: {code:string}) => i.code === c))) throw new Error("Agrega todos los materiales del ensamble al BOM.");
-      if (x.children.length && !/\.([12])\d{2}/.test(x.code)) throw new Error("Solo ensambles y subensambles llevan materiales.");
-    }
-    function visit(code: string, path: string[]) { if (path.includes(code)) throw new Error("El BOM tiene referencias circulares."); const x = items.find((i: {code:string}) => i.code === code); x?.children.forEach((c: string) => visit(c, [...path, code])); }
-    items.forEach((x: {code:string}) => visit(x.code, []));
+    const priorBom = (await adminDB.collection("production_boms").doc(bomId(b.projectId)).get()).data();
+    const projectCode = projectCodeFromDmr(project.title) || priorBom?.projectCode || "";
+    const opProject = (await projectCatalog()).find(p=>p.code===projectCode);
+    if (!opProject) throw new Error("No se pudo identificar el número de proyecto desde el DMR.");
+    const {entries,items} = validateBomEntries(b.entries || legacyBomEntries(b.items || []),projectCode);
     const ref = adminDB.collection("production_boms").doc(bomId(b.projectId));
     await adminDB.runTransaction(async t => {
       const cols = [adminDB.collection(inventoryCollections(site).components), adminDB.collection(inventoryCollections(site === "B1" ? "B2" : "B1").components)];
@@ -82,7 +79,8 @@ export async function POST(req: NextRequest) {
         }
         return row;
       });
-      t.set(ref, {projectId:b.projectId,projectCode,items:saved,version:b.version+1,updatedBy:user.uid,updatedAt:new Date().toISOString()});
+      const savedEntries = entries.map(e=>{const i=saved.find(i=>i.code===e.code)!;return {...e,name:i.name,unit:i.unit};});
+      t.set(ref, {projectId:b.projectId,projectCode,items:saved,entries:savedEntries,version:b.version+1,updatedBy:user.uid,updatedAt:new Date().toISOString()});
     });
     return NextResponse.json({ ok: true });
   } catch(e) { return NextResponse.json({ error: e instanceof Error ? e.message : "No se pudo guardar." }, { status: 400 }); }

@@ -1,0 +1,22 @@
+import ts from 'typescript';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+function mod(path,deps={}){const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,{exports,require:k=>deps[k]});return exports;}
+const catalog=mod('lib/operacional/catalog.ts');const codes=mod('lib/production/codes.ts',{'@/lib/operacional/catalog':catalog});const bom=mod('lib/production/bom.ts',{'./codes':codes});
+assert.equal(bom.projectCodeFromDmr('DMR.001 Ocumetics'),'001');
+assert.equal(bom.projectCodeFromDmr('DMR.007 LumeNXT'),'007');
+assert.equal(bom.projectCodeFromDmr('004.Solvein'),'004');
+const row=(id,code,parentId='',level=3)=>({id,code,parentId,level,name:code,unit:'pz'});
+const entries=[row('root','007.101','',1),row('sub','007.205','root',2),row('mts-a','MTS-046','root',4),row('mts-b','MTS-046','sub',4)];
+const validated=bom.validateBomEntries(entries,'007');
+assert.equal(validated.entries.length,4);assert.equal(validated.items.length,3);
+assert.equal(validated.items.find(i=>i.code==='007.205').children[0],'MTS-046');
+assert.throws(()=>bom.validateBomEntries([row('x','002.300')],'007'));
+assert.throws(()=>bom.validateBomEntries([row('x','007.101','y',1),row('y','007.205','x',2)],'007'));
+assert.throws(()=>bom.validateBomEntries([row('x','007.301'),row('y','MTS-046','x',4)],'007'));
+assert.throws(()=>bom.validateBomEntries([row('x','MTS-046'),{...row('y','MTS-046'),unit:'ml'}],'007'));
+const legacy=bom.legacyBomEntries(validated.items);
+assert.equal(legacy.filter(i=>i.code==='MTS-046').length,2);
+assert.equal(bom.validateBomEntries(legacy,'007').items.length,3);
+console.log('DMR project detection, repeated BOM materials, legacy migration, and invalid parent/cycle checks passed.');
