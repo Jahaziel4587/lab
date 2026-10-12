@@ -36,6 +36,13 @@ export default function Home() {
           </button>
         </section>
 
+        <Link href="/production" className={`${accessClass} mt-8 sm:mt-12`}>
+          <Factory className="mb-3 text-emerald-300" size={30} />
+          <h2 className="text-xl font-semibold">Production</h2>
+          <p className="mt-3 text-sm text-white/60">Recetas por Work instruction, material para PDO y vales de retiro.</p>
+          <span className="mt-4 text-emerald-300">Abrir Production →</span>
+        </Link>
+
         <section aria-labelledby="quality-heading" className="mt-8 sm:mt-12">
           <p className="text-xs font-semibold uppercase tracking-widest text-emerald-300">Quality</p>
           <h2 id="quality-heading" className="mt-2 text-xl font-semibold sm:text-2xl">Inspecciones</h2>

@@ -288,7 +288,7 @@ export default function ClientLayout({
           <Link href="/inventario?site=B2" onClick={cerrarMenu} className={linkClass}>Inventory B2</Link>
         </NavigationGroup>
         {canOperate(user?.email) && <Link href="/operacional" onClick={cerrarMenu} className={linkClass}>Operational</Link>}
-        <span aria-disabled="true" title="Próximamente" className={comingSoonClass}>Production <span className="text-[10px]">Próximamente</span></span>
+        <Link href="/production" onClick={cerrarMenu} className={linkClass}>Production</Link>
       </>
     );
   };
