@@ -21,7 +21,7 @@ export default function LotForm({ component, onSaved }: { component: InventoryCo
     <Field label={`Cantidad (${component.unit})`}><input name="quantity" type="number" min={component.unit === "pz" ? 1 : 0.000001} step={component.unit === "pz" ? 1 : "0.000001"} required className={inputClass} /></Field>
     <Field label="Caducidad / reanálisis (vacío = No aplica)"><input name="expiry" type="date" className={inputClass} /></Field>
     <Field label="Almacén de ingreso"><select name="destination" value={destination} onChange={e => setDestination(e.target.value)} className={inputClass}>{WAREHOUSES.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
-    <StorageFields component={component} />
+    <StorageFields key={destination === "rechazado" ? "rejected" : "standard"} optional component={destination === "rechazado" ? {...component,temperatureCondition:"",humidityCondition:""} : component} />
     <VoucherProject disabled={busy} />
     <Field label="Origen"><select name="origin" className={inputClass}>{EXTERNAL_LOCATIONS.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
     <Field label="Proveedor"><input name="supplier" className={inputClass} /></Field>
