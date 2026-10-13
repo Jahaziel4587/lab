@@ -1,0 +1,36 @@
+"use client";
+import {useRef,useState} from "react";
+import {useRouter} from "next/navigation";
+import {WAREHOUSES,LEGACY_LOCATIONS,EXTERNAL_LOCATIONS,locationName} from "@/lib/inventario/catalogs";
+import {validateCart} from "@/lib/inventario/cart";
+import {mexicoToday} from "@/lib/inventario/selection";
+import {inventoryRequest} from "@/lib/inventario/service";
+import {voucherDestination} from "@/lib/inventario/sites";
+import type {CartLine,InventoryComponent,MovementKind} from "@/lib/inventario/types";
+import {useInventorySite} from "./InventoryProvider";
+import {panelClass,inputClass,buttonClass,secondaryButtonClass,Field} from "./InventoryShell";
+import QrScanner from "./QrScanner";
+import RecipeMaterialPicker from "./RecipeMaterialPicker";
+import VoucherProject from "./VoucherProject";
+export default function BatchMovementCart({components,onSaved}:{components:InventoryComponent[];onSaved:()=>void}){
+ const {site}=useInventorySite(),router=useRouter();
+ const [kind,setKind]=useState<MovementKind>("salida"),[origin,setOrigin]=useState("aprobado"),[destination,setDestination]=useState("externo:produccion"),[componentId,setComponentId]=useState(""),[lotId,setLotId]=useState(""),[quantity,setQuantity]=useState("");
+ const [lines,setLines]=useState<CartLine[]>([]),[busy,setBusy]=useState(false),[error,setError]=useState("");const pending=useRef<{id:string;signature:string}|null>(null);
+ const c=components.find(c=>c.id===componentId),lots=c?.lots||[],origins=kind==="entrada"?EXTERNAL_LOCATIONS:[...WAREHOUSES,...LEGACY_LOCATIONS].filter(w=>kind!=="salida"||w.usable),destinations=kind==="salida"?EXTERNAL_LOCATIONS:WAREHOUSES;
+ function select(id:string){setComponentId(id);setLotId("");setQuantity("");setError("");}
+ return <section className={`${panelClass} space-y-5`}><div><h2 className="text-xl font-semibold">Crear carrito</h2><p className="mt-2 text-sm text-white/50">Escanea o busca materiales, selecciona sus lotes y cantidades. Todo el carrito se registra en un movimiento y un vale.</p></div>
+ <div className="grid gap-4 sm:grid-cols-3"><Field label="Movimiento"><select className={inputClass} disabled={busy||!!lines.length} value={kind} onChange={e=>{const next=e.target.value as MovementKind;setKind(next);setOrigin(next==="entrada"?"externo:recepcion":"aprobado");setDestination(next==="salida"?"externo:produccion":"pendiente");setLotId("");}}><option value="salida">Retiro / salida</option><option value="entrada">Entrada / devolución</option><option value="traslado">Traslado entre almacenes</option></select></Field><Field label="Origen común"><select disabled={busy||!!lines.length} className={inputClass} value={origin} onChange={e=>{setOrigin(e.target.value);setLotId("");}}>{origins.map(w=><option key={w.id} value={w.id}>{w.name}</option>)}</select></Field><Field label="Destino común"><select disabled={busy||!!lines.length} className={inputClass} value={destination} onChange={e=>setDestination(e.target.value)}>{destinations.map(w=><option key={w.id} value={w.id}>{w.name}</option>)}</select></Field></div>
+ {!!lines.length&&<p className="text-xs text-white/45">Para cambiar origen, destino o tipo, vacía el carrito.</p>}
+ {!busy&&<QrScanner onScan={(id,scannedSite)=>{if((scannedSite||"B1")!==site){setError("El QR pertenece a otro almacén B1/B2.");return;}if(!components.some(c=>c.id===id)){setError("El componente no existe en este almacén.");return;}select(id);}}/>}
+ <div className="grid gap-4 sm:grid-cols-2"><div><p className="mb-2 text-xs text-white/55">Componente o MTS</p><RecipeMaterialPicker components={components} value={componentId} onChange={select} disabled={busy}/></div><Field label={`Cantidad ${c?`(${c.unit})`:""}`}><input disabled={busy} type="number" min="0.000001" step={c?.unit==="pz"?1:"0.000001"} className={inputClass} value={quantity} onChange={e=>setQuantity(e.target.value)}/></Field><Field label="Lote"><select className={inputClass} disabled={busy||!c} value={lotId} onChange={e=>setLotId(e.target.value)}><option value="">Seleccionar lote</option>{lots.map(l=><option key={l.id} value={l.id}>{l.name} · {l.stock[origin]||0} {c?.unit} en origen · {l.expiry||"Sin caducidad"}</option>)}</select></Field></div>
+ {c&&!lots.length&&<p className="text-sm text-amber-200">Este componente no tiene lotes. Registra el lote antes de moverlo.</p>}
+ <button type="button" className={secondaryButtonClass} disabled={busy||!lotId} onClick={()=>{try{const line={componentId,lotId,quantity:Number(quantity),origin,destination};if(origin===destination)throw new Error("Origen y destino deben ser diferentes.");validateCart([...lines,line],components,kind,mexicoToday());const found=lines.findIndex(l=>l.componentId===componentId&&l.lotId===lotId);setLines(found<0?[...lines,line]:lines.map((l,i)=>i===found?{...l,quantity:Math.round((l.quantity+line.quantity)*1e6)/1e6}:l));select("");}catch(e){setError((e as Error).message);}}}>Agregar al carrito</button>
+ <div className="space-y-2">{lines.map((l,i)=>{const article=components.find(c=>c.id===l.componentId),lot=article?.lots.find(x=>x.id===l.lotId);return <div key={`${l.componentId}:${l.lotId}`} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-white/10 p-4"><div><p>{article?.code} · {article?.name}</p><p className="text-sm text-white/55">Lote {lot?.name} · {l.quantity} {article?.unit}</p></div><button type="button" disabled={busy} className="text-sm text-red-300" onClick={()=>setLines(lines.filter((_,j)=>j!==i))}>Quitar</button></div>;})}</div>
+ {!!lines.length&&<button type="button" disabled={busy} className="text-sm text-white/50 underline" onClick={()=>setLines([])}>Vaciar carrito</button>}
+ <form className="space-y-4" onSubmit={async e=>{e.preventDefault();setError("");try{validateCart(lines,components,kind,mexicoToday());const body={action:"movement",cart:true,kind,lines,...Object.fromEntries(new FormData(e.currentTarget)),site};const signature=JSON.stringify(body);if(!pending.current||pending.current.signature!==signature)pending.current={id:crypto.randomUUID(),signature};setBusy(true);const result=await inventoryRequest<{voucherIds:string[]}>({...body,operationId:pending.current.id});pending.current=null;setLines([]);onSaved();router.push(voucherDestination(result.voucherIds,site));}catch(e){setError((e as Error).message);}finally{setBusy(false);}}}>
+ <VoucherProject disabled={busy}/><Field label="Comentarios del vale"><input disabled={busy} name="notes" maxLength={1000} className={inputClass}/></Field>
+ {origin==="externo:otro"&&<Field label="Especificar origen Otro"><input required disabled={busy} name="originOther" maxLength={200} className={inputClass}/></Field>}{destination==="externo:otro"&&<Field label="Especificar destino Otro"><input required disabled={busy} name="destinationOther" maxLength={200} className={inputClass}/></Field>}
+ <p className="text-xs text-white/50">{lines.length} partidas · {locationName(origin)} → {locationName(destination)}. Solicitante y receptor se llenan a mano. Si una partida no está disponible, no se registra ninguna.</p>
+ {error&&<p role="alert" className="text-red-300">{error}</p>}<button disabled={busy||!lines.length} className={buttonClass}>{busy?"Registrando…":"Confirmar carrito y generar vale"}</button></form>
+ </section>;
+}
