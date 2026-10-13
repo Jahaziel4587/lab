@@ -26,7 +26,7 @@ export default function InventoryPage() {
     <section className="space-y-3"><div className="flex items-center justify-between"><h2 className="text-sm font-semibold text-white/80">Almacenes</h2>{warehouse && <button className="text-xs text-emerald-300 hover:text-emerald-100" onClick={() => setWarehouse("")}>Ver todos</button>}</div>
       <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">{WAREHOUSES.map(w => {
         const active = warehouse === w.id;
-        return <button key={w.id} aria-pressed={active} onClick={() => setWarehouse(active ? "" : w.id)} className={`min-h-28 rounded-2xl border p-4 text-left backdrop-blur-xl transition sm:rounded-3xl ${active ? "border-emerald-400/35 bg-emerald-500/10" : "border-white/10 bg-white/[0.035] hover:border-white/20 hover:bg-white/[0.06]"}`}>
+        return <button key={w.id} aria-pressed={active} onClick={() => setWarehouse(active ? "" : w.id)} className={`min-h-24 rounded-2xl border p-3 sm:min-h-28 sm:p-4 text-left backdrop-blur-xl transition sm:rounded-3xl ${active ? "border-emerald-400/35 bg-emerald-500/10" : "border-white/10 bg-white/[0.035] hover:border-white/20 hover:bg-white/[0.06]"}`}>
           <Warehouse size={16} className={active ? "mb-3 text-emerald-300" : "mb-3 text-white/35"} /><span className={`block text-xs font-semibold leading-snug sm:text-sm ${active ? "text-emerald-100" : "text-white/80"}`}>{w.name}</span><span className="mt-2 block text-[11px] text-white/40">{components.filter(c => c.lots.some(l => (l.stock[w.id] || 0) > 0)).length} artículos</span>
         </button>;
       })}</div>

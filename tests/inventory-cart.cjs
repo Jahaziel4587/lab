@@ -13,3 +13,11 @@ assert.throws(()=>validateCart([], [c]),/Agrega/);
 console.log('Common origin/destination, explicit lots, cumulative quantities, expiry and return cart validation passed.');
 
 assert.doesNotThrow(()=>validateCart([{...line,quantity:0.1},{...line,quantity:0.2}],[{...c,unit:"L",lots:[{...c.lots[0],stock:{aprobado:0.3}}]}],"salida","2026-10-13"));
+
+const {cartLotAvailability}=m.exports;
+assert.equal(cartLotAvailability(c,'a',[line],'aprobado','salida','2026-10-13').available,70);
+assert.equal(cartLotAvailability(c,'b',[],'aprobado','salida','2026-10-13').selectable,false);
+assert.equal(cartLotAvailability(c,'a',[],'pendiente','salida','2026-10-13').selectable,false);
+assert.equal(cartLotAvailability(c,'b',[],'externo:recepcion','entrada','2026-10-13').selectable,true);
+assert.equal(cartLotAvailability(c,'a',[{...line,quantity:100}],'aprobado','salida','2026-10-13').selectable,false);
+console.log('Lot picker availability accounts for the cart, origin, expiry and return movements.');

@@ -1,19 +1,12 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { ClipboardCheck, Factory, PackagePlus, ScanLine, ArrowRight } from "lucide-react";
-import InventoryDialog from "@/app/components/inventario/InventoryDialog";
-import QrScanner from "@/app/components/inventario/QrScanner";
-import { inventoryHref } from "@/lib/inventario/sites";
 
 const cardClass = "rounded-2xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl sm:rounded-3xl sm:p-7";
 const accessClass = `${cardClass} group flex h-full w-full flex-col text-left transition hover:border-emerald-300/30 hover:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400`;
 
 export default function Home() {
-  const router = useRouter();
-  const [scannerOpen, setScannerOpen] = useState(false);
 
   return (
     <div className="min-h-[calc(100vh-140px)]">
@@ -27,13 +20,13 @@ export default function Home() {
             <span className="mt-auto pt-6 flex items-center gap-2 text-sm font-medium text-emerald-300">Realizar pedido <ArrowRight size={16} aria-hidden="true" /></span>
           </Link>
 
-          <button type="button" onClick={() => setScannerOpen(true)} aria-haspopup="dialog" className={accessClass}>
+          <Link href="/inventario/movimientos?site=B1&tab=cart" className={accessClass}>
             <ScanLine className="mb-5 text-emerald-300" size={30} aria-hidden="true" />
             <span className="text-xs font-semibold uppercase tracking-widest text-emerald-300">Inventory</span>
-            <span className="mt-2 text-xl font-semibold">Escanear QR de inventario</span>
-            <span className="mt-3 text-sm leading-relaxed text-white/60">Escanea la etiqueta de un componente para abrir su información en Inventory B1 o B2.</span>
-            <span className="mt-auto flex items-center gap-2 pt-6 text-sm font-medium text-emerald-300">Abrir escáner <ArrowRight size={16} aria-hidden="true" /></span>
-          </button>
+            <span className="mt-2 text-xl font-semibold">Crear carrito de inventario</span>
+            <span className="mt-3 text-sm leading-relaxed text-white/60">Escanea varios materiales, elige sus lotes y cantidades y genera un vale de material.</span>
+            <span className="mt-auto flex items-center gap-2 pt-6 text-sm font-medium text-emerald-300">Crear carrito <ArrowRight size={16} aria-hidden="true" /></span>
+          </Link>
         </section>
 
         <Link href="/production" className={`${accessClass} mt-8 sm:mt-12`}>
@@ -65,16 +58,7 @@ export default function Home() {
           </div>
         </section>
       </main>
-      {scannerOpen && (
-        <InventoryDialog title="Escanear QR de inventario" onClose={() => setScannerOpen(false)}>
-          <h2 className="mb-2 text-xl font-semibold">Escanear QR de inventario</h2>
-          <p className="mb-5 text-sm text-white/60">Permite el acceso a la cámara y apunta a la etiqueta del componente.</p>
-          <QrScanner autoStart onScan={(id, site) => {
-            setScannerOpen(false);
-            router.push(inventoryHref(`/inventario/components/${id}`, site || "B1"));
-          }} />
-        </InventoryDialog>
-      )}
+
     </div>
   );
 }
