@@ -1,10 +1,11 @@
 "use client";
-import {useId,useState} from "react";
+import {useEffect,useId,useState} from "react";
 import type {InventoryComponent} from "@/lib/inventario/types";
 import {availableRecipeQuantity,filterRecipeMaterials} from "@/lib/inventario/recipe-materials";
 import {inputClass} from "./InventoryShell";
 export default function RecipeMaterialPicker({components,value,onChange,disabled}:{components:InventoryComponent[];value:string;onChange:(id:string)=>void;disabled:boolean}) {
   const [query,setQuery]=useState(""),[editing,setEditing]=useState(false),[open,setOpen]=useState(false),[highlight,setHighlight]=useState(-1);
+  useEffect(()=>{if(value){setEditing(false);setQuery("");setOpen(false);setHighlight(-1);}},[value]);
   const listId=useId(),selected=components.find(c=>c.id===value),filtered=filterRecipeMaterials(components,query);
   const show=open&&editing&&!!query.trim()&&!disabled;
   function choose(component:InventoryComponent){onChange(component.id);setEditing(false);setQuery("");setOpen(false);setHighlight(-1);}

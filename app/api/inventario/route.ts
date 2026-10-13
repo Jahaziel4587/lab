@@ -1,3 +1,4 @@
+import { validateCart } from "@/lib/inventario/cart";
 import { recipePeriod, type FixedRecipe } from "@/lib/inventario/fixed-recipes";
 import { storageConditions } from "@/lib/inventario/storage";
 import { applyStorage, warehouseRecipients, pushStorageAlerts } from "@/lib/inventario/storage-server";
@@ -155,6 +156,7 @@ export async function POST(req: NextRequest) {
         if (!["salida", "entrada", "traslado"].includes(b.kind)) fail("Movimiento inválido.");
         if (!Array.isArray(b.lines) || !b.lines.length || b.lines.length > 50) fail("Agrega entre 1 y 50 artículos.");
         const lines = b.lines as CartLine[];
+        if (b.cart === true) validateCart(lines);
         const ids = [...new Set(lines.map(l => str(l.componentId)))];
         const snaps = await t.getAll(...ids.map(id => components.doc(id)));
         snaps.forEach(s => { if (!s.exists) fail("Artículo inexistente."); changed.set(s.id, { ...s.data(), id: s.id } as InventoryComponent); });
