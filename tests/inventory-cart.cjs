@@ -11,3 +11,5 @@ assert.throws(()=>validateCart([{...line,quantity:0.5}],[c],'salida','2026-10-13
 assert.doesNotThrow(()=>validateCart([{...line,quantity:200,origin:'externo:recepcion',destination:'aprobado'}],[c],'entrada','2026-10-13'));
 assert.throws(()=>validateCart([], [c]),/Agrega/);
 console.log('Common origin/destination, explicit lots, cumulative quantities, expiry and return cart validation passed.');
+
+assert.doesNotThrow(()=>validateCart([{...line,quantity:0.1},{...line,quantity:0.2}],[{...c,unit:"L",lots:[{...c.lots[0],stock:{aprobado:0.3}}]}],"salida","2026-10-13"));
