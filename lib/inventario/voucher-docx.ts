@@ -1,3 +1,4 @@
+import { bioanaDate } from "./storage";
 import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import type { Voucher } from "./types";
@@ -32,6 +33,6 @@ export function renderVoucher(template:Buffer,v:Voucher){
  zip.file("word/document.xml",xml);
  const other=(location:string, detail?:string)=>labels[location]?"":detail ||[locationName(location),detail === undefined ? v.notes : ""].filter(Boolean).join(" · ");
  const doc=new Docxtemplater(zip,{paragraphLoop:true,linebreaks:true,nullGetter:()=>"",});
- doc.render({fecha:new Date(v.createdAt).toLocaleDateString("es-MX",{timeZone:"America/Mexico_City"}),proyecto:v.project||[...new Set(v.lines.map(l=>l.project).filter(Boolean))].join(", ")||"N/A",almacen:v.site||"B1",folio:v.id,solicitante:v.requestedBy,recibe:v.receivedBy,surte:v.actor,or_otro_texto:other(v.origin,v.originOther),de_otro_texto:other(v.destination,v.destinationOther),articulos:v.lines.map(l=>({articulo:`${l.code}\n${l.name}`,unidad:l.unit,cantidad:l.quantity,lote:l.lot,caducidad:l.expiry||"N/A",comentarios:[l.comments,v.notes].filter(Boolean).join("\n")||"N/A"}))});
+ doc.render({fecha:bioanaDate(v.createdAt),proyecto:v.project||[...new Set(v.lines.map(l=>l.project).filter(Boolean))].join(", ")||"N/A",almacen:v.site||"B1",folio:v.id,solicitante:v.requestedBy,recibe:v.receivedBy,surte:v.actor,or_otro_texto:other(v.origin,v.originOther),de_otro_texto:other(v.destination,v.destinationOther),articulos:v.lines.map(l=>({articulo:`${l.code}\n${l.name}`,unidad:l.unit,cantidad:l.quantity,lote:l.lot,caducidad:l.expiry||"N/A",comentarios:[l.comments,v.notes].filter(Boolean).join("\n")||"N/A"}))});
  return doc.getZip().generate({type:"nodebuffer",compression:"DEFLATE"});
 }

@@ -1,6 +1,9 @@
-import { NextRequest, NextResponse } from "next/server";
+import { recipePeriod, type FixedRecipe } from "@/lib/inventario/fixed-recipes";
+import { storageConditions } from "@/lib/inventario/storage";
+import { applyStorage, warehouseRecipients, pushStorageAlerts } from "@/lib/inventario/storage-server";
+import { after, NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDB } from "@/lib/firebaseAdmin";
-import { LOCATIONS, WAREHOUSES, TYPES } from "@/lib/inventario/catalogs";
+import { LOCATIONS, LEGACY_LOCATIONS, WAREHOUSES, TYPES } from "@/lib/inventario/catalogs";
 import { mexicoToday, selectLot, lotAvailableForProject } from "@/lib/inventario/selection";
 import type { InventoryComponent, Lot, Voucher, VoucherLine, CartLine } from "@/lib/inventario/types";
 import { inventorySite, inventoryCollections } from "@/lib/inventario/sites";
@@ -16,8 +19,8 @@ function str(value: unknown, required = true): string {
 }
 function quantity(value: unknown): number { if (typeof value !== "number" || !Number.isFinite(value) || value <= 0 || value > 1e9) fail("La cantidad debe ser mayor que cero."); return value; }
 function date(value: unknown): string { const v = str(value, false); if (v && (!/^\d{4}-\d{2}-\d{2}$/.test(v) || new Date(v).toISOString().slice(0, 10) !== v)) fail("Fecha inválida."); return v; }
-function location(value: unknown) { const id = str(value); if (!LOCATIONS.some(l => l.id === id)) fail("Ubicación inválida."); return id; }
-function isWarehouse(id: string) { return WAREHOUSES.some(w => w.id === id); }
+function location(value: unknown, allowLegacy = false) { const id = str(value); if (![...LOCATIONS, ...(allowLegacy ? LEGACY_LOCATIONS : [])].some(l => l.id === id)) fail("Ubicación inválida."); return id; }
+function isWarehouse(id: string) { return [...WAREHOUSES, ...LEGACY_LOCATIONS].some(w => w.id === id); }
 async function identity(req: NextRequest) {
   const header = req.headers.get("authorization") || "";
   if (!header.startsWith("Bearer ")) return null;
@@ -75,6 +78,38 @@ export async function POST(req: NextRequest) {
       });
       return NextResponse.json({ id });
     }
+    if (["storage", "lot-storage"].includes(b.action)) {
+      const componentId = str(b.componentId), next = storageConditions(b.temperatureCondition, b.humidityCondition);
+      const emails = await warehouseRecipients(site), alerts: Array<{id:string;message:string;url:string}> = [];
+      await adminDB.runTransaction(async t => {
+        alerts.length = 0;
+        const snap = await t.get(components.doc(componentId)); if (!snap.exists) fail("Artículo inexistente.");
+        const c = { ...snap.data(), id: snap.id } as InventoryComponent;
+        if (b.action === "lot-storage") {
+          const lot = c.lots.find(l => l.id === b.lotId); if (!lot) fail("Lote inexistente.");
+          Object.assign(lot, next);
+        }
+        applyStorage(t, c, next, site, actor, emails, alerts); t.set(snap.ref, c);
+      });
+      after(() => pushStorageAlerts(alerts, emails, req.url));
+      return NextResponse.json({ saved: true });
+    }
+    if (!b.requestId && ["lot", "movement"].includes(b.action)) {
+      const selected = str(b.project || "000.General");
+      if (selected !== "000.General" && !(await projectCatalog()).some(p => p.label === selected)) fail("Selecciona un proyecto del catálogo.");
+      b.project = selected;
+    }
+    const emails = b.action === "lot" ? await warehouseRecipients(site) : [];
+    const storageAlerts: Array<{id:string;message:string;url:string}> = [];
+    let recipeVersion = 0;
+    if (b.recipeId) {
+      const snap = await adminDB.collection(`${names.components}_fixed_recipes`).doc(str(b.recipeId)).get();
+      const recipe = snap.data() as FixedRecipe | undefined;
+      if (!recipe?.active || b.action !== "movement" || b.kind !== "salida") fail("Receta inactiva o movimiento inválido.");
+      recipeVersion = recipe.version;
+      const period = recipePeriod(recipe, mexicoToday());
+      if (b.operationId !== `recipe-${snap.id}-${period}` || !Array.isArray(b.lines) || b.lines.length !== recipe.lines.length || recipe.lines.some(l => !b.lines.some((line: CartLine) => line.componentId === l.componentId && line.quantity === l.quantity && line.destination === "externo:produccion")) || new Set(b.lines.map((l:CartLine)=>l.componentId)).size !== b.lines.length) fail("El retiro no coincide con la receta.");
+    }
     const operationId = str(b.operationId);
     if (!/^[a-zA-Z0-9-]{10,100}$/.test(operationId)) fail("Identificador de operación inválido.");
     const operationRef = operations.doc(operationId);
@@ -87,10 +122,15 @@ export async function POST(req: NextRequest) {
       if (b.project !== o.projectName || !Array.isArray(b.lines) || b.lines.length !== o.lines.length || new Set(b.lines.map((l: CartLine)=>l.componentId)).size !== b.lines.length || o.lines.some((l: {componentId:string;total:number})=>!b.lines.some((x:CartLine)=>x.componentId===l.componentId && x.quantity===l.total && x.destination==="externo:produccion"))) fail("El retiro no coincide con la solicitud.");
     } else if ((await adminDB.collection("production_orders").doc(operationId).get()).exists) fail("Atiende esta solicitud desde Solicitudes de retiro.");
     const result = await adminDB.runTransaction(async t => {
+      storageAlerts.length = 0;
       const previous = await t.get(operationRef);
       if (previous.exists) {
         if (previous.data()?.uid !== user.uid || previous.data()?.fingerprint !== fingerprint) fail("La operación ya se usó con otros datos.");
         return previous.data()?.voucherIds as string[];
+      }
+      if (b.recipeId) {
+        const current = await t.get(adminDB.collection(`${names.components}_fixed_recipes`).doc(b.recipeId));
+        if (!current.data()?.active || current.data()?.version !== recipeVersion) fail("La receta cambió. Recarga antes de confirmar.");
       }
       const groups = new Map<string, { origin: string; destination: string; lines: VoucherLine[] }>();
       const changed = new Map<string, InventoryComponent>();
@@ -108,7 +148,8 @@ export async function POST(req: NextRequest) {
         if (c.unit === "pz" && !Number.isInteger(q)) fail("Las piezas deben ser cantidades enteras.");
         if (c.lots.some(l => l.name.toUpperCase() === name.toUpperCase())) fail("El lote ya existe. Usa Registrar entrada para agregar existencias.");
         const l: Lot = { id: randomUUID(), name, expiry, supplier: str(b.supplier || "", false), notes: str(b.notes || "", false), createdAt: now, stock: { [destination]: q } };
-        if (destination === "ssc") { l.temperatureCondition = str(b.temperatureCondition); l.humidityCondition = str(b.humidityCondition); }
+        const conditions = storageConditions(b.temperatureCondition ?? c.temperatureCondition, b.humidityCondition ?? c.humidityCondition);
+        applyStorage(t, c, conditions, site, actor, emails, storageAlerts); Object.assign(l, conditions);
         c.lots.push(l); changed.set(id, c); addLine(origin, destination, c, l, q);
       } else if (b.action === "movement") {
         if (!["salida", "entrada", "traslado"].includes(b.kind)) fail("Movimiento inválido.");
@@ -119,7 +160,7 @@ export async function POST(req: NextRequest) {
         snaps.forEach(s => { if (!s.exists) fail("Artículo inexistente."); changed.set(s.id, { ...s.data(), id: s.id } as InventoryComponent); });
         for (const line of lines) {
           const c = changed.get(line.componentId)!;
-          const q = quantity(line.quantity), origin = location(line.origin), destination = location(line.destination);
+          const q = quantity(line.quantity), origin = location(line.origin, true), destination = location(line.destination);
           if (c.unit === "pz" && !Number.isInteger(q)) fail("Las piezas deben ser cantidades enteras.");
           if (origin === destination) fail("El origen y destino deben ser diferentes.");
           if (b.kind === "salida" && (!isWarehouse(origin) || isWarehouse(destination))) fail("La salida debe ir desde un almacén a un destino externo.");
@@ -133,7 +174,6 @@ export async function POST(req: NextRequest) {
           } else {
             lot = c.lots.find(l => l.id === line.lotId); if (!lot) fail("Selecciona el lote al que pertenecen las piezas.");
           }
-          if (destination === "ssc") { lot.temperatureCondition = str(b.temperatureCondition); lot.humidityCondition = str(b.humidityCondition); }
           if (isWarehouse(origin)) {
             if ((lot.stock[origin] || 0) < q) fail(`${c.code}: existencias insuficientes.`);
             lot.stock[origin] = Math.round(((lot.stock[origin] || 0) - q) * 1e6) / 1e6;
@@ -159,6 +199,7 @@ export async function POST(req: NextRequest) {
       t.create(operationRef, { uid: user.uid, fingerprint, site, voucherIds, createdAt: now });
       return voucherIds;
     });
+    after(() => pushStorageAlerts(storageAlerts, emails, req.url));
     return NextResponse.json({ voucherIds: result });
   } catch (e) {
     const message = e instanceof Error ? e.message : "No se pudo registrar el movimiento.";
