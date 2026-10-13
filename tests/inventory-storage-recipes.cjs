@@ -26,3 +26,10 @@ assert.deepEqual(filterRecipeMaterials([component,empty,expired],'acido').map(c=
 assert.deepEqual(filterRecipeMaterials([component,empty,expired],'mts-099').map(c=>c.id),[empty.id]);
 assert.equal(availableRecipeQuantity(empty,'2026-10-13'),0);assert.equal(availableRecipeQuantity(expired,'2026-10-13'),0);assert.equal(availableRecipeQuantity(component,'2026-10-13'),7);
 console.log('Material search includes zero-stock/expired materials and supports codes, names and accents.');
+
+assert.deepEqual(storage.storageConditions(undefined,'',true),{temperatureCondition:'',humidityCondition:''});
+assert.deepEqual(storage.componentConditionsFromLot(before,{temperatureCondition:'',humidityCondition:'N/A'}),before);
+assert.deepEqual(storage.componentConditionsFromLot(before,{temperatureCondition:'2–8',humidityCondition:''}),{temperatureCondition:'2–8',humidityCondition:before.humidityCondition});
+assert.deepEqual(storage.componentConditionsFromLot(before,{temperatureCondition:'2–8',humidityCondition:'20–80'},'rechazado'),before);
+assert.deepEqual(storage.componentConditionsFromLot({},storage.storageConditions('','',true)),{temperatureCondition:'',humidityCondition:''});
+console.log('Blank/non-applicable and rejected-lot conditions preserve component defaults; partial meaningful edits preserve the other field.');

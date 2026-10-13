@@ -1,6 +1,6 @@
 import { validateCart } from "@/lib/inventario/cart";
 import { recipePeriod, type FixedRecipe } from "@/lib/inventario/fixed-recipes";
-import { storageConditions } from "@/lib/inventario/storage";
+import { storageConditions, componentConditionsFromLot } from "@/lib/inventario/storage";
 import { applyStorage, warehouseRecipients, pushStorageAlerts } from "@/lib/inventario/storage-server";
 import { after, NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDB } from "@/lib/firebaseAdmin";
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ id });
     }
     if (["storage", "lot-storage"].includes(b.action)) {
-      const componentId = str(b.componentId), next = storageConditions(b.temperatureCondition, b.humidityCondition);
+      const componentId = str(b.componentId), next = storageConditions(b.temperatureCondition, b.humidityCondition, b.action === "lot-storage");
       const emails = await warehouseRecipients(site), alerts: Array<{id:string;message:string;url:string}> = [];
       await adminDB.runTransaction(async t => {
         alerts.length = 0;
@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
           const lot = c.lots.find(l => l.id === b.lotId); if (!lot) fail("Lote inexistente.");
           Object.assign(lot, next);
         }
-        applyStorage(t, c, next, site, actor, emails, alerts); t.set(snap.ref, c);
+        applyStorage(t, c, b.action === "lot-storage" ? componentConditionsFromLot(c, next, (c.lots.find(l=>l.id===b.lotId)?.stock.rechazado || 0) > 0 ? "rechazado" : undefined) : next, site, actor, emails, alerts); t.set(snap.ref, c);
       });
       after(() => pushStorageAlerts(alerts, emails, req.url));
       return NextResponse.json({ saved: true });
@@ -149,8 +149,8 @@ export async function POST(req: NextRequest) {
         if (c.unit === "pz" && !Number.isInteger(q)) fail("Las piezas deben ser cantidades enteras.");
         if (c.lots.some(l => l.name.toUpperCase() === name.toUpperCase())) fail("El lote ya existe. Usa Registrar entrada para agregar existencias.");
         const l: Lot = { id: randomUUID(), name, expiry, supplier: str(b.supplier || "", false), notes: str(b.notes || "", false), createdAt: now, stock: { [destination]: q } };
-        const conditions = storageConditions(b.temperatureCondition ?? c.temperatureCondition, b.humidityCondition ?? c.humidityCondition);
-        applyStorage(t, c, conditions, site, actor, emails, storageAlerts); Object.assign(l, conditions);
+        const conditions = storageConditions(b.temperatureCondition ?? c.temperatureCondition, b.humidityCondition ?? c.humidityCondition, true);
+        applyStorage(t, c, componentConditionsFromLot(c, conditions, destination), site, actor, emails, storageAlerts); Object.assign(l, conditions);
         c.lots.push(l); changed.set(id, c); addLine(origin, destination, c, l, q);
       } else if (b.action === "movement") {
         if (!["salida", "entrada", "traslado"].includes(b.kind)) fail("Movimiento inválido.");
