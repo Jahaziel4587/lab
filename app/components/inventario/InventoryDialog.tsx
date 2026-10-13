@@ -19,11 +19,11 @@ export default function InventoryDialog({ title, onClose, children, wide = false
   }, []);
   return createPortal(<dialog ref={dialog} aria-label={title}
     onCancel={event => { event.preventDefault(); onClose(); }}
-    className={`fixed inset-0 m-auto max-h-[calc(100dvh-2rem)] w-[calc(100%-2rem)] ${wide ? "max-w-7xl" : "max-w-2xl"} overflow-y-auto rounded-3xl border border-white/10 bg-[#0d1512] p-5 text-white shadow-2xl backdrop:bg-black/75 backdrop:backdrop-blur-sm sm:p-7`}>
+    className={`fixed inset-0 m-auto max-h-[calc(100dvh-1rem)] w-[calc(100%_-_1rem)] sm:max-h-[calc(100dvh-2rem)] sm:w-[calc(100%_-_2rem)] ${wide ? "max-w-7xl" : "max-w-2xl"} overflow-y-auto rounded-3xl border border-white/10 bg-[#0d1512] p-4 sm:p-5 text-white shadow-2xl backdrop:bg-black/75 backdrop:backdrop-blur-sm sm:p-7`}>
     <div className="mb-4 flex items-center justify-between gap-4">
       <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300">{label}</p>
       <button type="button" onClick={onClose} aria-label="Cerrar ventana"
-        className="rounded-xl border border-white/10 p-2 text-white/60 hover:bg-white/5 focus-visible:outline-emerald-300"><X size={18} /></button>
+        className="rounded-xl border border-white/10 p-3 text-white/60 hover:bg-white/5 focus-visible:outline-emerald-300"><X size={18} /></button>
     </div>
     <div className="[&>:is(form,section)]:rounded-none [&>:is(form,section)]:border-0 [&>:is(form,section)]:bg-transparent [&>:is(form,section)]:p-0 [&>:is(form,section)]:backdrop-blur-none">{children}</div>
   </dialog>, document.body);
