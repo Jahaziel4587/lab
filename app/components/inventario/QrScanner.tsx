@@ -2,9 +2,9 @@
 import { inventorySite, type InventorySite } from "@/lib/inventario/sites";
 import { useEffect, useRef, useState } from "react";
 import { BrowserQRCodeReader, type IScannerControls } from "@zxing/browser";
-import { secondaryButtonClass } from "./InventoryShell";
+import { buttonClass, secondaryButtonClass } from "./InventoryShell";
 import { ScanLine, X } from "lucide-react";
-export default function QrScanner({ onScan, autoStart = false }: { autoStart?: boolean; onScan: (id: string, site?: InventorySite) => void }) {
+export default function QrScanner({ onScan, autoStart = false, prominent = false }: { prominent?: boolean; autoStart?: boolean; onScan: (id: string, site?: InventorySite) => void }) {
   const video = useRef<HTMLVideoElement>(null); const callback = useRef(onScan); callback.current = onScan;
   const [active, setActive] = useState(autoStart), [error, setError] = useState("");
   useEffect(() => {
@@ -22,5 +22,5 @@ export default function QrScanner({ onScan, autoStart = false }: { autoStart?: b
     }).then(c => { controls = c; if (disposed) c.stop(); }).catch(() => { if (!disposed) { setError("No se pudo abrir la cámara. Revisa el permiso o selecciona el artículo manualmente."); setActive(false); } });
     return () => { disposed = true; controls?.stop(); const stream = videoElement.srcObject as MediaStream | null; stream?.getTracks().forEach(t => t.stop()); };
   }, [active]);
-  return <div className="space-y-3"><button className={secondaryButtonClass} type="button" onClick={() => { setError(""); setActive(!active); }}>{active ? <X size={16} /> : <ScanLine size={16} />}{active ? "Cerrar cámara" : "Escanear QR"}</button>{active && <video ref={video} muted playsInline className="max-h-72 w-full rounded-2xl border border-white/10 bg-black" />}{error && <p role="alert" className="rounded-xl border border-amber-400/20 bg-amber-400/5 p-3 text-sm text-amber-200">{error}</p>}</div>;
+  return <div className="space-y-3"><div className={prominent ? "flex justify-center" : ""}><button className={prominent && !active ? `${buttonClass} w-full sm:w-auto` : secondaryButtonClass} type="button" onClick={() => { setError(""); setActive(!active); }}>{active ? <X size={16} /> : <ScanLine size={16} />}{active ? "Cerrar cámara" : "Escanear QR"}</button></div>{active && <video ref={video} muted playsInline className="max-h-72 w-full rounded-2xl border border-white/10 bg-black" />}{error && <p role="alert" className="rounded-xl border border-amber-400/20 bg-amber-400/5 p-3 text-sm text-amber-200">{error}</p>}</div>;
 }
