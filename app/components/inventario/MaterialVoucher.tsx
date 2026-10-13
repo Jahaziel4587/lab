@@ -1,4 +1,5 @@
 "use client";
+import { bioanaDate } from "@/lib/inventario/storage";
 import { useState } from "react";
 import { auth } from "@/src/firebase/firebaseConfig";
 import type { Voucher } from "@/lib/inventario/types";
@@ -7,7 +8,7 @@ import { buttonClass } from "./InventoryShell";
 export default function MaterialVoucher({ voucher: v }: { voucher: Voucher }) {
   const [busy,setBusy]=useState(false),[error,setError]=useState("");
   async function download(){setBusy(true);setError("");try{if(!auth.currentUser)throw new Error("Inicia sesión.");const r=await fetch(`/api/inventario/vales/${encodeURIComponent(v.id)}/docx?site=${v.site||"B1"}`,{cache:"no-store",headers:{Authorization:`Bearer ${await auth.currentUser.getIdToken()}`}});if(!r.ok){const d=await r.json();throw new Error(d.error||"No se pudo descargar.");}const url=URL.createObjectURL(await r.blob());const a=document.createElement("a");a.href=url;a.download=`Vale-${v.site||"B1"}-${v.id}.docx`;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000);}catch(e){setError(e instanceof Error?e.message:"Error.");}finally{setBusy(false);}}
-  const stamp = new Date(v.createdAt).toLocaleString("es-MX", { timeZone: "America/Mexico_City" });
+  const stamp = bioanaDate(v.createdAt);
   return <><div className="print-hide space-y-2"><button onClick={download} disabled={busy} className={buttonClass}>{busy?"Generando…":"Descargar vale oficial Word"}</button><p className="text-xs text-white/50">Abre el documento oficial en Word para imprimirlo o guardarlo como PDF.</p>{error&&<p role="alert" className="text-sm text-red-300">{error}</p>}</div><article className="voucher space-y-5 rounded-xl bg-white p-6 text-black">
     <div className="flex justify-between gap-4 border-b pb-4"><h1 className="text-2xl font-bold">BIOANA · Vale de Material</h1><p className="text-right text-xs">FRM.019.05C<br />Folio: {v.id}</p></div>
     <div className="grid grid-cols-2 gap-3 text-sm"><p><b>Almacén:</b> {v.site || "B1"}</p><p><b>Fecha:</b> {stamp}</p><p><b>Tipo:</b> {v.kind === "traslado" ? "Salida / entrada por traslado" : v.kind === "entrada" ? "Entrada" : "Salida"}</p><p><b>Origen:</b> {locationName(v.origin)}</p><p><b>Destino:</b> {locationName(v.destination)}</p><p><b>Proceso / proyecto:</b> {v.project || [...new Set(v.lines.map(l => l.project).filter(Boolean))].join(", ") || "N/A"}</p><p><b>Registrado por:</b> {v.actor}</p></div>

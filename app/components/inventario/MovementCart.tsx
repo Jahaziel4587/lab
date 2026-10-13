@@ -1,23 +1,24 @@
 "use client";
 import { useInventorySite } from "@/app/components/inventario/InventoryProvider";
-import { inventoryHref } from "@/lib/inventario/sites";
-import Link from "next/link";
+import { inventoryHref, voucherDestination } from "@/lib/inventario/sites";
+import { useRouter } from "next/navigation";
+import VoucherProject from "./VoucherProject";
 import { useRef, useState } from "react";
-import { WAREHOUSES, EXTERNAL_LOCATIONS } from "@/lib/inventario/catalogs";
+import { WAREHOUSES, LEGACY_LOCATIONS, EXTERNAL_LOCATIONS } from "@/lib/inventario/catalogs";
 import { selectLot, mexicoToday } from "@/lib/inventario/selection";
 import { inventoryRequest } from "@/lib/inventario/service";
 import type { InventoryComponent, MovementKind } from "@/lib/inventario/types";
 import { buttonClass, inputClass, panelClass, Field } from "./InventoryShell";
 import QrScanner from "./QrScanner";
 export default function MovementCart({ components, initialId = "", fixedLotId = "", onSaved }: { components: InventoryComponent[]; initialId?: string; fixedLotId?: string; onSaved: () => void }) {
-  const { site } = useInventorySite();
+  const { site } = useInventorySite(); const router = useRouter();
   const [kind, setKind] = useState<MovementKind>("salida"), [componentId, setComponentId] = useState(initialId), [quantity, setQuantity] = useState("");
   const [origin, setOrigin] = useState(""), [destination, setDestination] = useState("externo:produccion"), [lotId, setLotId] = useState("");
-  const [busy, setBusy] = useState(false), [error, setError] = useState(""), [voucherIds, setVoucherIds] = useState<string[]>([]);
+  const [busy, setBusy] = useState(false), [error, setError] = useState("");
   const pending = useRef<{ signature: string; id: string } | null>(null);
   const c = components.find(x => x.id === componentId);
   const selectedLot = c?.lots.find(l => l.id === fixedLotId);
-  const origins = kind === "entrada" ? EXTERNAL_LOCATIONS : WAREHOUSES.filter(w => (kind !== "salida" || w.usable) && (fixedLotId ? (selectedLot?.stock[w.id] || 0) > 0 : c?.lots.some(l => (l.stock[w.id] || 0) > 0)));
+  const origins = kind === "entrada" ? EXTERNAL_LOCATIONS : [...WAREHOUSES, ...LEGACY_LOCATIONS].filter(w => (kind !== "salida" || w.usable) && (fixedLotId ? (selectedLot?.stock[w.id] || 0) > 0 : c?.lots.some(l => (l.stock[w.id] || 0) > 0)));
   const actualOrigin = origins.some(w => w.id === origin) ? origin : origins[0]?.id || "";
   const destinations = kind === "salida" ? EXTERNAL_LOCATIONS : WAREHOUSES;
   const actualDestination = destinations.some(w => w.id === destination) ? destination : destinations[0]?.id || "";
@@ -43,12 +44,11 @@ export default function MovementCart({ components, initialId = "", fixedLotId = 
       const signature = JSON.stringify(body);
       if (!pending.current || pending.current.signature !== signature) pending.current = { signature, id: crypto.randomUUID() };
       setBusy(true);
-      try { const r = await inventoryRequest<{ voucherIds: string[] }>({ ...body, operationId: pending.current.id, site }); pending.current = null; setQuantity(""); setVoucherIds(r.voucherIds); onSaved(); }
+      try { const r = await inventoryRequest<{ voucherIds: string[] }>({ ...body, operationId: pending.current.id, site }); pending.current = null; setQuantity(""); onSaved(); if (r.voucherIds[0]) router.push(voucherDestination(r.voucherIds, site)); }
       catch (err) { setError(err instanceof Error ? err.message : "No se pudo registrar."); }
       finally { setBusy(false); }
     }}>
-      {actualDestination === "ssc" && <div key={`${componentId}:${fixedLotId || lotId}`} className="grid gap-4 sm:grid-cols-2"><Field label="Condición de temperatura (°C)"><input required disabled={busy} name="temperatureCondition" maxLength={200} defaultValue={c?.lots.find(l => l.id === (fixedLotId || lotId))?.temperatureCondition || ""} className={inputClass} placeholder="Ej. 15–30, debajo de 25 o N/A" /></Field><Field label="Condición de humedad (%HR)"><input required disabled={busy} name="humidityCondition" maxLength={200} defaultValue={c?.lots.find(l => l.id === (fixedLotId || lotId))?.humidityCondition || ""} className={inputClass} placeholder="Ej. debajo de 60, 20–80 o N/A" /></Field></div>}
-      <Field label="Proyecto / proceso del vale"><input disabled={busy} name="project" className={inputClass} /></Field>
+      <VoucherProject disabled={busy} />
       <p className="text-xs text-white/50">Solicitado por y recibido por se llenan a mano en el vale impreso.</p>
       <Field label="Comentarios del vale (opcional)"><input disabled={busy} name="notes" className={inputClass} maxLength={1000} /><span className="block text-xs text-white/40">Se imprimen en la columna Comentarios de la tabla de artículos.</span></Field>
       {actualOrigin === "externo:otro" && <Field label="Especificar origen Otro"><input disabled={busy} required name="originOther" className={inputClass} maxLength={200} /><span className="block text-xs text-white/40">Se imprime junto a la casilla Otro de Origen.</span></Field>}
@@ -56,6 +56,6 @@ export default function MovementCart({ components, initialId = "", fixedLotId = 
       <p className="text-sm text-white/60">Al confirmar se actualizarán las existencias y se generará el vale de material.</p>
       <button disabled={busy} className={buttonClass}>{busy ? "Registrando…" : "Confirmar movimiento y generar vale"}</button>
     </form>
-    {error && <p role="alert" className="rounded-xl border border-red-400/20 bg-red-400/5 p-3 text-sm text-red-200">{error}</p>}{voucherIds.length > 0 && <div role="status" className="space-y-2 text-emerald-300"><p>Movimiento registrado.</p>{voucherIds.map(id => <Link className="block underline" key={id} href={inventoryHref(`/inventario/vales/${id}`, site)}>Abrir vale para imprimir · {id.slice(-8)}</Link>)}</div>}
+    {error && <p role="alert" className="rounded-xl border border-red-400/20 bg-red-400/5 p-3 text-sm text-red-200">{error}</p>}
   </section>;
 }

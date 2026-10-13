@@ -1,4 +1,6 @@
 "use client";
+import StorageFields from "./StorageFields";
+import VoucherProject from "./VoucherProject";
 import { useInventorySite } from "./InventoryProvider";
 import { useRef, useState } from "react";
 import { WAREHOUSES, EXTERNAL_LOCATIONS } from "@/lib/inventario/catalogs";
@@ -19,7 +21,8 @@ export default function LotForm({ component, onSaved }: { component: InventoryCo
     <Field label={`Cantidad (${component.unit})`}><input name="quantity" type="number" min={component.unit === "pz" ? 1 : 0.000001} step={component.unit === "pz" ? 1 : "0.000001"} required className={inputClass} /></Field>
     <Field label="Caducidad / reanálisis (vacío = No aplica)"><input name="expiry" type="date" className={inputClass} /></Field>
     <Field label="Almacén de ingreso"><select name="destination" value={destination} onChange={e => setDestination(e.target.value)} className={inputClass}>{WAREHOUSES.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
-    {destination === "ssc" && <><Field label="Condición de temperatura (°C)"><input required name="temperatureCondition" maxLength={200} className={inputClass} placeholder="Ej. 15–30, debajo de 25 o N/A" /></Field><Field label="Condición de humedad (%HR)"><input required name="humidityCondition" maxLength={200} className={inputClass} placeholder="Ej. debajo de 60, 20–80 o N/A" /></Field></>}
+    <StorageFields component={component} />
+    <VoucherProject disabled={busy} />
     <Field label="Origen"><select name="origin" className={inputClass}>{EXTERNAL_LOCATIONS.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
     <Field label="Proveedor"><input name="supplier" className={inputClass} /></Field>
     <Field label="Comentarios / ubicación Otro"><input name="notes" maxLength={1000} className={inputClass} /></Field>

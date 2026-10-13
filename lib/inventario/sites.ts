@@ -17,3 +17,8 @@ export function inventoryCollections(site: InventorySite) {
 export function inventoryHref(path: string, site: InventorySite) {
     return `${path}${path.includes("?") ? "&" : "?"}site=${site}`;
 }
+
+export function voucherDestination(ids: string[], site: InventorySite) {
+    if (!ids.length) throw new Error("No se generó un vale de material.");
+    return inventoryHref(`/inventario/vales/${ids[0]}`, site) + (ids.length > 1 ? `&related=${encodeURIComponent(ids.join(","))}` : "");
+}
