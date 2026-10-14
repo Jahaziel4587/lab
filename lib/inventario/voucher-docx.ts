@@ -2,7 +2,7 @@ import { bioanaDate } from "./storage";
 import PizZip from "pizzip";
 import Docxtemplater from "docxtemplater";
 import type { Voucher } from "./types";
-import { locationName } from "./catalogs";
+import { voucherComments, voucherLocation } from "./voucher-details";
 const labels: Record<string,string> = {pendiente:"pendiente de inspeccion",aprobado:"material aprobado",rechazado:"material rechazado",cuarentena:"cuarentena",terminado:"dispositivos terminados","no-conforme":"producto no conforme",retencion:"retencion",semiterminado:"producto semiterminado",limpieza:"limpieza","externo:produccion":"actividades de operacion/produccion","externo:envio":"envio (salida de planta)"};
 function normalize(s:string){return s.normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase().replace(/\s+/g," ").trim();}
 function text(xml:string){return normalize([...xml.matchAll(/<w:t\b[^>]*>([\s\S]*?)<\/w:t>/g)].map(m=>m[1]).join(""));}
@@ -31,8 +31,8 @@ export function renderVoucher(template:Buffer,v:Voucher){
  xml=xml.replace(/<w:tr\b[^>]*>[\s\S]*?<\/w:tr>/g,row=>{let col=0;return row.replace(/<w:tc\b[^>]*>[\s\S]*?<\/w:tc>/g,cell=>{const current=col; col+=Number(cell.match(/<w:gridSpan\b[^>]*w:val="(\d+)"/)?.[1]||1);if(!cell.includes('<w:checkBox'))return cell;const n=(cell.match(/<w:checkBox\b/g)||[]).length;count+=n;const label=text(cell);if(label.includes('entrada')&&label.includes('salida'))return checks(cell,[v.kind!=="salida",v.kind==="salida"]);if(current!==2&&current!==3)throw new Error("Casilla inesperada en el formato oficial.");const location=current===2?v.origin:v.destination;const expected=labels[location]||"otro:";return checks(cell,[label.startsWith(expected)]);});});
  if(count!==28)throw new Error("El formato debe contener las 28 casillas oficiales de Entrada/Salida, Origen y Destino.");
  zip.file("word/document.xml",xml);
- const other=(location:string, detail?:string)=>labels[location]?"":detail ||[locationName(location),detail === undefined ? v.notes : ""].filter(Boolean).join(" · ");
+ const other=(location:string, detail?:string)=>labels[location]?"":voucherLocation(location, detail || (location === "externo:otro" ? v.notes : ""));
  const doc=new Docxtemplater(zip,{paragraphLoop:true,linebreaks:true,nullGetter:()=>"",});
- doc.render({fecha:bioanaDate(v.createdAt),proyecto:v.project||[...new Set(v.lines.map(l=>l.project).filter(Boolean))].join(", ")||"N/A",almacen:v.site||"B1",folio:v.id,solicitante:v.requestedBy,recibe:v.receivedBy,surte:v.actor,or_otro_texto:other(v.origin,v.originOther),de_otro_texto:other(v.destination,v.destinationOther),articulos:v.lines.map(l=>({articulo:`${l.code}\n${l.name}`,unidad:l.unit,cantidad:l.quantity,lote:l.lot,caducidad:l.expiry||"N/A",comentarios:[l.comments,v.notes].filter(Boolean).join("\n")||"N/A"}))});
+ doc.render({fecha:bioanaDate(v.createdAt),proyecto:v.project||[...new Set(v.lines.map(l=>l.project).filter(Boolean))].join(", ")||"N/A",almacen:v.site||"B1",folio:v.id,solicitante:v.requestedBy,recibe:v.receivedBy,surte:v.actor,or_otro_texto:other(v.origin,v.originOther),de_otro_texto:other(v.destination,v.destinationOther),articulos:v.lines.map(l=>({articulo:`${l.code}\n${l.name}`,unidad:l.unit,cantidad:l.quantity,lote:l.lot,caducidad:l.expiry||"N/A",comentarios:voucherComments(l.comments,v.notes)||"N/A"}))});
  return doc.getZip().generate({type:"nodebuffer",compression:"DEFLATE"});
 }

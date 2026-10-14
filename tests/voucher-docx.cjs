@@ -1,5 +1,6 @@
 const fs=require('fs'),ts=require('typescript'),assert=require('node:assert/strict');function load(p,imports={}){const m={exports:{}};new Function('require','module','exports',ts.transpileModule(fs.readFileSync(p,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020,esModuleInterop:true}}).outputText)(n=>imports[n]||require(n),m,m.exports);return m.exports;}
-const {renderVoucher}=load('lib/inventario/voucher-docx.ts',{'./catalogs':load('lib/inventario/catalogs.ts'),'./storage':load('lib/inventario/storage.ts')});const template=fs.readFileSync('public/templates/vale-material.docx');const v={id:'voucher123456789',site:'B2',kind:'salida',createdAt:'2026-10-10T20:00:00Z',project:'004.Solvein',origin:'aprobado',destination:'externo:produccion',requestedBy:'Inspector',receivedBy:'Producción',actor:'Jahaziel Garza',notes:'Prueba de generación',lines:[{code:'004.308',name:'Connector',unit:'pz',quantity:100,lot:'LOT-01',expiry:'2028-01-01',comments:'Material aprobado'},{code:'004.305',name:'Main Shaft',unit:'pz',quantity:75,lot:'LOT-02',expiry:'',comments:''}]};const result=renderVoucher(template,v);const Zip=require('pizzip');const xml=new Zip(result).file('word/document.xml').asText();assert.equal((xml.match(/<w:checked w:val="1"/g)||[]).length,3);assert(!xml.includes('{articulo}'));assert(xml.indexOf('004.308')<xml.indexOf('004.305'));
+const details=load('lib/inventario/voucher-details.ts',{'./catalogs':load('lib/inventario/catalogs.ts')});
+const {renderVoucher}=load('lib/inventario/voucher-docx.ts',{'./voucher-details':details,'./catalogs':load('lib/inventario/catalogs.ts'),'./storage':load('lib/inventario/storage.ts')});const template=fs.readFileSync('public/templates/vale-material.docx');const v={id:'voucher123456789',site:'B2',kind:'salida',createdAt:'2026-10-10T20:00:00Z',project:'004.Solvein',origin:'aprobado',destination:'externo:produccion',requestedBy:'Inspector',receivedBy:'Producción',actor:'Jahaziel Garza',notes:'Prueba de generación',lines:[{code:'004.308',name:'Connector',unit:'pz',quantity:100,lot:'LOT-01',expiry:'2028-01-01',comments:'Material aprobado'},{code:'004.305',name:'Main Shaft',unit:'pz',quantity:75,lot:'LOT-02',expiry:'',comments:''}]};const result=renderVoucher(template,v);const Zip=require('pizzip');const xml=new Zip(result).file('word/document.xml').asText();assert.equal((xml.match(/<w:checked w:val="1"/g)||[]).length,3);assert(!xml.includes('{articulo}'));assert(xml.indexOf('004.308')<xml.indexOf('004.305'));
 for(const kind of ['entrada','traslado']){const x=new Zip(renderVoucher(template,{...v,kind,origin:'externo:recepcion',destination:'pendiente'})).file('word/document.xml').asText();assert.equal((x.match(/<w:checked w:val="1"/g)||[]).length,3);}
 console.log('Voucher generation: native checkbox states, row repetition and order passed.');
 
@@ -29,3 +30,14 @@ assert(separated.includes('Nota exclusiva de artículos'));
 console.log('Other locations and article comments are rendered separately.');
 
 assert(xml.includes("10/oct/26"));
+
+assert.equal(details.voucherComments('Bolsa (800pz)', ' Bolsa (800pz) '),'Bolsa (800pz)');
+assert.equal(details.voucherComments('Lote', 'Movimiento'),'Lote\nMovimiento');
+const entry={...v,kind:'entrada',origin:'externo:recepcion',destination:'pendiente',notes:'Bolsa (800pz)',lines:[{...v.lines[0],comments:'Bolsa (800pz)'}]};
+for(const supplier of ['', 'Proveedor de prueba']) {
+ const output=new Zip(renderVoucher(template,{...entry,originOther:supplier})).file('word/document.xml').asText();
+ assert.equal((output.match(/Bolsa \(800pz\)/g)||[]).length,1);
+ assert(output.includes(supplier ? 'Recepción / proveedor · Proveedor de prueba' : 'Recepción / proveedor'));
+ assert.equal((output.match(/<w:checked w:val="1"/g)||[]).length,3);
+}
+console.log('Duplicate lot comments appear once; receipt supplier and blank fallback retain checkbox selection.');

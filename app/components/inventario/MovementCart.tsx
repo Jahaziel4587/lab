@@ -51,6 +51,7 @@ export default function MovementCart({ components, initialId = "", fixedLotId = 
       <VoucherProject disabled={busy} />
       <p className="text-xs text-white/50">Solicitado por y recibido por se llenan a mano en el vale impreso.</p>
       <Field label="Comentarios del vale (opcional)"><input disabled={busy} name="notes" className={inputClass} maxLength={1000} /><span className="block text-xs text-white/40">Se imprimen en la columna Comentarios de la tabla de artículos.</span></Field>
+      {actualOrigin === "externo:recepcion" && <Field label="Proveedor (opcional)"><input disabled={busy} name="supplier" maxLength={200} className={inputClass} /><span className="block text-xs text-white/40">Se imprime en Origen. Si lo dejas vacío, aparecerá Recepción / proveedor.</span></Field>}
       {actualOrigin === "externo:otro" && <Field label="Especificar origen Otro"><input disabled={busy} required name="originOther" className={inputClass} maxLength={200} /><span className="block text-xs text-white/40">Se imprime junto a la casilla Otro de Origen.</span></Field>}
       {actualDestination === "externo:otro" && <Field label="Especificar destino Otro"><input disabled={busy} required name="destinationOther" className={inputClass} maxLength={200} /><span className="block text-xs text-white/40">Se imprime junto a la casilla Otro de Destino.</span></Field>}
       <p className="text-sm text-white/60">Al confirmar se actualizarán las existencias y se generará el vale de material.</p>

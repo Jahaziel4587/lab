@@ -9,6 +9,7 @@ import type { InventoryComponent } from "@/lib/inventario/types";
 import { Field, inputClass, buttonClass, panelClass } from "./InventoryShell";
 export default function LotForm({ component, onSaved }: { component: InventoryComponent; onSaved: (ids: string[]) => void }) {
   const { site } = useInventorySite();
+  const [origin, setOrigin] = useState(EXTERNAL_LOCATIONS[0].id);
   const [destination, setDestination] = useState(WAREHOUSES[0].id);
   const [busy, setBusy] = useState(false), [error, setError] = useState(""); const pending = useRef<{ id: string; signature: string } | null>(null);
   return <form className={`${panelClass} space-y-5`} onSubmit={async e => {
@@ -23,8 +24,8 @@ export default function LotForm({ component, onSaved }: { component: InventoryCo
     <Field label="Almacén de ingreso"><select name="destination" value={destination} onChange={e => setDestination(e.target.value)} className={inputClass}>{WAREHOUSES.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
     <StorageFields key={destination === "rechazado" ? "rejected" : "standard"} optional component={destination === "rechazado" ? {...component,temperatureCondition:"",humidityCondition:""} : component} />
     <VoucherProject disabled={busy} />
-    <Field label="Origen"><select name="origin" className={inputClass}>{EXTERNAL_LOCATIONS.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
-    <Field label="Proveedor"><input name="supplier" className={inputClass} /></Field>
+    <Field label="Origen"><select name="origin" value={origin} onChange={e => setOrigin(e.target.value)} className={inputClass}>{EXTERNAL_LOCATIONS.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}</select></Field>
+    <Field label="Proveedor (opcional)"><input name="supplier" maxLength={200} className={inputClass} />{origin === "externo:recepcion" && <span className="block text-xs text-white/40">Se imprime en Origen. Si lo dejas vacío, aparecerá Recepción / proveedor.</span>}</Field>
     <Field label="Comentarios / ubicación Otro"><input name="notes" maxLength={1000} className={inputClass} /></Field>
   </div>{error && <p role="alert" className="rounded-xl border border-red-400/20 bg-red-400/5 p-3 text-sm text-red-200">{error}</p>}<button disabled={busy} className={buttonClass}>{busy ? "Registrando…" : "Crear lote y vale de entrada"}</button></form>;
 }

@@ -184,8 +184,9 @@ export async function POST(req: NextRequest) {
           addLine(origin, destination, c, lot, q);
         }
       } else fail("Acción inválida.");
-      const requestedBy = str(b.requestedBy || "", false), receivedBy = str(b.receivedBy || "", false), project = str(b.project || "", false), notes = str(b.notes || "", false);
-      const originOther = str(b.originOther || "", false), destinationOther = str(b.destinationOther || "", false);
+      const requestedBy = str(b.requestedBy || "", false), receivedBy = str(b.receivedBy || "", false), project = str(b.project || "", false), notes = b.action === "lot" ? "" : str(b.notes || "", false);
+      const supplier = str(b.supplier || "", false);
+      const originOther = str(b.originOther || ([...groups.values()].some(g => g.origin === "externo:recepcion") ? supplier : b.action === "lot" ? b.notes || "" : ""), false), destinationOther = str(b.destinationOther || "", false);
       if ([...groups.values()].some(g => g.origin === "externo:otro") && !originOther && !notes) fail("Especifica el origen Otro.");
       if ([...groups.values()].some(g => g.destination === "externo:otro") && !destinationOther && !notes) fail("Especifica el destino Otro.");
       const voucherIds: string[] = [];
