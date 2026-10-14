@@ -1,3 +1,4 @@
+import { kivLots } from "@/lib/inventario/kiv";
 import { validateCart } from "@/lib/inventario/cart";
 import { recipePeriod, type FixedRecipe } from "@/lib/inventario/fixed-recipes";
 import { storageConditions, componentConditionsFromLot } from "@/lib/inventario/storage";
@@ -46,6 +47,10 @@ export async function GET(req: NextRequest) {
       // Include legacy vouchers too: their component IDs exist only inside lines.
       const history = await vouchers.orderBy("createdAt", "desc").get();
       return NextResponse.json({ vouchers: history.docs.map(d => ({ ...d.data(), id: d.id } as Voucher)).filter(v => v.lines.some(l => l.componentId === historyComponent)) });
+    }
+    if (req.nextUrl.searchParams.get("view") === "kiv") {
+      const cs = await components.get(), today = mexicoToday();
+      return NextResponse.json({ today, lots: kivLots(cs.docs.map(d => ({ ...d.data(), id: d.id } as InventoryComponent)), today) });
     }
     const [cs, vs] = await Promise.all([components.get(), vouchers.orderBy("createdAt", "desc").limit(300).get()]);
     return NextResponse.json({ components: cs.docs.map(d => ({ ...d.data(), id: d.id })), vouchers: vs.docs.map(d => ({ ...d.data(), id: d.id })) });
