@@ -1,0 +1,12 @@
+const fs=require('fs'),ts=require('typescript'),assert=require('node:assert/strict');
+const m={exports:{}};new Function('module','exports',ts.transpileModule(fs.readFileSync('lib/inventario/kiv.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText)(m,m.exports);
+const lot=(id,stock,expiry='')=>({id,name:id,stock,expiry});
+const component={id:'a',code:'MTS-001',name:'Material',project:'',unit:'pz',lots:[lot('empty',{}),lot('zero',{aprobado:0}),lot('legacy',{aprobado:0,ssc:2}),lot('expired',{rechazado:5},'2026-10-13'),lot('today',{aprobado:1},'2026-10-14'),lot('future',{aprobado:1},'2026-10-15'),lot('both',{aprobado:0},'2026-10-12')]};
+const result=m.exports.kivLots([component],'2026-10-14');
+assert.deepEqual(result.map(r=>r.lot.id),['both','expired','empty','zero']);
+assert(result[0].empty&&result[0].expired);assert.equal(result[1].quantity,5);assert(!result[1].empty);
+assert(!result.some(r=>r.lot.id==='legacy'));assert.equal(result.filter(r=>r.lot.id==='both').length,1);
+assert(m.exports.kivLots([component],'2026-10-15').some(r=>r.lot.id==='today'));
+assert(!m.exports.kivLots([component],'2026-10-15').some(r=>r.lot.id==='future'));
+assert.deepEqual(m.exports.kivLots([],'2026-10-14'),[]);assert.equal(component.lots[3].stock.rechazado,5);
+console.log('KIV: zero stock, legacy balances, expiry boundaries, overlapping reasons, day rollover and unchanged stock passed.');
