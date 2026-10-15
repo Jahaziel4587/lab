@@ -1,0 +1,15 @@
+const { readFileSync } = require('node:fs');
+const ts = require('typescript');
+const assert = require('node:assert/strict');
+const source = readFileSync('lib/operacional/record-search.ts', 'utf8');
+const moduleResult = { exports: {} };
+new Function('module', 'exports', ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText)(moduleResult, moduleResult.exports);
+const { matchesRecord, recordFields } = moduleResult.exports;
+const component = { code: 'MTS-012', name: 'Tyvek Dupont XL', lots: [{ name: 'NL.MTS-012.1526B', stock: { aprobado: 4 } }], notes: 'Inspección' };
+assert(matchesRecord('abc123', component, [{ field: 'name', value: 'TYVEK' }, { field: 'lots.name', value: '1526b' }]));
+assert(!matchesRecord('abc123', component, [{ field: 'name', value: 'Tyvek' }, { field: 'lots.name', value: 'otro' }]));
+assert(matchesRecord('abc123', component, [{ field: '__id__', value: 'abc' }]));
+assert(matchesRecord('abc123', component, [{ field: '', value: 'inspeccion' }]));
+assert(!matchesRecord('abc123', component, [{ field: 'missing', value: 'x' }]));
+assert(recordFields(component).includes('lots.stock.aprobado'));
+console.log('Record search: combined filters, arrays, ID, accents and missing fields passed.');
