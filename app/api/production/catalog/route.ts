@@ -1,7 +1,8 @@
+import { getMtsMasterCatalog } from "@/lib/box/mtsMaster";
 import { NextRequest, NextResponse } from "next/server";
 import { adminDB } from "@/lib/firebaseAdmin";
 import { identify, projectCatalog } from "@/lib/operacional/server";
-import { getDmrProjects, getMtsWorkInstructions } from "@/lib/box/boxCatalog";
+import { getDmrProjects } from "@/lib/box/boxCatalog";
 import { inventorySite, inventoryCollections } from "@/lib/inventario/sites";
 import { ensureArticle, normalizedCode } from "@/lib/production/catalog";
 import { projectCodeFromDmr, legacyBomEntries, validateBomEntries } from "@/lib/production/bom";
@@ -21,8 +22,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({bom:{...bom,projectCode:projectCodeFromDmr(project.title) || bom.projectCode || "",entries:bom.entries || legacyBomEntries(bom.items)}});
     }
     if (req.nextUrl.searchParams.get("scope") === "projects") return NextResponse.json({ projects: await projectCatalog() });
-    const wis = await getMtsWorkInstructions();
-    const catalog = wis.map(w => ({ code: w.documentCode.match(/MTS-\d+/i)?.[0]?.toUpperCase(), name: w.itemName || w.title })).filter(w => w.code);
+    const catalog = await getMtsMasterCatalog();
     const current = await adminDB.collection(inventoryCollections(site).components).get();
     const other = await adminDB.collection(inventoryCollections(site === "B1" ? "B2" : "B1").components).get();
     const all = [...current.docs, ...other.docs];
@@ -40,10 +40,10 @@ export async function POST(req: NextRequest) {
   try {
     const b = await req.json(), site = inventorySite(b.site);
     if (b.action === "mts") {
-      const wis = await getMtsWorkInstructions(), code = normalizedCode(String(b.code));
-      const wi = wis.find(w => w.documentCode.match(/MTS-\d+/i)?.[0]?.toUpperCase() === code);
-      if (!wi) throw new Error("El MTS no está en el catálogo de Box.");
-      const c = await ensureArticle(site, code, wi.itemName || wi.title, String(b.unit || ""), user.uid);
+      const catalog = await getMtsMasterCatalog(), code = normalizedCode(String(b.code));
+      const item = catalog.find(item => item.code === code);
+      if (!item) throw new Error("El MTS no está en la lista maestra de Box.");
+      const c = await ensureArticle(site, code, item.name, String(b.unit || ""), user.uid);
       return NextResponse.json({ component: c });
     }
     if (b.action === "reserve") {
