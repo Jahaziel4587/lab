@@ -1,0 +1,13 @@
+import ts from 'typescript';
+import fs from 'node:fs';
+import vm from 'node:vm';
+import assert from 'node:assert/strict';
+const exports={};vm.runInNewContext(ts.transpileModule(fs.readFileSync('lib/production/bom-view.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText,{exports});
+const entries=[{id:'a',parentId:'',code:'004.103'},{id:'b',parentId:'',code:'004.204'},{id:'child-a',parentId:'a',code:'MTS-046'},{id:'child-b',parentId:'b',code:'MTS-046'},{id:'sub',parentId:'a',code:'004.203'},{id:'nested',parentId:'sub',code:'004.301'}];
+const original=JSON.stringify(entries), rows=exports.orderedBomRows(entries);
+assert.equal(rows.map(r=>r.entry.id).join(','),'a,child-a,sub,nested,b,child-b');
+assert.equal(rows.map(r=>r.depth).join(','),'0,1,1,2,0,1');
+assert.equal(JSON.stringify(entries),original);
+assert.equal(exports.orderedBomRows([{id:'orphan',parentId:'missing'}]).length,1);
+assert.equal(exports.orderedBomRows([{id:'a',parentId:'b'},{id:'b',parentId:'a'}]).length,2);
+console.log('BOM groups stay together; nested indentation and repeated materials preserve occurrence identity.');
