@@ -92,7 +92,7 @@ function download(bytes: Uint8Array, filename: string) {
 export async function generateIncomingLotPdf({ mode, context, lot, reports, idToken, anomalyId }: Params) {
   const methodOrder = lot.methodPlans.map((plan) => plan.method);
   const methodLabel = (method?: string) => method === "documentary" ? "Documental" : method === "dimensional" ? "Dimensional" : method === "functional" ? "Funcional" : "Visual";
-  const methodPlanText = (plan: IncomingInspectionLot["methodPlans"][number], includeAllowed = false) => plan.method === "documentary" ? "Documentación requerida; sin muestreo ni AQL" : plan.perShift ? `${plan.inspectionsPerShift} inspecciones por turno` : plan.isFullInspection
+  const methodPlanText = (plan: IncomingInspectionLot["methodPlans"][number], includeAllowed = false) => plan.method === "documentary" ? "Documentación requerida; sin muestreo ni AQL" : plan.perShift ? `${plan.inspectionsPerShift} inspecciones por turno; ${plan.allowedRejectedQuantity} rechazos permitidos por inspección` : plan.isFullInspection
     ? "Inspección del 100%"
     : `Muestra: ${plan.inspectedQuantity} | Tipo: ${plan.inspectionType === "special" ? "Especial" : "Normal"} | Nivel: ${plan.inspectionLevel} | AQL: ${plan.aql}${includeAllowed ? ` | Permitidos: ${plan.allowedRejectedQuantity}` : ""}`;
   const byMethodThenDate = (a: IncomingLotReport, b: IncomingLotReport) => methodOrder.indexOf(a.inspectionMethod || "visual") - methodOrder.indexOf(b.inspectionMethod || "visual") || stamp(a.createdAt) - stamp(b.createdAt);
@@ -188,7 +188,7 @@ export async function generateIncomingLotPdf({ mode, context, lot, reports, idTo
   text(`Componente: ${context.componentTitle}`, { font: bold });
   text(`${context.sourceType === "proceso_proyecto" ? "PDO" : "PO"} #: ${lot.purchaseOrder || "Sin registrar"}`);
   text(`Cantidad total del lote: ${lot.totalLotQuantity}`);
-  lot.methodPlans.forEach((plan) => text(`${methodLabel(plan.method)}: ${plan.method==="documentary"?"Documentación requerida; sin muestreo ni AQL":plan.isFullInspection?`Inspección del 100% | ${plan.inspectedQuantity} piezas por inspeccionar`:`${plan.inspectedQuantity} por inspeccionar | ${plan.inspectionType === "special" ? "Especial" : "Normal"} | Nivel ${plan.inspectionLevel} | AQL ${plan.aql} | ${plan.allowedRejectedQuantity} rechazos permitidos`}`, { size: 9.5, color: GRAY }));
+  lot.methodPlans.forEach((plan) => text(`${methodLabel(plan.method)}: ${plan.method==="documentary"?"Documentación requerida; sin muestreo ni AQL":plan.perShift?methodPlanText(plan):plan.isFullInspection?`Inspección del 100% | ${plan.inspectedQuantity} piezas por inspeccionar`:`${plan.inspectedQuantity} por inspeccionar | ${plan.inspectionType === "special" ? "Especial" : "Normal"} | Nivel ${plan.inspectionLevel} | AQL ${plan.aql} | ${plan.allowedRejectedQuantity} rechazos permitidos`}`, { size: 9.5, color: GRAY }));
   text(`Estado: ${lot.status === "finalized" ? "Finalizado" : "En curso"} | Resultado: ${lot.inspectionResult === "will_fail" ? "No pasará" : lot.inspectionResult === "within_limit" ? "Dentro del límite" : "Pendiente"}`, { color: lot.inspectionResult === "will_fail" ? RED : GRAY });
   if (mode === "summary") {
     text(`Piezas del lote que no pasaron la inspección: ${typeof lot.finalRejectedPieces === "number" ? lot.finalRejectedPieces : "Pendiente de cierre"}`, { size: 13, font: bold, color: typeof lot.finalRejectedPieces === "number" && lot.finalRejectedPieces > 0 ? RED : GREEN, gap: 8 });
@@ -200,6 +200,7 @@ export async function generateIncomingLotPdf({ mode, context, lot, reports, idTo
 
   await drawOtherRejections();
   if (mode === "summary" && lot.shiftChecks?.length) { section("Inspecciones por turno aprobadas"); for (const check of lot.shiftChecks) text(`${methodLabel(check.method)} | ${check.shiftIdentifier} | #${check.inspectionNumber}: pasó | ${check.createdBy}`); }
+  if(mode==="summary"&&Object.keys(lot.shiftRejectionState||{}).length){section("Rechazos acumulados por inspección de turno");for(const state of Object.values(lot.shiftRejectionState||{})){const limit=lot.methodPlans.find(p=>p.method===state.method)?.allowedRejectedQuantity||0;text(`${methodLabel(state.method)} | ${state.shiftIdentifier} | #${state.inspectionNumber}: ${state.rejectedQuantity} piezas únicas / ${limit} permitidas | ${state.rejectedQuantity>limit?"No pasó":"Dentro del límite"}`);}}
   const pages = pdf.getPages();
   pages.forEach((current, index) => current.drawText(`Página ${index + 1} de ${pages.length}`, { x: WIDTH - MX - 65, y: 24, size: 8.5, font: regular, color: GRAY }));
   const bytes = await pdf.save();

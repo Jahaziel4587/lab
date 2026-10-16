@@ -1,4 +1,5 @@
 "use client";
+import { advanceShiftRejections, shiftInspectionKey } from "../shiftRejections";
 import { validateInspectionFormData } from "../inspectionFormData";
 
 import {
@@ -75,6 +76,7 @@ function mapReport(
     inspectionMethod: !["line_rejection", "component_rejection"].includes(String(data.kind)) && ["documentary", "visual", "dimensional", "functional"].includes(String(data.inspectionMethod)) ? data.inspectionMethod as IncomingLotReport["inspectionMethod"] : undefined,
     shiftIdentifier: String(data.shiftIdentifier || ""),
     shiftInspectionNumber: Number(data.shiftInspectionNumber || 0),
+    shiftUniqueRejectedTotal: typeof data.shiftUniqueRejectedTotal === "number" ? data.shiftUniqueRejectedTotal : undefined,
     photos: Array.isArray(data.photos)
       ? data.photos as IncomingLotReportPhoto[]
       : [],
@@ -298,12 +300,13 @@ export function useIncomingLotReports({
         }),
       );
 
-      await runTransaction(db, async (transaction) => {
+      const exceededShiftLimit = await runTransaction(db, async (transaction) => {
         const lotSnapshot = await transaction.get(lotReference);
         if (!lotSnapshot.exists()) {
           throw new Error("El lote ya no existe.");
         }
         const current = lotSnapshot.data();
+        let shiftFailed = false;
         if (current.status !== "in_progress") {
           throw new Error("Este lote ya fue finalizado.");
         }
@@ -325,7 +328,7 @@ export function useIncomingLotReports({
           title,
           description,
           ...(!openRejection ? { inspectionMethod: input.inspectionMethod } : {}),
-          ...(input.kind === "spec_rejection" && methodPlan?.perShift ? { shiftIdentifier: input.shiftIdentifier!.trim(), shiftInspectionNumber: input.shiftInspectionNumber } : {}),
+          ...(input.kind === "spec_rejection" && methodPlan?.perShift ? { shiftIdentifier: input.shiftIdentifier!.trim(), shiftInspectionNumber: input.shiftInspectionNumber, ...(input.mode === "quantity" ? { shiftUniqueRejectedTotal: input.shiftUniqueRejectedTotal } : {}) } : {}),
           ...(!documentary ? (input.mode === "quantity"
             ? { quantity: amount }
             : { sampleNumber: Number(input.sampleNumber) }) : {}),
@@ -346,7 +349,10 @@ export function useIncomingLotReports({
         }
         if (input.kind === "spec_rejection" && methodPlan?.perShift) {
           if ((current.shiftChecks || []).some((check: {method: string; shiftIdentifier: string; inspectionNumber: number}) => check.method === input.inspectionMethod && check.shiftIdentifier === input.shiftIdentifier?.trim() && check.inspectionNumber === input.shiftInspectionNumber)) throw new Error("Esta inspección ya está registrada como aprobada.");
-          transaction.update(lotReference, { inspectionResult: "will_fail", [`methodReviewState.${methodPlan.method}`]: { result: "will_fail", confirmedUniqueQuantity: amount, lastReviewedReportedQuantity: Number(current.reportedRejectedQuantity || 0) + amount } });
+          const key = shiftInspectionKey(methodPlan.method, input.shiftIdentifier!, input.shiftInspectionNumber!);
+          const next = advanceShiftRejections(current.shiftRejectionState?.[key], { method: methodPlan.method, shiftIdentifier: input.shiftIdentifier!, inspectionNumber: input.shiftInspectionNumber!, mode: input.mode, quantity: amount, sampleNumber: input.sampleNumber, uniqueTotal: input.shiftUniqueRejectedTotal });
+          shiftFailed = next.rejectedQuantity > methodPlan.allowedRejectedQuantity;
+          transaction.update(lotReference, { shiftRejectionState: { ...(current.shiftRejectionState || {}), [key]: next }, ...(shiftFailed ? { inspectionResult: "will_fail", [`methodReviewState.${methodPlan.method}`]: { result: "will_fail", confirmedUniqueQuantity: next.rejectedQuantity, lastReviewedReportedQuantity: Number(current.reportedRejectedQuantity || 0) + amount } } : {}) });
         }
         if (input.kind === "spec_rejection") {
           transaction.update(lotReference, {
@@ -360,9 +366,10 @@ export function useIncomingLotReports({
             updatedAt: serverTimestamp(),
           });
         }
+        return shiftFailed;
       });
 
-      if (input.kind === "spec_rejection" && (methodPlan?.perShift || documentary)) await notify("threshold_exceeded", { inspectionMethod: methodPlan?.method || "documentary" }).catch(console.error);
+      if (input.kind === "spec_rejection" && (exceededShiftLimit || documentary)) await notify("threshold_exceeded", { inspectionMethod: methodPlan?.method || "documentary" }).catch(console.error);
       if (input.kind === "anomaly") {
         await notify("anomaly_created", { reportId: reportReference.id }).catch((cause) => {
           console.error("La anormalidad se guardó, pero no pudo notificarse:", cause);
@@ -521,7 +528,7 @@ export function useIncomingLotReports({
     const additionReference = doc(collection(reportReference, "quantity_additions"));
     setSaving(true);
     try {
-      await runTransaction(db, async (transaction) => {
+      const exceeded = await runTransaction(db, async (transaction) => {
         const [lotSnapshot, reportSnapshot] = await Promise.all([
           transaction.get(lotReference),
           transaction.get(reportReference),
@@ -531,6 +538,18 @@ export function useIncomingLotReports({
         }
         if (lotSnapshot.data().status !== "in_progress") {
           throw new Error("Este lote ya fue finalizado.");
+        }
+        const plan = lot.methodPlans.find(p=>p.method===report.inspectionMethod);
+        let shiftFailed = false;
+        if (report.kind === "spec_rejection" && plan?.perShift) {
+          const current = lotSnapshot.data();
+          if ((current.shiftChecks || []).some((c: {method: string;shiftIdentifier: string;inspectionNumber: number})=>c.method===report.inspectionMethod&&c.shiftIdentifier===report.shiftIdentifier&&c.inspectionNumber===report.shiftInspectionNumber)) throw new Error("Esta inspección ya se registró como aprobada.");
+          const key=shiftInspectionKey(plan.method,report.shiftIdentifier!,report.shiftInspectionNumber!);
+          const previous=current.shiftRejectionState?.[key];
+          const count=Number(previous?.rejectedQuantity ?? reportSnapshot.data().quantity ?? 0);
+          const next=advanceShiftRejections(previous,{method:plan.method,shiftIdentifier:report.shiftIdentifier!,inspectionNumber:report.shiftInspectionNumber!,mode:"quantity",quantity:count+quantityToAdd,uniqueTotal:count+quantityToAdd});
+          shiftFailed=next.rejectedQuantity>plan.allowedRejectedQuantity;
+          transaction.update(lotReference,{shiftRejectionState:{...(current.shiftRejectionState||{}),[key]:next},...(shiftFailed?{inspectionResult:"will_fail",[`methodReviewState.${plan.method}`]:{result:"will_fail",confirmedUniqueQuantity:next.rejectedQuantity}}:{})});
         }
         const currentQuantity = Number(reportSnapshot.data().quantity || 0);
         transaction.update(reportReference, {
@@ -553,11 +572,13 @@ export function useIncomingLotReports({
             updatedAt: serverTimestamp(),
           });
         }
+        return shiftFailed;
       });
+      if(exceeded)await notify("threshold_exceeded",{inspectionMethod:report.inspectionMethod}).catch(console.error);
     } finally {
       setSaving(false);
     }
-  }, [context, lot, user]);
+  }, [context, lot, user, notify]);
 
   const confirmUniqueRejectedQuantity = useCallback(async (
     inspectionMethod: IncomingInspectionMethod,

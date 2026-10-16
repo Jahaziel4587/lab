@@ -1,4 +1,5 @@
 "use client";
+import { shiftInspectionKey, type ShiftRejectionState } from "../shiftRejections";
 import { findingLabel } from "../types";
 
 import {
@@ -29,6 +30,7 @@ type Props = {
   initialMode: IncomingLotReportMode;
   lockedSpecMode: SpecCountingMode;
   methodPlans: IncomingInspectionMethodPlan[];
+  shiftRejectionState?: Record<string, ShiftRejectionState>;
   saving?: boolean;
   onSubmit: (input: CreateIncomingLotReportInput) => Promise<void>;
   onCancel: () => void;
@@ -39,11 +41,13 @@ export default function IncomingLotReportForm({
   initialMode,
   lockedSpecMode,
   methodPlans,
+  shiftRejectionState = {},
   saving = false,
   onSubmit,
   onCancel,
 }: Props) {
   const openRejection = initialKind === "line_rejection" || initialKind === "component_rejection";
+  const [shiftUniqueTotal, setShiftUniqueTotal] = useState("");
   const [shiftIdentifier, setShiftIdentifier] = useState("");
   const [shiftInspectionNumber, setShiftInspectionNumber] = useState("");
   const fileReference = useRef<HTMLInputElement | null>(null);
@@ -59,6 +63,9 @@ export default function IncomingLotReportForm({
   const [quantity, setQuantity] = useState("");
   const [sampleNumber, setSampleNumber] = useState("");
   const [photos, setPhotos] = useState<File[]>([]);
+  const shiftPlan = methodPlans.find(p=>p.method===inspectionMethod);
+  const previousShiftCount = shiftRejectionState[shiftInspectionKey(inspectionMethod,shiftIdentifier,Number(shiftInspectionNumber))]?.rejectedQuantity || 0;
+  useEffect(()=>{setShiftUniqueTotal(String(previousShiftCount + Number(quantity || 0)))},[previousShiftCount,quantity,shiftIdentifier,shiftInspectionNumber,inspectionMethod]);
   const [formError, setFormError] = useState("");
 
   useEffect(() => {
@@ -125,7 +132,7 @@ export default function IncomingLotReportForm({
         sampleNumber: !documentary && mode === "sample_number" ? parsedSample : undefined,
         photos,
         ...(!openRejection ? { inspectionMethod } : {}),
-        ...(initialKind === "spec_rejection" && selectedPlan.perShift ? { shiftIdentifier: shiftIdentifier.trim(), shiftInspectionNumber: Number(shiftInspectionNumber) } : {}),
+        ...(initialKind === "spec_rejection" && selectedPlan.perShift ? { shiftIdentifier: shiftIdentifier.trim(), shiftInspectionNumber: Number(shiftInspectionNumber), ...(mode === "quantity" ? { shiftUniqueRejectedTotal: Number(shiftUniqueTotal) } : {}) } : {}),
       });
     } catch (cause) {
       setFormError(cause instanceof Error ? cause.message : "No fue posible guardar el reporte.");
@@ -190,6 +197,7 @@ export default function IncomingLotReportForm({
             {mode === "quantity" ? "Cantidad de piezas con el hallazgo" : "Número de muestra"}
             <input type="number" min="1" value={mode === "quantity" ? quantity : sampleNumber} onChange={(event) => mode === "quantity" ? setQuantity(event.target.value) : setSampleNumber(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none focus:border-emerald-400/40" />
           </label>}
+          {initialKind==="spec_rejection"&&shiftPlan?.perShift&&<div className="rounded-xl border border-white/15 p-3 text-sm text-white/70"><p>Límite por inspección: {shiftPlan.allowedRejectedQuantity} piezas únicas. El lote no pasa al superar ese límite.</p>{mode==="quantity"&&<label className="mt-2 block">Total acumulado de piezas rechazadas únicas en esta inspección<input type="number" min={Math.max(previousShiftCount,Number(quantity||0))} max={previousShiftCount+Number(quantity||0)} value={shiftUniqueTotal} onChange={e=>setShiftUniqueTotal(e.target.value)} className="mt-2 w-full rounded bg-black/20 p-3"/><span className="mt-1 block text-xs">Ya registradas: {previousShiftCount}. Ajusta el total si este hallazgo afecta piezas que ya reportaste.</span></label>}{mode==="sample_number"&&<p className="mt-2 text-xs">Las muestras con el mismo número se cuentan una sola vez en esta inspección.</p>}</div>}
           {documentary&&<p className="text-sm text-amber-100/80">{initialKind === "spec_rejection" ? "Indica en el título el documento que falta. Este rechazo documental hará que el lote no pase; no se registran cantidades ni muestras." : "Hallazgo documental: sin cantidad de piezas ni número de muestra."}</p>}
 
           <div>

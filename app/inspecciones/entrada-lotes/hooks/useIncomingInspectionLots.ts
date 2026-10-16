@@ -149,7 +149,7 @@ export function useIncomingInspectionLots({
         );
       }
 
-      if (!primaryPlan || methodPlans.some((plan) => plan.method === "documentary" ? false : plan.perShift ? (context.sourceType !== "proceso_proyecto" || !Number.isInteger(plan.inspectionsPerShift) || Number(plan.inspectionsPerShift) < 1) : plan.isFullInspection
+      if (!primaryPlan || methodPlans.some((plan) => plan.method === "documentary" ? false : plan.perShift ? (context.sourceType !== "proceso_proyecto" || !Number.isInteger(plan.inspectionsPerShift) || Number(plan.inspectionsPerShift) < 1 || !isNonNegativeInteger(plan.allowedRejectedQuantity) || plan.allowedRejectedQuantity > input.totalLotQuantity) : plan.isFullInspection
         ? plan.inspectedQuantity !== input.totalLotQuantity
         : !isPositiveInteger(plan.inspectedQuantity) || plan.inspectedQuantity > input.totalLotQuantity || !plan.aql.trim() || !isNonNegativeInteger(plan.allowedRejectedQuantity) || plan.allowedRejectedQuantity > plan.inspectedQuantity)) throw new Error("Completa correctamente el plan de cada método de inspección.");
 

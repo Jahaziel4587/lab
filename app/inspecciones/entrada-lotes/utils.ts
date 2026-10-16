@@ -113,6 +113,7 @@ export function mapIncomingLot(
       }) : [fallbackPlan];
   return {
     id,
+    shiftRejectionState: data.shiftRejectionState && typeof data.shiftRejectionState === "object" ? data.shiftRejectionState as IncomingInspectionLot["shiftRejectionState"] : {},
     shiftChecks: Array.isArray(data.shiftChecks) ? data.shiftChecks as IncomingInspectionLot["shiftChecks"] : [],
     lotName: String(data.lotName || ""),
     normalizedLotName: String(
