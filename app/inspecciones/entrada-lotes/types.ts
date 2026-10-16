@@ -1,3 +1,4 @@
+import type { AqlPlan, AqlCalculation } from "@/lib/inspections/aql";
 export type IncomingInspectionSource =
   | "entrada_mts"
   | "entrada_proyecto"
@@ -19,6 +20,8 @@ export type IncomingInspectionLevel =
 export type IncomingInspectionMethod = "documentary" | "visual" | "dimensional" | "functional";
 
 export type IncomingInspectionMethodPlan = {
+  samplingPlan?: AqlPlan;
+  aqlCalculation?: AqlCalculation;
   method: IncomingInspectionMethod;
   isFullInspection?: boolean;
   perShift?: boolean;

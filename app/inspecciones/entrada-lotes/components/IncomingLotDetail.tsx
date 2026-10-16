@@ -1,4 +1,5 @@
 "use client";
+import {aqlPlanDescription} from "@/lib/inspections/aql";
 import { findingLabel } from "../types";
 
 import {
@@ -602,7 +603,7 @@ export default function IncomingLotDetail({ context, lot }: Props) {
             </h2>
             <p className="mt-2 text-sm text-white/55">{lot.totalLotQuantity} piezas totales · {lot.methodPlans.length} método{lot.methodPlans.length === 1 ? "" : "s"} de inspección</p>
             <p className="mt-1 text-sm text-white/45">{context.sourceType === "proceso_proyecto" ? "PDO" : "PO"} #: {lot.purchaseOrder || "Sin registrar"}</p>
-            <div className="mt-2 flex flex-wrap gap-2">{lot.methodPlans.map((plan) => <span key={plan.method} className="rounded-full border border-white/10 px-2.5 py-1 text-xs text-white/45">{plan.method === "documentary" ? "Documental" : plan.method === "visual" ? "Visual" : plan.method === "dimensional" ? "Dimensional" : "Funcional"}: {plan.method==="documentary"?"Documentación requerida · sin muestreo":plan.perShift?`${plan.inspectionsPerShift} inspecciones por turno · ${plan.allowedRejectedQuantity} rechazos permitidos por inspección`:plan.isFullInspection?`100% · ${plan.inspectedQuantity} piezas`:`${plan.inspectedQuantity} muestras · ${plan.allowedRejectedQuantity} permitidos`}</span>)}</div>
+            <div className="mt-2 flex flex-wrap gap-2">{lot.methodPlans.map((plan) => <span key={plan.method} className="rounded-full border border-white/10 px-2.5 py-1 text-xs text-white/45">{plan.method === "documentary" ? "Documental" : plan.method === "visual" ? "Visual" : plan.method === "dimensional" ? "Dimensional" : "Funcional"}: {plan.method==="documentary"?"Documentación requerida · sin muestreo":plan.perShift?`${plan.inspectionsPerShift} inspecciones por turno · ${plan.allowedRejectedQuantity} rechazos permitidos por inspección`:plan.isFullInspection?`100% · ${plan.inspectedQuantity} piezas`:`${plan.inspectedQuantity} muestras · ${plan.allowedRejectedQuantity} permitidos${plan.aqlCalculation?` · ${aqlPlanDescription(plan)}`:""}`}</span>)}</div>
             {typeof lot.finalRejectedPieces === "number" && (
               <p className="mt-2 text-sm font-medium text-red-200">
                 {lot.finalRejectedPieces} piezas no pasaron la inspección

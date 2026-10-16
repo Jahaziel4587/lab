@@ -1,3 +1,4 @@
+import {aqlPlanDescription} from "@/lib/inspections/aql";
 import { findingLabel } from "../types";
 import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb } from "pdf-lib";
 import type { IncomingInspectionContext, IncomingInspectionLot, IncomingLotReport } from "../types";
@@ -94,7 +95,7 @@ export async function generateIncomingLotPdf({ mode, context, lot, reports, idTo
   const methodLabel = (method?: string) => method === "documentary" ? "Documental" : method === "dimensional" ? "Dimensional" : method === "functional" ? "Funcional" : "Visual";
   const methodPlanText = (plan: IncomingInspectionLot["methodPlans"][number], includeAllowed = false) => plan.method === "documentary" ? "Documentación requerida; sin muestreo ni AQL" : plan.perShift ? `${plan.inspectionsPerShift} inspecciones por turno; ${plan.allowedRejectedQuantity} rechazos permitidos por inspección` : plan.isFullInspection
     ? "Inspección del 100%"
-    : `Muestra: ${plan.inspectedQuantity} | Tipo: ${plan.inspectionType === "special" ? "Especial" : "Normal"} | Nivel: ${plan.inspectionLevel} | AQL: ${plan.aql}${includeAllowed ? ` | Permitidos: ${plan.allowedRejectedQuantity}` : ""}`;
+    : `Muestra: ${plan.inspectedQuantity} | Tipo: ${aqlPlanDescription(plan)}${includeAllowed ? ` | Permitidos: ${plan.allowedRejectedQuantity}` : ""}`;
   const byMethodThenDate = (a: IncomingLotReport, b: IncomingLotReport) => methodOrder.indexOf(a.inspectionMethod || "visual") - methodOrder.indexOf(b.inspectionMethod || "visual") || stamp(a.createdAt) - stamp(b.createdAt);
   const spec = reports.filter((report) => report.kind === "spec_rejection").sort(byMethodThenDate);
   const anomalies = reports.filter((report) => report.kind === "anomaly" && (mode !== "anomaly" || report.id === anomalyId)).sort(byMethodThenDate);
@@ -188,7 +189,7 @@ export async function generateIncomingLotPdf({ mode, context, lot, reports, idTo
   text(`Componente: ${context.componentTitle}`, { font: bold });
   text(`${context.sourceType === "proceso_proyecto" ? "PDO" : "PO"} #: ${lot.purchaseOrder || "Sin registrar"}`);
   text(`Cantidad total del lote: ${lot.totalLotQuantity}`);
-  lot.methodPlans.forEach((plan) => text(`${methodLabel(plan.method)}: ${plan.method==="documentary"?"Documentación requerida; sin muestreo ni AQL":plan.perShift?methodPlanText(plan):plan.isFullInspection?`Inspección del 100% | ${plan.inspectedQuantity} piezas por inspeccionar`:`${plan.inspectedQuantity} por inspeccionar | ${plan.inspectionType === "special" ? "Especial" : "Normal"} | Nivel ${plan.inspectionLevel} | AQL ${plan.aql} | ${plan.allowedRejectedQuantity} rechazos permitidos`}`, { size: 9.5, color: GRAY }));
+  lot.methodPlans.forEach((plan) => text(`${methodLabel(plan.method)}: ${plan.method==="documentary"?"Documentación requerida; sin muestreo ni AQL":plan.perShift?methodPlanText(plan):plan.isFullInspection?`Inspección del 100% | ${plan.inspectedQuantity} piezas por inspeccionar`:`${plan.inspectedQuantity} por inspeccionar | ${aqlPlanDescription(plan)} | ${plan.allowedRejectedQuantity} rechazos permitidos`}`, { size: 9.5, color: GRAY }));
   text(`Estado: ${lot.status === "finalized" ? "Finalizado" : "En curso"} | Resultado: ${lot.inspectionResult === "will_fail" ? "No pasará" : lot.inspectionResult === "within_limit" ? "Dentro del límite" : "Pendiente"}`, { color: lot.inspectionResult === "will_fail" ? RED : GRAY });
   if (mode === "summary") {
     text(`Piezas del lote que no pasaron la inspección: ${typeof lot.finalRejectedPieces === "number" ? lot.finalRejectedPieces : "Pendiente de cierre"}`, { size: 13, font: bold, color: typeof lot.finalRejectedPieces === "number" && lot.finalRejectedPieces > 0 ? RED : GREEN, gap: 8 });
