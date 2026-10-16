@@ -55,7 +55,7 @@ function mapReport(
         ? data.kind as IncomingLotFindingKind
         : "anomaly",
     mode:
-      data.mode === "sample_number"
+      data.mode === "documentary" || data.inspectionMethod === "documentary" ? "documentary" : data.mode === "sample_number"
         ? "sample_number"
         : "quantity",
     title: String(data.title || ""),
@@ -238,10 +238,12 @@ export function useIncomingLotReports({
     }
 
     if (input.kind === "spec_rejection" && methodPlan?.perShift && (!input.shiftIdentifier?.trim() || !Number.isInteger(input.shiftInspectionNumber) || Number(input.shiftInspectionNumber) < 1 || Number(input.shiftInspectionNumber) > Number(methodPlan.inspectionsPerShift))) throw new Error("Identifica el turno y el número de inspección.");
-    const amount = input.mode === "quantity"
+    const documentary = input.inspectionMethod === "documentary" && !openRejection;
+    if ((input.mode === "documentary") !== documentary) throw new Error("El reporte documental no utiliza cantidades ni muestras.");
+    const amount = documentary ? 0 : input.mode === "quantity"
       ? Number(input.quantity)
       : 1;
-    if (!Number.isInteger(amount) || amount < 1) {
+    if (!documentary && (!Number.isInteger(amount) || amount < 1)) {
       throw new Error("La cantidad debe ser un número entero mayor a cero.");
     }
     if (
@@ -308,7 +310,7 @@ export function useIncomingLotReports({
 
         if (
           input.kind === "spec_rejection" &&
-          !methodPlan?.perShift &&
+          !documentary && !methodPlan?.perShift &&
           current.specCountingMode &&
           current.specCountingMode !== input.mode
         ) {
@@ -324,9 +326,9 @@ export function useIncomingLotReports({
           description,
           ...(!openRejection ? { inspectionMethod: input.inspectionMethod } : {}),
           ...(input.kind === "spec_rejection" && methodPlan?.perShift ? { shiftIdentifier: input.shiftIdentifier!.trim(), shiftInspectionNumber: input.shiftInspectionNumber } : {}),
-          ...(input.mode === "quantity"
+          ...(!documentary ? (input.mode === "quantity"
             ? { quantity: amount }
-            : { sampleNumber: Number(input.sampleNumber) }),
+            : { sampleNumber: Number(input.sampleNumber) }) : {}),
           photos,
           ...(input.kind === "anomaly"
             ? { status: "pending_title", decision: null }
@@ -339,13 +341,16 @@ export function useIncomingLotReports({
           updatedAt: serverTimestamp(),
         });
 
+        if (input.kind === "spec_rejection" && documentary) {
+          transaction.update(lotReference, { inspectionResult: "will_fail", "methodReviewState.documentary": { result: "will_fail" } });
+        }
         if (input.kind === "spec_rejection" && methodPlan?.perShift) {
           if ((current.shiftChecks || []).some((check: {method: string; shiftIdentifier: string; inspectionNumber: number}) => check.method === input.inspectionMethod && check.shiftIdentifier === input.shiftIdentifier?.trim() && check.inspectionNumber === input.shiftInspectionNumber)) throw new Error("Esta inspección ya está registrada como aprobada.");
           transaction.update(lotReference, { inspectionResult: "will_fail", [`methodReviewState.${methodPlan.method}`]: { result: "will_fail", confirmedUniqueQuantity: amount, lastReviewedReportedQuantity: Number(current.reportedRejectedQuantity || 0) + amount } });
         }
         if (input.kind === "spec_rejection") {
           transaction.update(lotReference, {
-            ...(!methodPlan?.perShift ? {specCountingMode: input.mode} : {}),
+            ...(!documentary && !methodPlan?.perShift ? {specCountingMode: input.mode} : {}),
             reportedRejectedQuantity:
               Number(current.reportedRejectedQuantity || 0) + amount,
             updatedAt: serverTimestamp(),
@@ -357,7 +362,7 @@ export function useIncomingLotReports({
         }
       });
 
-      if (input.kind === "spec_rejection" && methodPlan?.perShift) await notify("threshold_exceeded", { inspectionMethod: methodPlan.method }).catch(console.error);
+      if (input.kind === "spec_rejection" && (methodPlan?.perShift || documentary)) await notify("threshold_exceeded", { inspectionMethod: methodPlan?.method || "documentary" }).catch(console.error);
       if (input.kind === "anomaly") {
         await notify("anomaly_created", { reportId: reportReference.id }).catch((cause) => {
           console.error("La anormalidad se guardó, pero no pudo notificarse:", cause);
@@ -610,7 +615,7 @@ export function useIncomingLotReports({
       throw new Error("Falta la sesión o la información del lote.");
     }
     const hasUnreviewedThreshold = lot.methodPlans.some((plan) => {
-      if (plan.isFullInspection || plan.perShift) return false;
+      if (plan.method === "documentary" || plan.isFullInspection || plan.perShift) return false;
       const reported = reports.filter((report) => report.kind === "spec_rejection" && (report.inspectionMethod || "visual") === plan.method).reduce((sum, report) => sum + (report.mode === "quantity" ? report.quantity || 0 : 1), 0);
       return reported > plan.allowedRejectedQuantity && reported > Number(lot.methodReviewState?.[plan.method]?.lastReviewedReportedQuantity || 0);
     });

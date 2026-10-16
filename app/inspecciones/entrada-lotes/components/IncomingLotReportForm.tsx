@@ -54,6 +54,7 @@ export default function IncomingLotReportForm({
   );
   const [title, setTitle] = useState("");
   const [inspectionMethod, setInspectionMethod] = useState(methodPlans[0]?.method || "visual");
+  const documentary = !openRejection && inspectionMethod === "documentary";
   const [description, setDescription] = useState("");
   const [quantity, setQuantity] = useState("");
   const [sampleNumber, setSampleNumber] = useState("");
@@ -94,14 +95,14 @@ export default function IncomingLotReportForm({
       return;
     }
     if (
-      mode === "quantity" &&
+      !documentary && mode === "quantity" &&
       (!Number.isInteger(parsedQuantity) || parsedQuantity < 1)
     ) {
       setFormError("Agrega una cantidad válida.");
       return;
     }
     if (
-      mode === "sample_number" &&
+      !documentary && mode === "sample_number" &&
       (
         !Number.isInteger(parsedSample) ||
         parsedSample < 1 ||
@@ -117,11 +118,11 @@ export default function IncomingLotReportForm({
       setFormError("");
       await onSubmit({
         kind: initialKind,
-        mode,
+        mode: documentary ? "documentary" : mode,
         title: initialKind === "anomaly" ? "Pendiente de título" : title.trim(),
         description: description.trim(),
-        quantity: mode === "quantity" ? parsedQuantity : undefined,
-        sampleNumber: mode === "sample_number" ? parsedSample : undefined,
+        quantity: !documentary && mode === "quantity" ? parsedQuantity : undefined,
+        sampleNumber: !documentary && mode === "sample_number" ? parsedSample : undefined,
         photos,
         ...(!openRejection ? { inspectionMethod } : {}),
         ...(initialKind === "spec_rejection" && selectedPlan.perShift ? { shiftIdentifier: shiftIdentifier.trim(), shiftInspectionNumber: Number(shiftInspectionNumber) } : {}),
@@ -148,7 +149,7 @@ export default function IncomingLotReportForm({
 
         <form onSubmit={submit} className="mt-6 space-y-5">
           {!openRejection && methodPlans.length > 1 && <div><p className="mb-2 text-sm text-white/70">Método de inspección del reporte</p><div className="grid grid-cols-2 gap-2">{methodPlans.map((plan) => <button key={plan.method} type="button" onClick={() => setInspectionMethod(plan.method)} className={`rounded-xl border px-3 py-3 text-sm ${inspectionMethod === plan.method ? "border-emerald-400/35 bg-emerald-400/10 text-emerald-100" : "border-white/10 text-white/45"}`}>{plan.method === "documentary" ? "Documental" : plan.method === "visual" ? "Visual" : plan.method === "dimensional" ? "Dimensional" : "Funcional"}</button>)}</div></div>}
-          {!openRejection && <div>
+          {!openRejection && !documentary && <div>
             <p className="mb-2 text-sm text-white/70">Manera de reportar</p>
             <div className="grid grid-cols-2 gap-2">
               {(["quantity", "sample_number"] as IncomingLotReportMode[]).map((value) => {
@@ -185,10 +186,11 @@ export default function IncomingLotReportForm({
             <textarea value={description} onChange={(event) => setDescription(event.target.value)} rows={4} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none focus:border-emerald-400/40" placeholder="Describe lo observado. Puedes incluir aquí el rango inspeccionado." />
           </label>
 
-          <label className="block text-sm text-white/70">
+          {!documentary && <label className="block text-sm text-white/70">
             {mode === "quantity" ? "Cantidad de piezas con el hallazgo" : "Número de muestra"}
             <input type="number" min="1" value={mode === "quantity" ? quantity : sampleNumber} onChange={(event) => mode === "quantity" ? setQuantity(event.target.value) : setSampleNumber(event.target.value)} className="mt-2 w-full rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-white outline-none focus:border-emerald-400/40" />
-          </label>
+          </label>}
+          {documentary&&<p className="text-sm text-amber-100/80">{initialKind === "spec_rejection" ? "Indica en el título el documento que falta. Este rechazo documental hará que el lote no pase; no se registran cantidades ni muestras." : "Hallazgo documental: sin cantidad de piezas ni número de muestra."}</p>}
 
           <div>
             <div className="flex items-center justify-between gap-3">

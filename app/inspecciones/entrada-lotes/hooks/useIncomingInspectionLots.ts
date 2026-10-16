@@ -124,7 +124,7 @@ export function useIncomingInspectionLots({
           lotName,
         );
       if (context.sourceType === "proceso_proyecto" && input.methodPlans.some(plan => plan.method === "documentary")) throw new Error("La inspección documental no aplica a proceso.");
-      const methodPlans = input.methodPlans.map((plan) => plan.isFullInspection
+      const methodPlans = input.methodPlans.map((plan) => plan.method === "documentary" ? { ...plan, isFullInspection: false, perShift: false, inspectedQuantity: 0, aql: "", allowedRejectedQuantity: 0 } : plan.isFullInspection
         ? { ...plan, inspectedQuantity: input.totalLotQuantity, aql: "", allowedRejectedQuantity: 0 }
         : plan);
       const primaryPlan = methodPlans[0];
@@ -149,7 +149,7 @@ export function useIncomingInspectionLots({
         );
       }
 
-      if (!primaryPlan || methodPlans.some((plan) => plan.perShift ? (context.sourceType !== "proceso_proyecto" || !Number.isInteger(plan.inspectionsPerShift) || Number(plan.inspectionsPerShift) < 1) : plan.isFullInspection
+      if (!primaryPlan || methodPlans.some((plan) => plan.method === "documentary" ? false : plan.perShift ? (context.sourceType !== "proceso_proyecto" || !Number.isInteger(plan.inspectionsPerShift) || Number(plan.inspectionsPerShift) < 1) : plan.isFullInspection
         ? plan.inspectedQuantity !== input.totalLotQuantity
         : !isPositiveInteger(plan.inspectedQuantity) || plan.inspectedQuantity > input.totalLotQuantity || !plan.aql.trim() || !isNonNegativeInteger(plan.allowedRejectedQuantity) || plan.allowedRejectedQuantity > plan.inspectedQuantity)) throw new Error("Completa correctamente el plan de cada método de inspección.");
 

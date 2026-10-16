@@ -105,7 +105,7 @@ export function addRejectionDetails(zip: PizZip, reports: IncomingLotReport[], o
     if (!items.length) continue;
     lines.push("", findingLabel(kind).toUpperCase());
     for (const report of items) {
-      lines.push(report.title, report.mode === "quantity" ? `Cantidad: ${report.quantity || 0} piezas` : `Muestra #${report.sampleNumber}`);
+      lines.push(report.title, report.inspectionMethod === "documentary" ? "Hallazgo documental (sin cantidad ni muestra)" : report.mode === "quantity" ? `Cantidad: ${report.quantity || 0} piezas` : `Muestra #${report.sampleNumber}`);
       if (report.inspectionMethod && kind !== "line_rejection" && kind !== "component_rejection") lines.push(`Método: ${report.inspectionMethod}`);
       if (report.shiftIdentifier) lines.push(`Por turno: ${report.shiftIdentifier} · Inspección #${report.shiftInspectionNumber}`);
       if (report.description) lines.push(...(report.description.match(/.{1,95}(?:\s|$)|.{1,95}/g) || [report.description]));

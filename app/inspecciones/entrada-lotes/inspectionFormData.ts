@@ -8,6 +8,7 @@ export function validateInspectionFormData(data: IncomingInspectionFormData, pla
   if (!data.specReference?.trim() || !data.wiRevision?.trim()) throw new Error("Agrega la referencia de SPEC y la revisión de la WI; puedes escribir No aplica en SPEC.");
   if (!results) return;
   for (const plan of plans) {
+    if (plan.method === "documentary") continue;
     const value = data.failedQuantities?.[plan.method];
     if (!value?.trim() || !Number.isInteger(Number(value)) || Number(value) < 0 || Number(value) > plan.inspectedQuantity) throw new Error("Confirma las muestras únicas que no pasaron en cada método (entre 0 y la cantidad inspeccionada).");
   }

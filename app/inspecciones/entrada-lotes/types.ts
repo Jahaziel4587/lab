@@ -196,6 +196,7 @@ export type IncomingLotFindingKind =
   | "component_rejection";
 
 export type IncomingLotReportMode =
+  | "documentary"
   | "quantity"
   | "sample_number";
 
