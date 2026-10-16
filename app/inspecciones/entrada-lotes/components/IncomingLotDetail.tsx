@@ -573,7 +573,6 @@ export default function IncomingLotDetail({ context, lot }: Props) {
         context,
         lot,
         reports: reportsState.reports,
-        messagesByReport: reportsState.messagesByReport,
         idToken: await user.getIdToken(),
         anomalyId: report?.id,
       });

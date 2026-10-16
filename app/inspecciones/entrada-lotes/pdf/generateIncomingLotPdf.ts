@@ -1,6 +1,6 @@
 import { findingLabel } from "../types";
 import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb } from "pdf-lib";
-import type { IncomingInspectionContext, IncomingInspectionLot, IncomingLotAnomalyMessage, IncomingLotReport } from "../types";
+import type { IncomingInspectionContext, IncomingInspectionLot, IncomingLotReport } from "../types";
 
 export type IncomingLotPdfMode = "summary" | "spec" | "anomalies" | "anomaly" | "line_rejection" | "component_rejection";
 
@@ -9,7 +9,6 @@ type Params = {
   context: IncomingInspectionContext;
   lot: IncomingInspectionLot;
   reports: IncomingLotReport[];
-  messagesByReport: Record<string, IncomingLotAnomalyMessage[]>;
   idToken: string;
   anomalyId?: string;
 };
@@ -90,7 +89,7 @@ function download(bytes: Uint8Array, filename: string) {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export async function generateIncomingLotPdf({ mode, context, lot, reports, messagesByReport, idToken, anomalyId }: Params) {
+export async function generateIncomingLotPdf({ mode, context, lot, reports, idToken, anomalyId }: Params) {
   const methodOrder = lot.methodPlans.map((plan) => plan.method);
   const methodLabel = (method?: string) => method === "documentary" ? "Documental" : method === "dimensional" ? "Dimensional" : method === "functional" ? "Funcional" : "Visual";
   const methodPlanText = (plan: IncomingInspectionLot["methodPlans"][number], includeAllowed = false) => plan.method === "documentary" ? "Documentación requerida; sin muestreo ni AQL" : plan.perShift ? `${plan.inspectionsPerShift} inspecciones por turno` : plan.isFullInspection
@@ -177,8 +176,7 @@ export async function generateIncomingLotPdf({ mode, context, lot, reports, mess
       if (report.description) text(report.description, { color: GRAY });
       text(`Reportó: ${report.createdByName} | ${time(report.createdAt)}${report.decidedByName ? ` | Decidió: ${report.decidedByName}` : ""}`, { size: 9, color: GRAY });
       await photos(report);
-      const conversation = mode === "summary" ? [] : (messagesByReport[report.id] || []);
-      if (conversation.length) { text("Conversación", { size: 11, font: bold }); conversation.forEach((message) => text(`${message.createdByName} (${time(message.createdAt)}): ${message.text}`, { size: 9.5, indent: 8, color: message.type === "decision" && failed ? RED : GRAY })); }
+
       if (index < anomalies.length - 1) rule();
     }
   };

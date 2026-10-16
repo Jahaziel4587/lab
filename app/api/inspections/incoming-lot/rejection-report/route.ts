@@ -1,3 +1,4 @@
+import { fitRejectionDescription } from "@/lib/inspections/rejectionPrintLayout";
 import { formatQmsDate } from "@/lib/inspections/qmsDate";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -107,6 +108,7 @@ export async function POST(request: NextRequest) {
 
     const templatePath = path.join(process.cwd(), "public", "templates", "Rejection Report Inpec Entrada.xlsx");
     const zip = new PizZip(await fs.readFile(templatePath));
+    replacements.rejectionSummary = await fitRejectionDescription(zip, rejectionSummary);
     Object.keys(zip.files)
       .filter((name) => name.startsWith("xl/") && name.endsWith(".xml"))
       .forEach((name) => {
