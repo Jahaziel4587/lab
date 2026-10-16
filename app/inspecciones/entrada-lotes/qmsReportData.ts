@@ -1,3 +1,4 @@
+import {aqlPlanDescription} from "@/lib/inspections/aql";
 import type {
   IncomingInspectionContext,
   IncomingInspectionLot,
@@ -45,7 +46,7 @@ export function buildNonconformanceDescription(
     if (plan.method === "documentary") return "Documental: falta documentación requerida. El lote no pasa la inspección documental; no aplica muestreo ni AQL.";
     if (plan.perShift) return `${incomingMethodLabel(plan.method)}: se superó el límite de ${plan.allowedRejectedQuantity} piezas rechazadas únicas en una de las ${plan.inspectionsPerShift} inspecciones programadas por turno.`;
     const review = lot.methodReviewState?.[plan.method];
-    return `${incomingMethodLabel(plan.method)}: ${review?.confirmedUniqueQuantity ?? 0} piezas rechazadas únicas frente a ${plan.allowedRejectedQuantity} permitidas (muestra de ${plan.inspectedQuantity}, AQL ${plan.aql}, inspección ${plan.inspectionType === "special" ? "especial" : "normal"}, nivel ${plan.inspectionLevel}).`;
+    return `${incomingMethodLabel(plan.method)}: ${review?.confirmedUniqueQuantity ?? 0} piezas rechazadas únicas frente a ${plan.allowedRejectedQuantity} permitidas (muestra de ${plan.inspectedQuantity}, ${aqlPlanDescription(plan)}).`;
   }).join(" ");
   const findings = buildSuggestedRejectionSummary(reports.filter(report => report.kind === "spec_rejection"));
   return `Durante la inspección de ${isProcess ? "proceso" : "entrada"} del lote ${lot.lotName} se excedió el criterio de aceptación en ${failedMethods.length || 1} método(s) de inspección. ${methodDetails} Hallazgos registrados: ${findings}. El lote se determinó no conforme y quedó sujeto a la disposición indicada.`;

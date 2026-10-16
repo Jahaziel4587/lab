@@ -1,0 +1,15 @@
+"use client";
+import {calculateAql,NORMAL_AQLS,ZERO_AQLS,type AqlPlan} from "@/lib/inspections/aql";
+import type {IncomingInspectionMethodPlan,IncomingInspectionLevel} from "../types";
+const style="mt-2 min-h-11 w-full rounded-xl border border-white/10 bg-[#111916] px-3 text-white";
+export default function AutomaticAqlFields({plan,total,onChange}:{plan:IncomingInspectionMethodPlan;total:number;onChange:(patch:Partial<IncomingInspectionMethodPlan>)=>void}){
+ const samplingPlan=plan.samplingPlan||"normal";
+ let result:ReturnType<typeof calculateAql>|undefined;let error="";
+ try{result=calculateAql(total,plan.inspectionLevel,plan.aql,samplingPlan)}catch(e){error=e instanceof Error?e.message:"No fue posible calcular el muestreo."}
+ return <div className="mt-4 space-y-3"><div className="grid gap-4 sm:grid-cols-3">
+ <label className="text-sm text-white/70">Plan de muestreo<select className={style} value={samplingPlan} onChange={e=>{const value=e.target.value as AqlPlan;onChange({samplingPlan:value,aql:(value==="normal"?NORMAL_AQLS:ZERO_AQLS).some(x=>Number(x)===Number(plan.aql))?plan.aql:"1.0"})}}><option value="normal">Normal — muestreo simple</option><option value="squeglia">Squeglia — cero aceptación</option></select></label>
+ {samplingPlan==="normal"&&<label className="text-sm text-white/70">Nivel de inspección<select className={style} value={plan.inspectionLevel} onChange={e=>onChange({inspectionLevel:e.target.value as IncomingInspectionLevel})}>{["I","II","III","S1","S2","S3","S4"].map(l=><option key={l} value={l}>{l.startsWith("S")?`Especial ${l}`:`General ${l}`}</option>)}</select></label>}
+ <label className="text-sm text-white/70">AQL<select className={style} value={(samplingPlan==="normal"?NORMAL_AQLS:ZERO_AQLS).find(x=>Number(x)===Number(plan.aql))||"1.0"} onChange={e=>onChange({aql:e.target.value})}>{(samplingPlan==="normal"?NORMAL_AQLS:ZERO_AQLS).map(x=><option key={x} value={x}>{x}</option>)}</select></label>
+ </div>{result?<div aria-live="polite" className="rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-4 text-sm text-emerald-100"><p>Muestra por inspeccionar: <strong>{result.sampleSize}</strong>{result.inspectEntireLot?" (100% del lote)":""} · Rechazos permitidos (Ac): <strong>{result.acceptanceNumber}</strong> · Se rechaza desde (Re): <strong>{result.rejectionNumber}</strong></p>{samplingPlan==="normal"&&<p className="mt-1 text-white/60">Letra del lote: {result.codeLetter}{result.codeLetter!==result.effectiveCodeLetter?` · Plan aplicado por flecha: ${result.effectiveCodeLetter}`:""}</p>}<p className="mt-1 text-white/50">QAP-013 Rev C · {samplingPlan==="normal"?"Tablas A y B, inspección normal":"Tabla de cero aceptación de Squeglia"}. Se recalcula al cambiar la cantidad del lote, el nivel o el AQL.</p></div>:<p className="text-sm text-white/60">{error}</p>}
+ <p className="text-xs text-white/45">Valores iniciales: nivel II y AQL 1.0. Usa el AQL indicado en la SPEC cuando sea diferente. Los regímenes reducido e intensivo requieren sus tablas aprobadas y no se cambian automáticamente.</p></div>
+}

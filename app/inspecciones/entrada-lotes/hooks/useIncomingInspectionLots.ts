@@ -1,4 +1,5 @@
 "use client";
+import { applyAutomaticAql } from "@/lib/inspections/aql";
 
 import { validateInspectionFormData } from "../inspectionFormData";
 import {
@@ -126,7 +127,7 @@ export function useIncomingInspectionLots({
       if (context.sourceType === "proceso_proyecto" && input.methodPlans.some(plan => plan.method === "documentary")) throw new Error("La inspección documental no aplica a proceso.");
       const methodPlans = input.methodPlans.map((plan) => plan.method === "documentary" ? { ...plan, isFullInspection: false, perShift: false, inspectedQuantity: 0, aql: "", allowedRejectedQuantity: 0 } : plan.isFullInspection
         ? { ...plan, inspectedQuantity: input.totalLotQuantity, aql: "", allowedRejectedQuantity: 0 }
-        : plan);
+        : context.sourceType !== "proceso_proyecto" ? applyAutomaticAql(plan, input.totalLotQuantity) : plan);
       const primaryPlan = methodPlans[0];
 
       if (!lotName) {

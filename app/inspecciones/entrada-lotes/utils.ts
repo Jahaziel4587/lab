@@ -109,7 +109,7 @@ export function mapIncomingLot(
     ? data.methodPlans.map((entry) => {
         const item = entry as Record<string, unknown>;
         const method = ["documentary", "visual", "dimensional", "functional"].includes(String(item.method)) ? String(item.method) as IncomingInspectionLot["methodPlans"][number]["method"] : "visual";
-        return { method, perShift: item.perShift === true, inspectionsPerShift: Number(item.inspectionsPerShift || 0), isFullInspection: item.isFullInspection === true, inspectedQuantity: Number(item.inspectedQuantity || 0), inspectionType: item.inspectionType === "special" ? "special" as const : "normal" as const, inspectionLevel: String(item.inspectionLevel || "II") as IncomingInspectionLot["inspectionLevel"], aql: String(item.aql || ""), allowedRejectedQuantity: Number(item.allowedRejectedQuantity || 0) };
+        return { method, ...(item.samplingPlan === "normal" || item.samplingPlan === "squeglia" ? {samplingPlan: item.samplingPlan as "normal" | "squeglia"} : {}), ...(item.aqlCalculation && typeof item.aqlCalculation === "object" ? {aqlCalculation: item.aqlCalculation as import("@/lib/inspections/aql").AqlCalculation} : {}), perShift: item.perShift === true, inspectionsPerShift: Number(item.inspectionsPerShift || 0), isFullInspection: item.isFullInspection === true, inspectedQuantity: Number(item.inspectedQuantity || 0), inspectionType: item.inspectionType === "special" ? "special" as const : "normal" as const, inspectionLevel: String(item.inspectionLevel || "II") as IncomingInspectionLot["inspectionLevel"], aql: String(item.aql || ""), allowedRejectedQuantity: Number(item.allowedRejectedQuantity || 0) };
       }) : [fallbackPlan];
   return {
     id,
