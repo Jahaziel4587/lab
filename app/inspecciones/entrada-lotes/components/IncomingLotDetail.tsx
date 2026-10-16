@@ -275,7 +275,7 @@ function ReportCard({
           >
             {typeof report.finalRejectedQuantity === "number"
               ? `${report.finalRejectedQuantity} piezas finales`
-              : report.mode === "quantity"
+              : report.inspectionMethod === "documentary" ? "Hallazgo documental" : report.mode === "quantity"
                 ? `${report.quantity || 0} piezas`
                 : `Muestra #${report.sampleNumber}`}
           </span>
@@ -442,8 +442,8 @@ export default function IncomingLotDetail({ context, lot }: Props) {
     }),
     [reportsState.reports],
   );
-  const specTotalsByMethod = useMemo(() => reportsState.reports.filter((report) => report.kind === "spec_rejection").reduce((totals, report) => ({ ...totals, [report.inspectionMethod || "visual"]: (totals[report.inspectionMethod || "visual"] || 0) + (report.mode === "quantity" ? report.quantity || 0 : 1) }), {} as Record<string, number>), [reportsState.reports]);
-  const thresholdPlan = lot.methodPlans.find((plan) => { if(plan.isFullInspection || plan.perShift)return false; const reported = specTotalsByMethod[plan.method] || 0; const reviewed = lot.methodReviewState?.[plan.method]?.lastReviewedReportedQuantity || 0; return reported > plan.allowedRejectedQuantity && reported > reviewed; });
+  const specTotalsByMethod = useMemo(() => reportsState.reports.filter((report) => report.kind === "spec_rejection" && report.inspectionMethod !== "documentary").reduce((totals, report) => ({ ...totals, [report.inspectionMethod || "visual"]: (totals[report.inspectionMethod || "visual"] || 0) + (report.mode === "quantity" ? report.quantity || 0 : 1) }), {} as Record<string, number>), [reportsState.reports]);
+  const thresholdPlan = lot.methodPlans.find((plan) => { if(plan.method === "documentary" || plan.isFullInspection || plan.perShift)return false; const reported = specTotalsByMethod[plan.method] || 0; const reviewed = lot.methodReviewState?.[plan.method]?.lastReviewedReportedQuantity || 0; return reported > plan.allowedRejectedQuantity && reported > reviewed; });
   const thresholdReportedQuantity = thresholdPlan ? specTotalsByMethod[thresholdPlan.method] || 0 : 0;
   const thresholdMethodLabel = thresholdPlan?.method === "documentary" ? "documental" : thresholdPlan?.method === "dimensional" ? "dimensional" : thresholdPlan?.method === "functional" ? "funcional" : "visual";
   const run = async (action: () => Promise<void>, fallback: string) => {
@@ -603,7 +603,7 @@ export default function IncomingLotDetail({ context, lot }: Props) {
             </h2>
             <p className="mt-2 text-sm text-white/55">{lot.totalLotQuantity} piezas totales · {lot.methodPlans.length} método{lot.methodPlans.length === 1 ? "" : "s"} de inspección</p>
             <p className="mt-1 text-sm text-white/45">{context.sourceType === "proceso_proyecto" ? "PDO" : "PO"} #: {lot.purchaseOrder || "Sin registrar"}</p>
-            <div className="mt-2 flex flex-wrap gap-2">{lot.methodPlans.map((plan) => <span key={plan.method} className="rounded-full border border-white/10 px-2.5 py-1 text-xs text-white/45">{plan.method === "documentary" ? "Documental" : plan.method === "visual" ? "Visual" : plan.method === "dimensional" ? "Dimensional" : "Funcional"}: {plan.perShift?`${plan.inspectionsPerShift} inspecciones por turno`:plan.isFullInspection?`100% · ${plan.inspectedQuantity} piezas`:`${plan.inspectedQuantity} muestras · ${plan.allowedRejectedQuantity} permitidos`}</span>)}</div>
+            <div className="mt-2 flex flex-wrap gap-2">{lot.methodPlans.map((plan) => <span key={plan.method} className="rounded-full border border-white/10 px-2.5 py-1 text-xs text-white/45">{plan.method === "documentary" ? "Documental" : plan.method === "visual" ? "Visual" : plan.method === "dimensional" ? "Dimensional" : "Funcional"}: {plan.method==="documentary"?"Documentación requerida · sin muestreo":plan.perShift?`${plan.inspectionsPerShift} inspecciones por turno`:plan.isFullInspection?`100% · ${plan.inspectedQuantity} piezas`:`${plan.inspectedQuantity} muestras · ${plan.allowedRejectedQuantity} permitidos`}</span>)}</div>
             {typeof lot.finalRejectedPieces === "number" && (
               <p className="mt-2 text-sm font-medium text-red-200">
                 {lot.finalRejectedPieces} piezas no pasaron la inspección
@@ -1055,7 +1055,7 @@ export default function IncomingLotDetail({ context, lot }: Props) {
                                   {item.title}
                                 </p>
                                 <p className="mt-1 text-xs text-white/45">
-                                  {targetReport
+                                  {item.reports.every(report=>report.inspectionMethod==="documentary") ? "Hallazgo documental" : targetReport
                                     ? `${item.quantity} piezas registradas`
                                     : `${item.reports.length} muestras registradas`}
                                 </p>
@@ -1095,7 +1095,7 @@ export default function IncomingLotDetail({ context, lot }: Props) {
                                 {report.title}
                               </p>
                               <p className="mt-1 text-xs text-white/45">
-                                {report.mode === "quantity"
+                                {report.inspectionMethod === "documentary" ? "Documento faltante" : report.mode === "quantity"
                                   ? `${report.quantity || 0} piezas registradas`
                                   : `Muestra #${report.sampleNumber}`}
                               </p>

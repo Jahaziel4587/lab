@@ -93,7 +93,7 @@ function download(bytes: Uint8Array, filename: string) {
 export async function generateIncomingLotPdf({ mode, context, lot, reports, messagesByReport, idToken, anomalyId }: Params) {
   const methodOrder = lot.methodPlans.map((plan) => plan.method);
   const methodLabel = (method?: string) => method === "documentary" ? "Documental" : method === "dimensional" ? "Dimensional" : method === "functional" ? "Funcional" : "Visual";
-  const methodPlanText = (plan: IncomingInspectionLot["methodPlans"][number], includeAllowed = false) => plan.perShift ? `${plan.inspectionsPerShift} inspecciones por turno` : plan.isFullInspection
+  const methodPlanText = (plan: IncomingInspectionLot["methodPlans"][number], includeAllowed = false) => plan.method === "documentary" ? "Documentación requerida; sin muestreo ni AQL" : plan.perShift ? `${plan.inspectionsPerShift} inspecciones por turno` : plan.isFullInspection
     ? "Inspección del 100%"
     : `Muestra: ${plan.inspectedQuantity} | Tipo: ${plan.inspectionType === "special" ? "Especial" : "Normal"} | Nivel: ${plan.inspectionLevel} | AQL: ${plan.aql}${includeAllowed ? ` | Permitidos: ${plan.allowedRejectedQuantity}` : ""}`;
   const byMethodThenDate = (a: IncomingLotReport, b: IncomingLotReport) => methodOrder.indexOf(a.inspectionMethod || "visual") - methodOrder.indexOf(b.inspectionMethod || "visual") || stamp(a.createdAt) - stamp(b.createdAt);
@@ -142,7 +142,7 @@ export async function generateIncomingLotPdf({ mode, context, lot, reports, mess
       const report = spec[index]; space(90);
       if ((report.inspectionMethod || "visual") !== currentMethod) { currentMethod = report.inspectionMethod || "visual"; const plan = lot.methodPlans.find((item) => item.method === currentMethod); text(`Método: ${methodLabel(currentMethod)}${plan ? ` | ${methodPlanText(plan,true)}` : ""}`, { size: 11.5, font: bold, color: GREEN }); }
       text(`SPEC ${index + 1}: ${report.title}`, { size: 12.5, font: bold, color: RED });
-      text(report.mode === "quantity" ? `Cantidad reportada: ${report.quantity || 0} piezas` : `Número de muestra: ${report.sampleNumber}`, { font: bold });
+      text(report.inspectionMethod === "documentary" ? "Hallazgo documental (sin cantidad ni muestra)" : report.mode === "quantity" ? `Cantidad reportada: ${report.quantity || 0} piezas` : `Número de muestra: ${report.sampleNumber}`, { font: bold });
       if (report.shiftIdentifier) text(`Por turno: ${report.shiftIdentifier} | Inspección #${report.shiftInspectionNumber}`);
       if (report.description) text(report.description, { color: GRAY });
       text(`Reportó: ${report.createdByName} | ${time(report.createdAt)}`, { size: 9, color: GRAY });
@@ -158,7 +158,7 @@ export async function generateIncomingLotPdf({ mode, context, lot, reports, mess
       for (const report of items) {
         text(report.title, { font: bold });
 
-        text(report.mode === "quantity" ? `Cantidad reportada: ${report.quantity || 0}` : `Número de muestra: ${report.sampleNumber}`);
+        text(report.inspectionMethod === "documentary" ? "Hallazgo documental (sin cantidad ni muestra)" : report.mode === "quantity" ? `Cantidad reportada: ${report.quantity || 0}` : `Número de muestra: ${report.sampleNumber}`);
         if (report.description) text(report.description);
         text(`Reportó: ${report.createdByName} | ${time(report.createdAt)}`, { size: 9, color: GRAY });
         await photos(report);
@@ -173,7 +173,7 @@ export async function generateIncomingLotPdf({ mode, context, lot, reports, mess
       const report = anomalies[index]; const failed = report.decision === "fail"; space(100);
       if ((report.inspectionMethod || "visual") !== currentMethod) { currentMethod = report.inspectionMethod || "visual"; const plan = lot.methodPlans.find((item) => item.method === currentMethod); text(`Método: ${methodLabel(currentMethod)}${plan ? ` | ${methodPlanText(plan)}` : ""}`, { size: 11.5, font: bold, color: GREEN }); }
       text(`${index + 1}. ${report.title || "Pendiente de título"}`, { size: 13, font: bold, color: failed ? RED : GREEN });
-      text(`Decisión: ${report.decision === "pass" ? "Pasó" : failed ? "No pasó" : "Pendiente"} | ${report.mode === "quantity" ? `Cantidad reportada: ${report.quantity || 0}` : `Muestra: ${report.sampleNumber}`}${typeof report.finalRejectedQuantity === "number" ? ` | Cantidad final rechazada: ${report.finalRejectedQuantity}` : ""}`, { font: bold, color: failed ? RED : DARK });
+      text(`Decisión: ${report.decision === "pass" ? "Pasó" : failed ? "No pasó" : "Pendiente"} | ${report.inspectionMethod === "documentary" ? "Hallazgo documental (sin cantidad ni muestra)" : report.mode === "quantity" ? `Cantidad reportada: ${report.quantity || 0}` : `Muestra: ${report.sampleNumber}`}${typeof report.finalRejectedQuantity === "number" ? ` | Cantidad final rechazada: ${report.finalRejectedQuantity}` : ""}`, { font: bold, color: failed ? RED : DARK });
       if (report.description) text(report.description, { color: GRAY });
       text(`Reportó: ${report.createdByName} | ${time(report.createdAt)}${report.decidedByName ? ` | Decidió: ${report.decidedByName}` : ""}`, { size: 9, color: GRAY });
       await photos(report);
@@ -190,7 +190,7 @@ export async function generateIncomingLotPdf({ mode, context, lot, reports, mess
   text(`Componente: ${context.componentTitle}`, { font: bold });
   text(`${context.sourceType === "proceso_proyecto" ? "PDO" : "PO"} #: ${lot.purchaseOrder || "Sin registrar"}`);
   text(`Cantidad total del lote: ${lot.totalLotQuantity}`);
-  lot.methodPlans.forEach((plan) => text(`${methodLabel(plan.method)}: ${plan.isFullInspection?`Inspección del 100% | ${plan.inspectedQuantity} piezas por inspeccionar`:`${plan.inspectedQuantity} por inspeccionar | ${plan.inspectionType === "special" ? "Especial" : "Normal"} | Nivel ${plan.inspectionLevel} | AQL ${plan.aql} | ${plan.allowedRejectedQuantity} rechazos permitidos`}`, { size: 9.5, color: GRAY }));
+  lot.methodPlans.forEach((plan) => text(`${methodLabel(plan.method)}: ${plan.method==="documentary"?"Documentación requerida; sin muestreo ni AQL":plan.isFullInspection?`Inspección del 100% | ${plan.inspectedQuantity} piezas por inspeccionar`:`${plan.inspectedQuantity} por inspeccionar | ${plan.inspectionType === "special" ? "Especial" : "Normal"} | Nivel ${plan.inspectionLevel} | AQL ${plan.aql} | ${plan.allowedRejectedQuantity} rechazos permitidos`}`, { size: 9.5, color: GRAY }));
   text(`Estado: ${lot.status === "finalized" ? "Finalizado" : "En curso"} | Resultado: ${lot.inspectionResult === "will_fail" ? "No pasará" : lot.inspectionResult === "within_limit" ? "Dentro del límite" : "Pendiente"}`, { color: lot.inspectionResult === "will_fail" ? RED : GRAY });
   if (mode === "summary") {
     text(`Piezas del lote que no pasaron la inspección: ${typeof lot.finalRejectedPieces === "number" ? lot.finalRejectedPieces : "Pendiente de cierre"}`, { size: 13, font: bold, color: typeof lot.finalRejectedPieces === "number" && lot.finalRejectedPieces > 0 ? RED : GREEN, gap: 8 });
