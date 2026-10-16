@@ -43,7 +43,7 @@ export function buildNonconformanceDescription(
   );
   const methodDetails = failedMethods.map((plan) => {
     if (plan.method === "documentary") return "Documental: falta documentación requerida. El lote no pasa la inspección documental; no aplica muestreo ni AQL.";
-    if (plan.perShift) return `${incomingMethodLabel(plan.method)}: se registró un rechazo por SPEC durante una de las ${plan.inspectionsPerShift} inspecciones programadas por turno.`;
+    if (plan.perShift) return `${incomingMethodLabel(plan.method)}: se superó el límite de ${plan.allowedRejectedQuantity} piezas rechazadas únicas en una de las ${plan.inspectionsPerShift} inspecciones programadas por turno.`;
     const review = lot.methodReviewState?.[plan.method];
     return `${incomingMethodLabel(plan.method)}: ${review?.confirmedUniqueQuantity ?? 0} piezas rechazadas únicas frente a ${plan.allowedRejectedQuantity} permitidas (muestra de ${plan.inspectedQuantity}, AQL ${plan.aql}, inspección ${plan.inspectionType === "special" ? "especial" : "normal"}, nivel ${plan.inspectionLevel}).`;
   }).join(" ");

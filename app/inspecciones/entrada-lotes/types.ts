@@ -106,6 +106,7 @@ export type IncomingInspectionFormData = {
 };
 
 export type IncomingInspectionLot = {
+  shiftRejectionState?: Record<string, import("./shiftRejections").ShiftRejectionState>;
   inspectionFormData?: IncomingInspectionFormData;
   id: string;
   shiftChecks?: Array<{ method: IncomingInspectionMethod; shiftIdentifier: string; inspectionNumber: number; result: "pass"; createdBy: string; createdAt: string }>;
@@ -218,6 +219,7 @@ export type IncomingLotReport = {
   inspectionMethod?: IncomingInspectionMethod;
   shiftIdentifier?: string;
   shiftInspectionNumber?: number;
+  shiftUniqueRejectedTotal?: number;
   photos: IncomingLotReportPhoto[];
   status?: "pending_title" | "pending_decision" | "resolved";
   decision?: "pass" | "fail" | null;
@@ -251,6 +253,7 @@ export type CreateIncomingLotReportInput = {
   sampleNumber?: number;
   shiftIdentifier?: string;
   shiftInspectionNumber?: number;
+  shiftUniqueRejectedTotal?: number;
   inspectionMethod?: IncomingInspectionMethod;
   photos: File[];
 };
