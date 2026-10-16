@@ -95,7 +95,7 @@ export default function ProcessComponentList({
 
     if (!cleanTitle) {
       setFormError(
-        "Escribe el nombre del componente.",
+        "Escribe el nombre del sub/ensamble.",
       );
       return;
     }
@@ -117,7 +117,7 @@ export default function ProcessComponentList({
       setFormError(
         submitError instanceof Error
           ? submitError.message
-          : "No fue posible guardar el componente.",
+          : "No fue posible guardar el sub/ensamble.",
       );
     }
   };
@@ -139,7 +139,7 @@ export default function ProcessComponentList({
             transition hover:bg-emerald-400/15"
         >
           <Plus size={17} />
-          Agregar componente
+          Cargar sub/ensamble
         </button>
       </div>
 
@@ -165,7 +165,7 @@ export default function ProcessComponentList({
           />
 
           <span className="ml-3 text-sm text-white/55">
-            Cargando componentes...
+            Cargando sub/ensambles...
           </span>
         </div>
       ) : (
@@ -177,7 +177,7 @@ export default function ProcessComponentList({
                 bg-white/[0.025] p-7 text-center"
             >
               <p className="text-sm text-white/55">
-                Esta WI todavía no tiene componentes
+                Esta WI todavía no tiene sub/ensambles
                 de proceso registrados.
               </p>
 
@@ -192,7 +192,7 @@ export default function ProcessComponentList({
                   text-emerald-300 transition
                   hover:text-emerald-200"
               >
-                Agregar el primer componente
+                Cargar el primer sub/ensamble
               </button>
             </div>
           ) : (
@@ -298,7 +298,7 @@ export default function ProcessComponentList({
                     uppercase tracking-[0.2em]
                     text-emerald-300"
                 >
-                  Componente de proceso
+                  Sub/ensamble de proceso
                 </p>
 
                 <h2
@@ -306,8 +306,8 @@ export default function ProcessComponentList({
                     font-semibold text-white"
                 >
                   {formMode.type === "edit"
-                    ? "Editar componente"
-                    : "Agregar componente"}
+                    ? "Editar sub/ensamble"
+                    : "Cargar sub/ensamble"}
                 </h2>
               </div>
 
@@ -334,7 +334,7 @@ export default function ProcessComponentList({
                 className="text-sm font-medium
                   text-white/75"
               >
-                Nombre del componente
+                Nombre del sub/ensamble
               </label>
 
               <input
@@ -410,7 +410,7 @@ export default function ProcessComponentList({
 
                   {formMode.type === "edit"
                     ? "Guardar cambios"
-                    : "Crear componente"}
+                    : "Cargar sub/ensamble"}
                 </button>
               </div>
             </form>
