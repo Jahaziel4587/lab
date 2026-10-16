@@ -64,9 +64,10 @@ export async function getBoxCurrentUser() {
 
 export async function listBoxFolderItems(
   folderId: string,
+  offset = 0,
 ) {
   return boxRequest<BoxFolderItemsResponse>(
     `/folders/${folderId}/items` +
-      "?limit=1000&fields=id,type,name,extension",
+      `?limit=1000&offset=${offset}&fields=id,type,name,extension`,
   );
 }
