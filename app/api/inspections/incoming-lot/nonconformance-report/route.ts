@@ -1,3 +1,4 @@
+import { formatQmsDate } from "@/lib/inspections/qmsDate";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -31,12 +32,7 @@ function safeFileName(value: string) {
 }
 
 function generatedDate() {
-  return new Intl.DateTimeFormat("es-MX", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    timeZone: "America/Mexico_City",
-  }).format(new Date());
+  return formatQmsDate(new Date());
 }
 
 function cellText(xml: string) {

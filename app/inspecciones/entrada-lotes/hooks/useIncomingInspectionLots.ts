@@ -123,6 +123,7 @@ export function useIncomingInspectionLots({
         normalizeIncomingLotName(
           lotName,
         );
+      if (context.sourceType === "proceso_proyecto" && input.methodPlans.some(plan => plan.method === "documentary")) throw new Error("La inspección documental no aplica a proceso.");
       const methodPlans = input.methodPlans.map((plan) => plan.isFullInspection
         ? { ...plan, inspectedQuantity: input.totalLotQuantity, aql: "", allowedRejectedQuantity: 0 }
         : plan);

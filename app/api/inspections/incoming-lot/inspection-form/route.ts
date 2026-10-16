@@ -1,3 +1,4 @@
+import { formatQmsDate } from "@/lib/inspections/qmsDate";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 import fs from "fs/promises";
@@ -11,7 +12,7 @@ import { extractIncomingPartInfo, incomingMethodLabel } from "@/app/inspecciones
 import { validateInspectionFormData } from "@/app/inspecciones/entrada-lotes/inspectionFormData";
 import type { IncomingInspectionContext, IncomingInspectionFormData, IncomingLotReport } from "@/app/inspecciones/entrada-lotes/types";
 const clean=(x:unknown)=>String(x??"").trim();
-function formatDate(date?:string){return date?date.split("-").reverse().join("/"):"";}
+
 export async function POST(request:NextRequest){
  try {
   const auth=request.headers.get("authorization");if(!auth?.startsWith("Bearer "))return NextResponse.json({error:"No autorizado."},{status:401});
@@ -27,7 +28,7 @@ export async function POST(request:NextRequest){
   validateInspectionFormData(data,lot.methodPlans,true);
   if(lot.inspectionResult==="will_fail"&&data.lotDisposition!=="rejected")throw new Error("El lote que no pasó por SPEC debe registrarse como rechazado.");
   const reports=reportsSnap.docs.map(d=>({id:d.id,...d.data()})) as IncomingLotReport[];
-  const values:Record<string,string>={...extractIncomingPartInfo(scope as IncomingInspectionContext),lotName:lot.lotName,purchaseOrder:lot.purchaseOrder,purchasedQuantity:data.purchasedQuantity!,receivedDate:formatDate(data.receivedDate),receivedQuantity:String(lot.totalLotQuantity),supplierName:data.supplierName!,expirationDate:data.noExpiration?"No aplica":formatDate(data.expirationDate),otherDocumentation:data.documentation?.includes("other")?data.otherDocumentation||"":"",specReference:data.specReference!,wiReference:`${clean(scope.wiCode)} Rev ${data.wiRevision}`,sampleSizeSummary:lot.methodPlans.map(p=>`${incomingMethodLabel(p.method)}: ${p.inspectedQuantity}`).join("\n"),allowedDefectsSummary:lot.methodPlans.map(p=>`${incomingMethodLabel(p.method)}: ${p.isFullInspection?"No aplica (100%)":p.allowedRejectedQuantity}`).join("\n"),totalDefects:data.totalDefects!,lotComments:data.lotComments||""};
+  const values:Record<string,string>={...extractIncomingPartInfo(scope as IncomingInspectionContext),lotName:lot.lotName,purchaseOrder:lot.purchaseOrder,purchasedQuantity:data.purchasedQuantity!,receivedDate:formatQmsDate(data.receivedDate),receivedQuantity:String(lot.totalLotQuantity),supplierName:data.supplierName!,expirationDate:data.noExpiration?"No aplica":formatQmsDate(data.expirationDate),otherDocumentation:data.documentation?.includes("other")?data.otherDocumentation||"":"",specReference:data.specReference!,wiReference:`${clean(scope.wiCode)} Rev ${data.wiRevision}`,sampleSizeSummary:lot.methodPlans.map(p=>`${incomingMethodLabel(p.method)}: ${p.inspectedQuantity}`).join("\n"),allowedDefectsSummary:lot.methodPlans.map(p=>`${incomingMethodLabel(p.method)}: ${p.isFullInspection?"No aplica (100%)":p.allowedRejectedQuantity}`).join("\n"),totalDefects:data.totalDefects!,lotComments:data.lotComments||""};
   for(const method of ["documentary","visual","dimensional","functional"] as const){const plan=lot.methodPlans.find(p=>p.method===method);const failed=Number(data.failedQuantities?.[method]||0);values[method+"PassedQuantity"]=plan?String(plan.inspectedQuantity-failed):"NA";values[method+"FailedQuantity"]=plan?String(failed):"NA";values[method+"Comments"]=plan?reports.filter(r=>(r.inspectionMethod||"visual")===method).map(r=>`${r.kind==="anomaly"?"Anormalidad":"Rechazo por SPEC"}: ${r.title}${r.description?" — "+r.description:""}${r.kind==="anomaly"?r.decision==="fail"?" (no pasó)":" (pasó)":""}`).join("\n"):"No aplica";}
   const zip=new PizZip(await fs.readFile(path.join(process.cwd(),"public","templates","Incoming Inspection Form ES.docx")));
   const doc=new Docxtemplater(zip,{paragraphLoop:true,linebreaks:true});doc.render(values);
