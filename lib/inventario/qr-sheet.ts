@@ -25,8 +25,9 @@ function nameLines(value: string, font: PDFFont, width: number) {
 export async function createMtsQrSheet(articles: QrArticle[], origin: string, site: InventorySite) {
   const pdf = await PDFDocument.create(), font = await pdf.embedFont(StandardFonts.Helvetica);
   const margin = 24, cellWidth = 282, cellHeight = 248, qrSize = 160;
-  for (let index = 0; index < articles.length; index++) {
-    const article = articles[index], slot = index % 6;
+  const ordered = [...articles].sort((a, b) => a.code.localeCompare(b.code, "es", { numeric: true, sensitivity: "base" }));
+  for (let index = 0; index < ordered.length; index++) {
+    const article = ordered[index], slot = index % 6;
     const page = slot === 0 ? pdf.addPage([612, 792]) : pdf.getPages()[pdf.getPageCount() - 1];
     const left = margin + (slot % 2) * cellWidth, top = 792 - margin - Math.floor(slot / 2) * cellHeight;
     const image = await pdf.embedPng(await QRCode.toDataURL(`${origin}${inventoryHref(`/inventario/components/${article.id}`, site)}`, { width: 640, margin: 4, errorCorrectionLevel: "M" }));
