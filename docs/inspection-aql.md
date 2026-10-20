@@ -13,3 +13,11 @@ The form previews n/Ac/Re. Lot creation recomputes these values and saves a calc
 This implementation does not select reduced/tightened regimes or apply historical switching rules automatically; the supplied QAP includes only the normal single-sampling table. Those regimes require their approved tables and switching controls. Critical-defect handling remains governed by the applicable quality procedure.
 
 Validation: `node --test tests/aql.test.cjs` and `npx tsc --noEmit --incremental false`. Tests cover the QAP's 3500/II/1.0 example (L, n=200, Ac=5, Re=6), table-A boundaries/levels, arrow directions, full-lot inspection, Squeglia and invalid inputs.
+
+## Reading arrows and the preview calculation
+
+The preview shows the lot-size range, initial code letter/base sample, effective plan selected by the AQL column and the final sample. The base sample is not a fixed sample-size guarantee: arrows replace the entire plan (n and Ac/Re). For example, D at AQL 0.25 becomes H, n=50, Ac=0/Re=1; F at AQL 0.15 becomes J, n=80. At L, AQL 0.65 gives n=200 and Ac=3/Re=4, whereas AQL 0.065 gives Ac=0/Re=1. These two decimal values must not be confused.
+
+Primary-source explanation: ASQ, “Z1.4 Sample Size,” https://asqasktheexperts.org/2017/03/24/z1-4-sample-size/ ; CDC/NIOSH, “Sampling Procedures,” 24 September 2012, section 9.6, https://archive.cdc.gov/www_cdc_gov/niosh/npptl/resources/pressrel/letters/manufacturers/pdfs/lttr-09242012-508.pdf .
+
+The numerical lookup and existing lot decisions are unchanged by this display clarification. Existing lot snapshots need no migration. The new fields are additive calculation metadata.

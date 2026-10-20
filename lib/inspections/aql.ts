@@ -61,10 +61,13 @@ export function calculateAql(lotSize:number, level:AqlLevel, aql:string, plan:Aq
   if(!cell){if(index<cells[0][0])cell=cells[0];else if(index>cells[cells.length-1][0])cell=cells[cells.length-1];else cell=index===cells[0][0]+1?cells[0]:cells[1];}
   sampleSize=sizes[cell[0]];acceptanceNumber=cell[1];effectiveCodeLetter=letters[cell[0]];
  }
+ const baseSampleSize=plan==="normal"?sizes[letters.indexOf(codeLetter)]:0;
+ const tableSampleSize=sampleSize;
+ const lotRange=lotSize===1?"1":row===bounds.length-1?"500001 o más":`${row===0?2:bounds[row-1]+1}–${bounds[row]}`;
  const inspectEntireLot=sampleSize>=lotSize;
  // QAP table B: if n >= lot size, inspect 100%; existing 100% rule is Ac=0/Re=1.
  if(inspectEntireLot){sampleSize=lotSize;acceptanceNumber=0;}
- return {plan, aql:options[column],codeLetter:plan==="normal"?codeLetter:"",effectiveCodeLetter,sampleSize,acceptanceNumber,rejectionNumber:acceptanceNumber+1,inspectEntireLot,reference:"QAP-013 Rev C"};
+ return {plan,lotRange,baseSampleSize,tableSampleSize, aql:options[column],codeLetter:plan==="normal"?codeLetter:"",effectiveCodeLetter,sampleSize,acceptanceNumber,rejectionNumber:acceptanceNumber+1,inspectEntireLot,reference:"QAP-013 Rev C"};
 }
 export type AqlCalculation=ReturnType<typeof calculateAql>;
 
