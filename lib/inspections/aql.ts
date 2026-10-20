@@ -1,5 +1,6 @@
 /** Controlled transcription: QAP-013 Rev C, tables A/B (pp.11–12), Squeglia (p.13).
- * Normal single sampling only. Arrows select the first plan in their direction.
+ * Normal single sampling only. Single-direction arrows follow their direction;
+ * bidirectional ranges always select the lower plan (operational selection policy).
  * No percentage approximation and no automatic normal/tightened/reduced switching.
  */
 export type AqlLevel = "I"|"II"|"III"|"S1"|"S2"|"S3"|"S4";
@@ -12,7 +13,7 @@ const letters="ABCDEFGHJKLMNPQR";
 const sizes=[2,3,5,8,13,20,32,50,80,125,200,315,500,800,1250,2000];
 const codes=["AABAAAA","ABCAAAA","BCDAABB","CDEABBC","CEFBBCC","DFGBBCD","EGHBCDE","FHJBCDE","GJKCCEF","HKLCDEG","JLMCDFG","KMNCDFH","LNPDEGJ","MPQDEGJ","NQRDEHK"];
 // Explicit numeric cells in each column. Missing cells follow the printed arrows:
-// above first -> down; after last -> up; two-cell gap after Ac=0 -> up then down.
+// above first -> down; after last -> up; bidirectional gap after Ac=0 -> lower plan.
 const normalColumns=[
  [[10,0],[13,1],[14,2],[15,3]],
  [[9,0],[12,1],[13,2],[14,3],[15,5]],
@@ -54,17 +55,21 @@ export function calculateAql(lotSize:number, level:AqlLevel, aql:string, plan:Aq
  const row=bounds.findIndex(x=>lotSize<=x);
  const codeLetter=codes[row][levels.indexOf(level)];
  let sampleSize:number, acceptanceNumber:number, effectiveCodeLetter="";
+ let bidirectionalArrow=false;
  if(plan==="squeglia") {sampleSize=zeroSizes[row][column]||lotSize;acceptanceNumber=0;}
  else {
   const index=letters.indexOf(codeLetter), cells=normalColumns[column];
   let cell=cells.find(c=>c[0]===index);
-  if(!cell){if(index<cells[0][0])cell=cells[0];else if(index>cells[cells.length-1][0])cell=cells[cells.length-1];else cell=index===cells[0][0]+1?cells[0]:cells[1];}
+  if(!cell){if(index<cells[0][0])cell=cells[0];else if(index>cells[cells.length-1][0])cell=cells[cells.length-1];else {bidirectionalArrow=true;cell=cells[1];}}
   sampleSize=sizes[cell[0]];acceptanceNumber=cell[1];effectiveCodeLetter=letters[cell[0]];
  }
+ const baseSampleSize=plan==="normal"?sizes[letters.indexOf(codeLetter)]:0;
+ const tableSampleSize=sampleSize;
+ const lotRange=lotSize===1?"1":row===bounds.length-1?"500001 o más":`${row===0?2:bounds[row-1]+1}–${bounds[row]}`;
  const inspectEntireLot=sampleSize>=lotSize;
  // QAP table B: if n >= lot size, inspect 100%; existing 100% rule is Ac=0/Re=1.
  if(inspectEntireLot){sampleSize=lotSize;acceptanceNumber=0;}
- return {plan, aql:options[column],codeLetter:plan==="normal"?codeLetter:"",effectiveCodeLetter,sampleSize,acceptanceNumber,rejectionNumber:acceptanceNumber+1,inspectEntireLot,reference:"QAP-013 Rev C"};
+ return {plan,lotRange,baseSampleSize,tableSampleSize,bidirectionalArrow, aql:options[column],codeLetter:plan==="normal"?codeLetter:"",effectiveCodeLetter,sampleSize,acceptanceNumber,rejectionNumber:acceptanceNumber+1,inspectEntireLot,reference:"QAP-013 Rev C"};
 }
 export type AqlCalculation=ReturnType<typeof calculateAql>;
 
