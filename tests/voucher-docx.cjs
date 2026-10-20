@@ -37,7 +37,12 @@ const entry={...v,kind:'entrada',origin:'externo:recepcion',destination:'pendien
 for(const supplier of ['', 'Proveedor de prueba']) {
  const output=new Zip(renderVoucher(template,{...entry,originOther:supplier})).file('word/document.xml').asText();
  assert.equal((output.match(/Bolsa \(800pz\)/g)||[]).length,1);
- assert(output.includes(supplier ? 'Recepción / proveedor · Proveedor de prueba' : 'Recepción / proveedor'));
+ assert(output.includes(supplier ? 'Proveedor de prueba' : 'Recepción / proveedor'));
+ if(supplier) assert(!output.includes('Recepción / proveedor'));
  assert.equal((output.match(/<w:checked w:val="1"/g)||[]).length,3);
 }
 console.log('Duplicate lot comments appear once; receipt supplier and blank fallback retain checkbox selection.');
+
+const {validateVoucherTitle}=load('lib/inventario/voucher-title.ts');
+assert.equal(validateVoucherTitle('  VM-2026-001  '),'VM-2026-001');assert.equal(validateVoucherTitle(''),'');assert.throws(()=>validateVoucherTitle('x'.repeat(121)));assert.throws(()=>validateVoucherTitle('dos\nlineas'));assert.throws(()=>validateVoucherTitle(null));
+console.log('Voucher titles: trimmed ID, blank reset and invalid titles verified.');

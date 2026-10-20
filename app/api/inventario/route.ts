@@ -1,3 +1,4 @@
+import { validateVoucherTitle } from "@/lib/inventario/voucher-title";
 import { kivLots } from "@/lib/inventario/kiv";
 import { validateCart } from "@/lib/inventario/cart";
 import { recipePeriod, type FixedRecipe } from "@/lib/inventario/fixed-recipes";
@@ -68,6 +69,17 @@ export async function POST(req: NextRequest) {
     const components = adminDB.collection(names.components), vouchers = adminDB.collection(names.vouchers), operations = adminDB.collection(names.operations);
     const now = new Date().toISOString();
     const actor = user.name || user.email || user.uid;
+    if (b.action === "voucher-title") {
+      const voucherId = str(b.voucherId), title = validateVoucherTitle(b.title), expectedTitle = validateVoucherTitle(b.expectedTitle);
+      if (!/^[a-zA-Z0-9]{10,100}$/.test(voucherId)) fail("Folio inválido.");
+      await adminDB.runTransaction(async transaction => {
+        const ref = vouchers.doc(voucherId), snapshot = await transaction.get(ref);
+        if (!snapshot.exists) fail("Vale no encontrado.");
+        if ((snapshot.data()?.title || "") !== expectedTitle) fail("Otro usuario cambió el título. Recarga el vale antes de editarlo.");
+        transaction.update(ref, { title, titleUpdatedAt: now, titleUpdatedBy: user.uid });
+      });
+      return NextResponse.json({ title });
+    }
     if (b.action === "component") {
       const parsed = parseComponentCode(str(b.code));
       const { code, type } = parsed;
