@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
     if (projectId) {
       const project = (await getDmrProjects()).find(p=>p.id===projectId);
       if (!project) throw new Error("Proyecto DMR inválido.");
-      const s = await adminDB.collection("production_boms").doc(bomId(projectId)).get(); const bom = s.data() || {items:[],version:0};
+      const [s, msop] = await Promise.all([adminDB.collection("production_boms").doc(bomId(projectId)).get(), adminDB.collection("production_msops").doc(bomId(projectId)).get()]); const bom = msop.data() || s.data() || {items:[],version:0};
       return NextResponse.json({bom:{...bom,projectCode:projectCodeFromDmr(project.title) || bom.projectCode || "",entries:bom.entries || legacyBomEntries(bom.items)}});
     }
     if (req.nextUrl.searchParams.get("scope") === "projects") return NextResponse.json({ projects: await projectCatalog() });
