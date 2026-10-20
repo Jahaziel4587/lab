@@ -20,4 +20,10 @@ The preview shows the lot-size range, initial code letter/base sample, effective
 
 Primary-source explanation: ASQ, “Z1.4 Sample Size,” https://asqasktheexperts.org/2017/03/24/z1-4-sample-size/ ; CDC/NIOSH, “Sampling Procedures,” 24 September 2012, section 9.6, https://archive.cdc.gov/www_cdc_gov/niosh/npptl/resources/pressrel/letters/manufacturers/pdfs/lttr-09242012-508.pdf .
 
-The numerical lookup and existing lot decisions are unchanged by this display clarification. Existing lot snapshots need no migration. The new fields are additive calculation metadata.
+The display clarification preserves single-direction arrows and explicit numeric cells. Bidirectional ranges now use the lower plan as the operational choice described below. Existing lot snapshots need no migration. The new fields are additive calculation metadata.
+
+## Bidirectional-arrow selection policy
+
+For the two-row bidirectional range between Ac=0 and Ac=1 in each normal AQL column, both code letters now use the first numeric plan below the range, with that plan's sample size and Ac/Re. This is the selected operational policy, rather than an assertion that every arrow must point down. One-way down/up arrows, explicit numeric cells, Squeglia and the full-lot cap keep their existing rules. Existing lots retain their saved limits.
+
+Example: normal level II, lot size 91–150, code F, AQL 1.0 selects H: n=50, Ac=1/Re=2 (provided the sample does not reach the entire lot). This permits one rejection but inspects more pieces than the upper alternative; it is not described as uniformly less rigorous. The calculation snapshot records bidirectionalArrow=true when this policy is applied.
