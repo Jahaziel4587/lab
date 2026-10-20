@@ -22,7 +22,7 @@ const api=load("app/api/inventario/route.ts",{
 });
 const componentId="component0000001",lotId="lot-00000000001",componentPath="inventario_componentes/"+componentId;
 records.set(componentPath,{id:componentId,code:"001.305",name:"Material",unit:"pz",project:"",lots:[{id:lotId,name:"LOTE-1",stock:{aprobado:10},expiry:"",notes:"",createdAt:"2026-01-01"}]});
-records.set("users/requester",{nombre:"Jahaziel",apellido:"Garza"});records.set("users/warehouse",{warehouseSites:["B1"]});records.set("users/head",{isWarehouseHead:true});
+records.set("users/requester",{nombre:"Jahaziel",apellido:"Garza",email:"requester@example.com"});records.set("users/warehouse",{warehouseSites:["B1"]});records.set("users/head",{isWarehouseHead:true});
 const line={componentId,lotId,quantity:4,origin:"aprobado",destination:"externo:produccion"};
 const body={action:"movement-request",cart:true,kind:"salida",site:"B1",operationId:"request-00000001",project:"000.General",lines:[line]};
 async function post(body){return api.POST({json:async()=>clone(body),headers:{get:()=> "Bearer test"},nextUrl:{searchParams:new URLSearchParams("site="+(body.site||"B1"))},url:"https://example.test/api/inventario"});}
@@ -35,6 +35,7 @@ try{
  const created=await post(body);assert.equal(created.status,200);assert.equal(created.data.requestId,body.operationId);assert.equal(records.get(componentPath).lots[0].stock.aprobado,10);
  assert([...records.keys()].some(path=>path.startsWith("notifications/")));assert(![...records.keys()].some(path=>path.startsWith("inventario_vales/")));
  assert.equal(records.get("inventario_componentes_movement_requests/"+body.operationId).requestedBy,"Jahaziel Garza");
+ assert.match([...records.values()].find(v=>v.tipo==="inventory_movement_request").mensaje,/Jahaziel Garza ha solicitado 4 pz de 001.305 · Material de Material aprobado/);
  records.get("inventario_componentes_movement_requests/"+body.operationId).requestedBy="requester@example.com";
  const listing=await api.GET({headers:{get:()=>"Bearer test"},nextUrl:{searchParams:new URLSearchParams("site=B1&view=movement-requests")}});
  assert.equal(listing.status,200);assert.equal(listing.data.requests[0].requestedBy,"Jahaziel Garza");
@@ -48,6 +49,7 @@ try{
  const result=await post(fulfill);assert.equal(result.status,200);assert.equal(result.data.voucherIds.length,1);assert.equal(records.get(componentPath).lots[0].stock.aprobado,6);
  assert.equal(records.get("inventario_componentes_movement_requests/"+body.operationId).status,"fulfilled");
  assert.equal((await post(fulfill)).status,200);assert.equal(records.get(componentPath).lots[0].stock.aprobado,6);
+ const notices=[...records.values()].filter(v=>v.tipo==="inventory_request_fulfilled");assert.equal(notices.length,1);assert.equal(notices[0].userEmail,"requester@example.com");assert.match(notices[0].mensaje,/firmar el vale de material físico/);
  assert.equal((await post({...body,operationId:"request-00000002",lines:[{...line,quantity:4},{...line,quantity:4}]})).status,400);
  const remove={action:"delete-empty-lot",site:"B1",componentId,lotId};
  assert.equal((await post(remove)).status,400);currentUser={uid:"head"};

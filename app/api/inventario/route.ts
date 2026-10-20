@@ -10,7 +10,7 @@ import { storageConditions, componentConditionsFromLot } from "@/lib/inventario/
 import { applyStorage, warehouseRecipients, pushStorageAlerts } from "@/lib/inventario/storage-server";
 import { after, NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDB } from "@/lib/firebaseAdmin";
-import { LOCATIONS, LEGACY_LOCATIONS, WAREHOUSES, TYPES } from "@/lib/inventario/catalogs";
+import { LOCATIONS, LEGACY_LOCATIONS, WAREHOUSES, TYPES, locationName } from "@/lib/inventario/catalogs";
 import { mexicoToday, selectLot, lotAvailableForProject } from "@/lib/inventario/selection";
 import type { InventoryComponent, Lot, Voucher, VoucherLine, CartLine } from "@/lib/inventario/types";
 import { inventorySite, inventoryCollections, inventoryHref } from "@/lib/inventario/sites";
@@ -188,7 +188,8 @@ export async function POST(req: NextRequest) {
     const operationRef = operations.doc(operationId);
     const fingerprint = createHash("sha256").update(JSON.stringify(b)).digest("hex");
     const movementRequestRef = isRequestCreation ? requestCollection.doc(operationId) : null;
-    let requestCreated = false;
+    let requestCreated = false, requestMessage = "";
+    let fulfillmentNotice: { email: string; url: string } | null = null;
     if (b.requestId) {
       if (b.requestId !== operationId || b.action !== "movement" || b.kind !== "salida") fail("Solicitud inválida.");
       const [order, profile] = await Promise.all([adminDB.collection("production_orders").doc(operationId).get(), adminDB.collection("users").doc(user.uid).get()]);
@@ -197,17 +198,19 @@ export async function POST(req: NextRequest) {
       if (b.project !== o.projectName || !Array.isArray(b.lines) || b.lines.length !== o.lines.length || new Set(b.lines.map((l: CartLine)=>l.componentId)).size !== b.lines.length || o.lines.some((l: {componentId:string;total:number})=>!b.lines.some((x:CartLine)=>x.componentId===l.componentId && x.quantity===l.total && x.destination==="externo:produccion"))) fail("El retiro no coincide con la solicitud.");
     } else if ((await adminDB.collection("production_orders").doc(operationId).get()).exists) fail("Atiende esta solicitud desde Solicitudes de retiro.");
     const result = await adminDB.runTransaction(async t => {
-      storageAlerts.length = 0; requestCreated = false;
+      storageAlerts.length = 0; requestCreated = false; fulfillmentNotice = null;
       if (b.action === "movement" && !isRequestCreation) {
         const profile = await t.get(adminDB.collection("users").doc(user.uid));
         if (!canMoveInventory(profile.data(), site)) fail("Ya no tienes permiso para confirmar movimientos en este almacén.");
       }
-      let fulfillmentStatus = "";
+      let fulfillmentStatus = "", requesterEmail = "";
       if (b.fulfillMovementRequestId) {
         if (b.operationId !== `inv-request-${b.fulfillMovementRequestId}`) fail("Identificador de solicitud inválido.");
         const request = await t.get(requestCollection.doc(b.fulfillMovementRequestId));
         if (!request.exists) fail("La solicitud no existe.");
         fulfillmentStatus = request.data()!.status;
+        const requester = await t.get(adminDB.collection("users").doc(request.data()!.createdBy));
+        requesterEmail = requester.data()?.email || "";
         const expected = { ...request.data()!.payload, action: "movement", site, operationId: b.operationId, fulfillMovementRequestId: b.fulfillMovementRequestId };
         if (JSON.stringify(expected) !== JSON.stringify(b)) fail("La solicitud no coincide.");
       }
@@ -289,8 +292,9 @@ export async function POST(req: NextRequest) {
         const payload = { action: "movement", site, kind: b.kind, lines: [...groups.values()].flatMap(group => group.lines.map(line => ({ componentId: line.componentId, lotId: line.lotId, quantity: line.quantity, origin: group.origin, destination: group.destination }))), project, notes, requestedBy: "", receivedBy: "", supplier, originOther, destinationOther, cart: b.cart === true };
         const lines = [...groups.values()].flatMap(group => group.lines.map(line => ({ ...line, origin: group.origin, destination: group.destination })));
         t.create(movementRequestRef, { site, payload, lines, status: "pending", createdBy: user.uid, requestedBy: actor, createdAt: now, fingerprint, voucherIds: [] });
+        requestMessage = lines.map(line => `${actor} ha solicitado ${line.quantity} ${line.unit} de ${line.code} · ${line.name} de ${locationName(line.origin)} (${site}) a ${locationName(line.destination)} (${site}).`).join("\n");
         const url = inventoryHref("/inventario/solicitudes", site) + `&movementRequest=${operationId}`;
-        for (const email of emails) t.create(adminDB.collection("notifications").doc(), { userEmail: email, tipo: "inventory_movement_request", mensaje: `${actor} solicitó ${lines.length} partidas en ${site}.`, url, createdAt: FieldValue.serverTimestamp(), leido: false });
+        for (const email of emails) t.create(adminDB.collection("notifications").doc(), { userEmail: email, tipo: "inventory_movement_request", mensaje: requestMessage, url, createdAt: FieldValue.serverTimestamp(), leido: false });
         requestCreated = true;
         return [] as string[];
       }
@@ -304,13 +308,22 @@ export async function POST(req: NextRequest) {
         const v: Voucher = { id: ref.id, site, operationId, kind: b.action === "lot" ? "entrada" : b.kind, origin: g.origin, destination: g.destination, createdAt: now, actor, actorUid: user.uid, requestedBy, receivedBy, project, notes, originOther, destinationOther, lines: g.lines };
         t.create(ref, v);
       }
-      if (b.fulfillMovementRequestId) t.update(requestCollection.doc(b.fulfillMovementRequestId), { status: "fulfilled", fulfilledAt: now, fulfilledBy: user.uid, voucherIds });
+      if (b.fulfillMovementRequestId) {
+        t.update(requestCollection.doc(b.fulfillMovementRequestId), { status: "fulfilled", fulfilledAt: now, fulfilledBy: user.uid, voucherIds });
+        if (requesterEmail) {
+          const url = inventoryHref("/inventario/solicitudes", site) + `&movementRequest=${b.fulfillMovementRequestId}`;
+          t.create(adminDB.collection("notifications").doc(), { userEmail: requesterEmail, tipo: "inventory_request_fulfilled", mensaje: "Se retiró tu pedido de almacén. Tienes pendiente firmar el vale de material físico.", url, createdAt: FieldValue.serverTimestamp(), leido: false });
+          fulfillmentNotice = { email: requesterEmail, url };
+        }
+      }
       t.create(operationRef, { uid: user.uid, fingerprint, site, voucherIds, createdAt: now });
       return voucherIds;
     });
     after(() => pushStorageAlerts(storageAlerts, emails, req.url));
+    const notice = fulfillmentNotice as { email: string; url: string } | null;
+    if (notice) after(async () => { try { await sendPushToEmails({ emails: [notice.email], title: "Solicitud de almacén atendida", body: "Se retiró tu pedido de almacén. Tienes pendiente firmar el vale de material físico.", url: new URL(notice.url, req.url).toString() }); } catch (error) { console.error("Inventory fulfillment push", error); } });
     if (isRequestCreation) {
-      if (requestCreated) after(async () => { try { await sendPushToEmails({ emails, title: "Nueva solicitud de inventario", body: `${actor} solicitó un movimiento en ${site}.`, url: new URL(inventoryHref("/inventario/solicitudes", site) + `&movementRequest=${operationId}`, req.url).toString() }); } catch (error) { console.error("Inventory request push", error); } });
+      if (requestCreated) after(async () => { try { await sendPushToEmails({ emails, title: "Nueva solicitud de inventario", body: requestMessage, url: new URL(inventoryHref("/inventario/solicitudes", site) + `&movementRequest=${operationId}`, req.url).toString() }); } catch (error) { console.error("Inventory request push", error); } });
       return NextResponse.json({ requestId: operationId, voucherIds: [] });
     }
     return NextResponse.json({ voucherIds: result });
