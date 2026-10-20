@@ -1,3 +1,6 @@
+import { canMoveInventory, canDeleteEmptyLots, isEmptyStock } from "@/lib/inventario/warehouse-access";
+import { FieldValue } from "firebase-admin/firestore";
+import { sendPushToEmails } from "@/lib/pushNotifications";
 import { validateVoucherTitle } from "@/lib/inventario/voucher-title";
 import { kivLots } from "@/lib/inventario/kiv";
 import { validateCart } from "@/lib/inventario/cart";
@@ -9,7 +12,7 @@ import { adminAuth, adminDB } from "@/lib/firebaseAdmin";
 import { LOCATIONS, LEGACY_LOCATIONS, WAREHOUSES, TYPES } from "@/lib/inventario/catalogs";
 import { mexicoToday, selectLot, lotAvailableForProject } from "@/lib/inventario/selection";
 import type { InventoryComponent, Lot, Voucher, VoucherLine, CartLine } from "@/lib/inventario/types";
-import { inventorySite, inventoryCollections } from "@/lib/inventario/sites";
+import { inventorySite, inventoryCollections, inventoryHref } from "@/lib/inventario/sites";
 import { parseComponentCode } from "@/lib/operacional/catalog";
 import { projectCatalog } from "@/lib/operacional/server";
 import { createHash, randomUUID } from "node:crypto";
@@ -30,11 +33,25 @@ async function identity(req: NextRequest) {
   try { return await adminAuth.verifyIdToken(header.slice(7), true); } catch { return null; }
 }
 export async function GET(req: NextRequest) {
-  if (!await identity(req)) return NextResponse.json({ error: "Inicia sesión." }, { status: 401 });
+  const user = await identity(req);
+  if (!user) return NextResponse.json({ error: "Inicia sesión." }, { status: 401 });
   try {
     const site = inventorySite(req.nextUrl.searchParams.get("site"));
     const names = inventoryCollections(site);
     const components = adminDB.collection(names.components), vouchers = adminDB.collection(names.vouchers);
+    const view = req.nextUrl.searchParams.get("view");
+    if (view === "permissions") {
+      const profile = (await adminDB.collection("users").doc(user.uid).get()).data();
+      return NextResponse.json({ canMove: canMoveInventory(profile, site), canDeleteEmptyLots: canDeleteEmptyLots(profile) });
+    }
+    if (view === "movement-requests") {
+      const collection = adminDB.collection(`${names.components}_movement_requests`);
+      const profile = (await adminDB.collection("users").doc(user.uid).get()).data(), canFulfill = canMoveInventory(profile, site);
+      const requests = await (canFulfill ? collection : collection.where("createdBy", "==", user.uid)).get();
+      return NextResponse.json({ canFulfill, requests: requests.docs.map(doc => {
+        const value = doc.data(); return { id: doc.id, site, status: value.status, kind: value.payload.kind, project: value.payload.project, notes: value.payload.notes || "", createdBy: value.createdBy, requestedBy: value.requestedBy, createdAt: value.createdAt, lines: value.lines, voucherIds: value.voucherIds || [] };
+      }).sort((a, b) => b.createdAt.localeCompare(a.createdAt)) });
+    }
     const voucherId = req.nextUrl.searchParams.get("voucherId");
     if (voucherId) {
       if (!/^[a-zA-Z0-9]{10,100}$/.test(voucherId)) return NextResponse.json({ error: "Folio inválido." }, { status: 400 });
@@ -61,7 +78,9 @@ export async function POST(req: NextRequest) {
   const user = await identity(req);
   if (!user) return NextResponse.json({ error: "Inicia sesión." }, { status: 401 });
   try {
-    const b = await req.json();
+    let b = await req.json();
+    const isRequestCreation = b.action === "movement-request";
+    if (isRequestCreation) b.action = "movement";
     const site = inventorySite(b.site);
     const querySite = req.nextUrl?.searchParams.get("site");
     if (querySite && inventorySite(querySite) !== site) fail("El almacén de la operación no coincide.");
@@ -69,6 +88,30 @@ export async function POST(req: NextRequest) {
     const components = adminDB.collection(names.components), vouchers = adminDB.collection(names.vouchers), operations = adminDB.collection(names.operations);
     const now = new Date().toISOString();
     const actor = user.name || user.email || user.uid;
+    const requestCollection = adminDB.collection(`${names.components}_movement_requests`);
+    if (b.action === "fulfill-movement-request") {
+      const requestId = str(b.requestId);
+      if (!/^[a-zA-Z0-9-]{10,100}$/.test(requestId)) fail("Solicitud inválida.");
+      const snapshot = await requestCollection.doc(requestId).get();
+      if (!snapshot.exists) fail("Solicitud no encontrada.");
+      b = { ...snapshot.data()!.payload, action: "movement", site, operationId: `inv-request-${requestId}`, fulfillMovementRequestId: requestId };
+    }
+    if (b.action === "delete-empty-lot") {
+      const componentId = str(b.componentId), lotId = str(b.lotId);
+      if (!/^[a-zA-Z0-9]{10,100}$/.test(componentId) || !/^[a-zA-Z0-9-]{10,100}$/.test(lotId)) fail("Componente o lote inválido.");
+      await adminDB.runTransaction(async transaction => {
+        const [profile, snapshot] = await Promise.all([transaction.get(adminDB.collection("users").doc(user.uid)), transaction.get(components.doc(componentId))]);
+        if (!canDeleteEmptyLots(profile.data())) fail("Solo el jefe de almacén puede eliminar lotes vacíos.");
+        if (!snapshot.exists) fail("Componente no encontrado.");
+        const component = snapshot.data() as InventoryComponent, lot = component.lots.find(lot => lot.id === lotId);
+        if (!lot) fail("Lote no encontrado.");
+        if (!isEmptyStock(lot.stock)) fail("El lote tiene existencias. No puede eliminarse.");
+        const archive = adminDB.collection(`${names.components}_deleted_lots`).doc();
+        transaction.create(archive, { componentId, code: component.code, lot, site, deletedAt: now, deletedBy: user.uid });
+        transaction.update(snapshot.ref, { lots: component.lots.filter(lot => lot.id !== lotId) });
+      });
+      return NextResponse.json({ deleted: true });
+    }
     if (b.action === "voucher-title") {
       const voucherId = str(b.voucherId), title = validateVoucherTitle(b.title), expectedTitle = validateVoucherTitle(b.expectedTitle);
       if (!/^[a-zA-Z0-9]{10,100}$/.test(voucherId)) fail("Folio inválido.");
@@ -117,7 +160,12 @@ export async function POST(req: NextRequest) {
       if (selected !== "000.General" && !(await projectCatalog()).some(p => p.label === selected)) fail("Selecciona un proyecto del catálogo.");
       b.project = selected;
     }
-    const emails = b.action === "lot" ? await warehouseRecipients(site) : [];
+    if (isRequestCreation && (b.requestId || b.fulfillMovementRequestId || b.recipeId)) fail("Solicitud inválida.");
+    if (b.action === "movement" && !isRequestCreation) {
+      const profile = (await adminDB.collection("users").doc(user.uid).get()).data();
+      if (!canMoveInventory(profile, site)) return NextResponse.json({ error: "Solo el almacenista asignado puede confirmar. Envía una solicitud." }, { status: 403 });
+    }
+    const emails = b.action === "lot" || isRequestCreation ? await warehouseRecipients(site) : [];
     const storageAlerts: Array<{id:string;message:string;url:string}> = [];
     let recipeVersion = 0;
     if (b.recipeId) {
@@ -132,6 +180,8 @@ export async function POST(req: NextRequest) {
     if (!/^[a-zA-Z0-9-]{10,100}$/.test(operationId)) fail("Identificador de operación inválido.");
     const operationRef = operations.doc(operationId);
     const fingerprint = createHash("sha256").update(JSON.stringify(b)).digest("hex");
+    const movementRequestRef = isRequestCreation ? requestCollection.doc(operationId) : null;
+    let requestCreated = false;
     if (b.requestId) {
       if (b.requestId !== operationId || b.action !== "movement" || b.kind !== "salida") fail("Solicitud inválida.");
       const [order, profile] = await Promise.all([adminDB.collection("production_orders").doc(operationId).get(), adminDB.collection("users").doc(user.uid).get()]);
@@ -140,12 +190,34 @@ export async function POST(req: NextRequest) {
       if (b.project !== o.projectName || !Array.isArray(b.lines) || b.lines.length !== o.lines.length || new Set(b.lines.map((l: CartLine)=>l.componentId)).size !== b.lines.length || o.lines.some((l: {componentId:string;total:number})=>!b.lines.some((x:CartLine)=>x.componentId===l.componentId && x.quantity===l.total && x.destination==="externo:produccion"))) fail("El retiro no coincide con la solicitud.");
     } else if ((await adminDB.collection("production_orders").doc(operationId).get()).exists) fail("Atiende esta solicitud desde Solicitudes de retiro.");
     const result = await adminDB.runTransaction(async t => {
-      storageAlerts.length = 0;
+      storageAlerts.length = 0; requestCreated = false;
+      if (b.action === "movement" && !isRequestCreation) {
+        const profile = await t.get(adminDB.collection("users").doc(user.uid));
+        if (!canMoveInventory(profile.data(), site)) fail("Ya no tienes permiso para confirmar movimientos en este almacén.");
+      }
+      let fulfillmentStatus = "";
+      if (b.fulfillMovementRequestId) {
+        if (b.operationId !== `inv-request-${b.fulfillMovementRequestId}`) fail("Identificador de solicitud inválido.");
+        const request = await t.get(requestCollection.doc(b.fulfillMovementRequestId));
+        if (!request.exists) fail("La solicitud no existe.");
+        fulfillmentStatus = request.data()!.status;
+        const expected = { ...request.data()!.payload, action: "movement", site, operationId: b.operationId, fulfillMovementRequestId: b.fulfillMovementRequestId };
+        if (JSON.stringify(expected) !== JSON.stringify(b)) fail("La solicitud no coincide.");
+      }
+      if (movementRequestRef) {
+        const prior = await t.get(movementRequestRef);
+        if (prior.exists) {
+          if (prior.data()?.createdBy !== user.uid || prior.data()?.fingerprint !== fingerprint) fail("La solicitud ya se usó con otros datos.");
+          return [] as string[];
+        }
+      }
       const previous = await t.get(operationRef);
       if (previous.exists) {
+        if (isRequestCreation) fail("La operación ya generó un vale y no puede convertirse en solicitud.");
         if (previous.data()?.uid !== user.uid || previous.data()?.fingerprint !== fingerprint) fail("La operación ya se usó con otros datos.");
         return previous.data()?.voucherIds as string[];
       }
+      if (b.fulfillMovementRequestId && fulfillmentStatus !== "pending") fail("La solicitud ya fue atendida.");
       if (b.recipeId) {
         const current = await t.get(adminDB.collection(`${names.components}_fixed_recipes`).doc(b.recipeId));
         if (!current.data()?.active || current.data()?.version !== recipeVersion) fail("La receta cambió. Recarga antes de confirmar.");
@@ -206,6 +278,15 @@ export async function POST(req: NextRequest) {
       const originOther = str(b.originOther || ([...groups.values()].some(g => g.origin === "externo:recepcion") ? supplier : b.action === "lot" ? b.notes || "" : ""), false), destinationOther = str(b.destinationOther || "", false);
       if ([...groups.values()].some(g => g.origin === "externo:otro") && !originOther && !notes) fail("Especifica el origen Otro.");
       if ([...groups.values()].some(g => g.destination === "externo:otro") && !destinationOther && !notes) fail("Especifica el destino Otro.");
+      if (movementRequestRef) {
+        const payload = { action: "movement", site, kind: b.kind, lines: [...groups.values()].flatMap(group => group.lines.map(line => ({ componentId: line.componentId, lotId: line.lotId, quantity: line.quantity, origin: group.origin, destination: group.destination }))), project, notes, requestedBy: "", receivedBy: "", supplier, originOther, destinationOther, cart: b.cart === true };
+        const lines = [...groups.values()].flatMap(group => group.lines.map(line => ({ ...line, origin: group.origin, destination: group.destination })));
+        t.create(movementRequestRef, { site, payload, lines, status: "pending", createdBy: user.uid, requestedBy: actor, createdAt: now, fingerprint, voucherIds: [] });
+        const url = inventoryHref("/inventario/solicitudes", site) + `&movementRequest=${operationId}`;
+        for (const email of emails) t.create(adminDB.collection("notifications").doc(), { userEmail: email, tipo: "inventory_movement_request", mensaje: `${actor} solicitó ${lines.length} partidas en ${site}.`, url, createdAt: FieldValue.serverTimestamp(), leido: false });
+        requestCreated = true;
+        return [] as string[];
+      }
       const voucherIds: string[] = [];
       for (const c of changed.values()) {
         if (c.lots.length > 500) fail("Este artículo alcanzó el límite de 500 lotes de esta versión.");
@@ -216,10 +297,15 @@ export async function POST(req: NextRequest) {
         const v: Voucher = { id: ref.id, site, operationId, kind: b.action === "lot" ? "entrada" : b.kind, origin: g.origin, destination: g.destination, createdAt: now, actor, actorUid: user.uid, requestedBy, receivedBy, project, notes, originOther, destinationOther, lines: g.lines };
         t.create(ref, v);
       }
+      if (b.fulfillMovementRequestId) t.update(requestCollection.doc(b.fulfillMovementRequestId), { status: "fulfilled", fulfilledAt: now, fulfilledBy: user.uid, voucherIds });
       t.create(operationRef, { uid: user.uid, fingerprint, site, voucherIds, createdAt: now });
       return voucherIds;
     });
     after(() => pushStorageAlerts(storageAlerts, emails, req.url));
+    if (isRequestCreation) {
+      if (requestCreated) after(async () => { try { await sendPushToEmails({ emails, title: "Nueva solicitud de inventario", body: `${actor} solicitó un movimiento en ${site}.`, url: new URL(inventoryHref("/inventario/solicitudes", site) + `&movementRequest=${operationId}`, req.url).toString() }); } catch (error) { console.error("Inventory request push", error); } });
+      return NextResponse.json({ requestId: operationId, voucherIds: [] });
+    }
     return NextResponse.json({ voucherIds: result });
   } catch (e) {
     const message = e instanceof Error ? e.message : "No se pudo registrar el movimiento.";

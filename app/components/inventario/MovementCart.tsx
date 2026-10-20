@@ -1,4 +1,5 @@
 "use client";
+import { useWarehouseAccess } from "./useWarehouseAccess";
 import { useInventorySite } from "@/app/components/inventario/InventoryProvider";
 import { inventoryHref, voucherDestination } from "@/lib/inventario/sites";
 import { useRouter } from "next/navigation";
@@ -12,6 +13,7 @@ import { buttonClass, inputClass, panelClass, Field } from "./InventoryShell";
 import QrScanner from "./QrScanner";
 export default function MovementCart({ components, initialId = "", fixedLotId = "", onSaved }: { components: InventoryComponent[]; initialId?: string; fixedLotId?: string; onSaved: () => void }) {
   const { site } = useInventorySite(); const router = useRouter();
+  const access=useWarehouseAccess();
   const [kind, setKind] = useState<MovementKind>("salida"), [componentId, setComponentId] = useState(initialId), [quantity, setQuantity] = useState("");
   const [origin, setOrigin] = useState(""), [destination, setDestination] = useState("externo:produccion"), [lotId, setLotId] = useState("");
   const [busy, setBusy] = useState(false), [error, setError] = useState("");
@@ -40,11 +42,11 @@ export default function MovementCart({ components, initialId = "", fixedLotId = 
       if (!chosen || (kind !== "entrada" && (chosen.stock[actualOrigin] || 0) < q)) { setError("El lote no está disponible o no tiene existencias suficientes. Los retiros requieren un lote vigente."); return; }
       const meta = Object.fromEntries(new FormData(e.currentTarget));
       const line = { componentId, quantity: q, origin: actualOrigin, destination: actualDestination, lotId: chosen.id };
-      const body = { action: "movement", kind, lines: [line], ...meta, requestedBy: "", receivedBy: "" };
+      const body = { action: access.canMove ? "movement" : "movement-request", kind, lines: [line], ...meta, requestedBy: "", receivedBy: "" };
       const signature = JSON.stringify(body);
       if (!pending.current || pending.current.signature !== signature) pending.current = { signature, id: crypto.randomUUID() };
       setBusy(true);
-      try { const r = await inventoryRequest<{ voucherIds: string[] }>({ ...body, operationId: pending.current.id, site }); pending.current = null; setQuantity(""); onSaved(); if (r.voucherIds[0]) router.push(voucherDestination(r.voucherIds, site)); }
+      try { const r = await inventoryRequest<{ voucherIds: string[]; requestId?: string }>({ ...body, operationId: pending.current.id, site }); pending.current = null; setQuantity(""); onSaved(); if (r.requestId) router.push(`/inventario/solicitudes?site=${site}&movementRequest=${r.requestId}`); else if (r.voucherIds[0]) router.push(voucherDestination(r.voucherIds, site)); }
       catch (err) { setError(err instanceof Error ? err.message : "No se pudo registrar."); }
       finally { setBusy(false); }
     }}>
@@ -54,8 +56,9 @@ export default function MovementCart({ components, initialId = "", fixedLotId = 
       {actualOrigin === "externo:recepcion" && <Field label="Proveedor (opcional)"><input disabled={busy} name="supplier" maxLength={200} className={inputClass} /><span className="block text-xs text-white/40">Se imprime en Origen. Si lo dejas vacío, aparecerá Recepción / proveedor.</span></Field>}
       {actualOrigin === "externo:otro" && <Field label="Especificar origen Otro"><input disabled={busy} required name="originOther" className={inputClass} maxLength={200} /><span className="block text-xs text-white/40">Se imprime junto a la casilla Otro de Origen.</span></Field>}
       {actualDestination === "externo:otro" && <Field label="Especificar destino Otro"><input disabled={busy} required name="destinationOther" className={inputClass} maxLength={200} /><span className="block text-xs text-white/40">Se imprime junto a la casilla Otro de Destino.</span></Field>}
-      <p className="text-sm text-white/60">Al confirmar se actualizarán las existencias y se generará el vale de material.</p>
-      <button disabled={busy} className={buttonClass}>{busy ? "Registrando…" : "Confirmar movimiento y generar vale"}</button>
+      <p className="text-sm text-white/60">{access.canMove ? "Al confirmar se actualizarán las existencias y se generará el vale de material." : "Se enviará una solicitud al almacenista. Las existencias se actualizan cuando la atienda."}</p>
+      {access.error && <p role="alert" className="text-red-300">{access.error}</p>}
+      <button disabled={busy || access.loading || !!access.error} className={buttonClass}>{busy ? "Procesando…" : access.loading ? "Verificando permisos…" : access.canMove ? "Confirmar movimiento y generar vale" : "Mandar solicitud"}</button>
     </form>
     {error && <p role="alert" className="rounded-xl border border-red-400/20 bg-red-400/5 p-3 text-sm text-red-200">{error}</p>}
   </section>;
