@@ -32,17 +32,19 @@ export async function POST(req: NextRequest) {
     if (!project) throw new Error("Proyecto no disponible en DMR.");
     const catalog = await getProjectWorkInstructions({ projectId, type: "process" }), wi = catalog.workInstructions.find(w => w.id === wiId);
     if (!wi) throw new Error("WI no disponible en el proyecto.");
-    const bom = (await adminDB.collection("production_boms").doc(createHash("sha256").update(projectId).digest("hex")).get()).data();
+    const catalogId = createHash("sha256").update(projectId).digest("hex");
+    const [legacyBom, msop] = await Promise.all([adminDB.collection("production_boms").doc(catalogId).get(), adminDB.collection("production_msops").doc(catalogId).get()]);
+    const bom = msop.data() || legacyBom.data();
     const prefix = bom?.projectCode || wi.id.match(/WI\.(\d{3})/)?.[1] || project.title.match(/(?:^|\D)(\d{3})(?:\D|$)/)?.[1];
     const projectName = (await projectCatalog()).find(p=>p.code===prefix)?.label || project.title;
-    const allowed = (c: InventoryComponent) => (prefix && c.code.startsWith(prefix + ".")) || bom?.items?.some((i: {code:string})=>i.code===c.code);
+    const allowed = (c: InventoryComponent) => bom?.items?.some((i: {code:string})=>i.code===c.code);
     const now = new Date().toISOString();
     if (b.action === "recipe") {
       if (!Array.isArray(b.lines) || !b.lines.length || b.lines.length > 50) throw new Error("Agrega de 1 a 50 materiales.");
       const lines: RecipeLine[] = b.lines.map((l: RecipeLine) => ({ componentId: text(l.componentId), perUnit: l.perUnit, extraPercent: l.extraPercent }));
       if (new Set(lines.map(l => l.componentId)).size !== lines.length) throw new Error("El material está repetido.");
       const cs = await adminDB.getAll(...lines.map(l => adminDB.collection(inventoryCollections(site).components).doc(l.componentId)));
-      lines.forEach((l, i) => { if (!cs[i].exists) throw new Error("Material inexistente."); if (!allowed(cs[i].data() as InventoryComponent)) throw new Error("El material no corresponde al proyecto o BOM."); requiredQuantity(l.perUnit, 1, l.extraPercent, cs[i].data()!.unit); });
+      lines.forEach((l, i) => { if (!cs[i].exists) throw new Error("Material inexistente."); if (!allowed(cs[i].data() as InventoryComponent)) throw new Error("El material no está en el catálogo MSOP del proyecto."); requiredQuantity(l.perUnit, 1, l.extraPercent, cs[i].data()!.unit); });
       await adminDB.runTransaction(async t => { const old = await t.get(ref); if ((old.data()?.version || 0) !== b.version) throw new Error("La receta cambió. Recarga antes de guardar."); t.set(ref, { site, projectId, projectName, wiId, wiTitle: wi.title, lines, version: (old.data()?.version || 0) + 1, updatedAt: now, updatedBy: user.uid }); });
       return NextResponse.json({ ok: true });
     }
