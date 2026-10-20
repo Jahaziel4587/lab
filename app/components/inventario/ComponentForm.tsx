@@ -21,7 +21,7 @@ export default function ComponentForm({ onSaved }: { onSaved: (id: string) => vo
     const form = e.currentTarget; const data = Object.fromEntries(new FormData(form)); setBusy(true); setError("");
     try { const r = await inventoryRequest<{ id: string }>({ action: "component", ...data, unit: selectedUnit, site }); form.reset(); setCode(""); setUnit("pz"); setCustomUnit(""); onSaved(r.id); } catch (err) { setError(err instanceof Error ? err.message : "Error."); } finally { setBusy(false); }
   }}><div className="border-b border-white/10 pb-4"><h2 className="text-lg font-semibold">Nuevo artículo</h2><p className="mt-1 text-xs text-white/45">Información general del material o componente.</p></div><div className="grid gap-4 sm:grid-cols-2">
-    <Field label="Código"><input name="code" value={code} onChange={e=>setCode(e.target.value)} required maxLength={100} className={inputClass} placeholder="004.308 / MTS-001" /></Field>
+    <Field label="Código"><input name="code" value={code} onChange={e=>setCode(e.target.value)} required maxLength={100} className={inputClass} placeholder="004.308 / 005.303C / MTS-001" /></Field>
     <Field label="Nombre"><input name="name" required maxLength={200} className={inputClass} /></Field>
     <p className="text-sm text-white/55 sm:col-span-2">{inferred}{catalogError && ` · ${catalogError}`}</p>
     <Field label="Unidad"><select name="unit" disabled={busy} value={unit} onChange={e => setUnit(e.target.value)} className={inputClass}>{["pz", "caja", "roll", "m", "kg", "g", "L", "mL"].map(u => <option key={u}>{u}</option>)}<option value="other">Otro</option></select></Field>

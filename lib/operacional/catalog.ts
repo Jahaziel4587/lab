@@ -14,8 +14,8 @@ export function parseComponentCode(raw: string) {
     const code = raw.replace(/\s+/g, "").trim().toUpperCase().replace(/\.+$/, "");
     if (/^MTS-\d{3,}$/.test(code) && Number(code.slice(4)) > 0)
         return { code, projectCode: "", type: "MTS" };
-    const match = /^(\d{3})[.-]([1-4]\d{2})(?:[.-][A-Z0-9]+)*$/.exec(code);
+    const match = /^(\d{3})[.-]([1-4]\d{2})[A-Z]*(?:[.-][A-Z0-9]+)*$/.exec(code);
     if (!match)
-        throw new Error("Usa un código como 001.305 o MTS-001.");
+        throw new Error("Usa un código como 001.305, 005.303C o MTS-001.");
     return { code, projectCode: match[1], type: `${match[2][0]}00` };
 }

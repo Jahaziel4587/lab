@@ -1,0 +1,10 @@
+const fs = require("fs"), ts = require("typescript"), assert = require("node:assert/strict");
+const m = { exports: {} };
+new Function("module", "exports", ts.transpileModule(fs.readFileSync("lib/operacional/catalog.ts", "utf8"), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2020 } }).outputText)(m, m.exports);
+const { parseComponentCode } = m.exports;
+const cases = [["005.303C","005.303C","005","300"],[" 005 . 303 c. ","005.303C","005","300"],["005.303AB","005.303AB","005","300"],["001.305.V2","001.305.V2","001","300"],["001-202A","001-202A","001","200"],["005.101B.2","005.101B.2","005","100"],["005.401C","005.401C","005","400"],["MTS-001","MTS-001","","MTS"]];
+for (const [raw, code, projectCode, type] of cases) assert.deepEqual(parseComponentCode(raw), { code, projectCode, type });
+for (const raw of ["005.503C", "005.30C", "005.30333C", "005.303C!", "MTS-001C"]) assert.throws(() => parseComponentCode(raw));
+assert.equal(parseComponentCode(" 005 . 303 c. ").code, parseComponentCode("005.303C").code);
+assert.notEqual(parseComponentCode("005.303C").code, parseComponentCode("005.303D").code);
+console.log("Component code suffixes, inferred project/level, legacy formats and duplicate normalization passed.");
