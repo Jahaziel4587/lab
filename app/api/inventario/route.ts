@@ -1,3 +1,4 @@
+import { inventoryRequesterName } from "@/lib/inventario/request-preview";
 import { canMoveInventory, canDeleteEmptyLots, isEmptyStock } from "@/lib/inventario/warehouse-access";
 import { FieldValue } from "firebase-admin/firestore";
 import { sendPushToEmails } from "@/lib/pushNotifications";
@@ -48,8 +49,14 @@ export async function GET(req: NextRequest) {
       const collection = adminDB.collection(`${names.components}_movement_requests`);
       const profile = (await adminDB.collection("users").doc(user.uid).get()).data(), canFulfill = canMoveInventory(profile, site);
       const requests = await (canFulfill ? collection : collection.where("createdBy", "==", user.uid)).get();
-      return NextResponse.json({ canFulfill, requests: requests.docs.map(doc => {
-        const value = doc.data(); return { id: doc.id, site, status: value.status, kind: value.payload.kind, project: value.payload.project, notes: value.payload.notes || "", createdBy: value.createdBy, requestedBy: value.requestedBy, createdAt: value.createdAt, lines: value.lines, voucherIds: value.voucherIds || [] };
+      const ids = [...new Set(requests.docs.map(doc => doc.data().createdBy).filter((uid): uid is string => typeof uid === "string" && !!uid && !uid.includes("/")))];
+      const requesterNames = new Map<string, string>();
+      for (let index = 0; index < ids.length; index += 100) {
+        const profiles = await adminDB.getAll(...ids.slice(index, index + 100).map(uid => adminDB.collection("users").doc(uid)));
+        profiles.forEach(doc => requesterNames.set(doc.id, inventoryRequesterName(doc.data())));
+      }
+      return NextResponse.json({ canFulfill, actorName: inventoryRequesterName(profile, user.name), requests: requests.docs.map(doc => {
+        const value = doc.data(); return { id: doc.id, site, status: value.status, kind: value.payload.kind, project: value.payload.project, notes: value.payload.notes || "", createdBy: value.createdBy, requestedBy: requesterNames.get(value.createdBy) || inventoryRequesterName(undefined, value.requestedBy), originOther: value.payload.originOther || "", destinationOther: value.payload.destinationOther || "", createdAt: value.createdAt, lines: value.lines, voucherIds: value.voucherIds || [] };
       }).sort((a, b) => b.createdAt.localeCompare(a.createdAt)) });
     }
     const voucherId = req.nextUrl.searchParams.get("voucherId");
@@ -87,7 +94,7 @@ export async function POST(req: NextRequest) {
     const names = inventoryCollections(site);
     const components = adminDB.collection(names.components), vouchers = adminDB.collection(names.vouchers), operations = adminDB.collection(names.operations);
     const now = new Date().toISOString();
-    const actor = user.name || user.email || user.uid;
+    const actor = isRequestCreation ? inventoryRequesterName((await adminDB.collection("users").doc(user.uid).get()).data(), user.name) : user.name || user.email || user.uid;
     const requestCollection = adminDB.collection(`${names.components}_movement_requests`);
     if (b.action === "fulfill-movement-request") {
       const requestId = str(b.requestId);

@@ -9,6 +9,7 @@ function collection(name,filters=[]){return {doc:(id)=>document(name,id||"autoge
 const db={collection,getAll:async(...refs)=>Promise.all(refs.map(ref=>ref.get())),runTransaction:async fn=>{const writes=[];const t={get:ref=>ref.get(),getAll:(...refs)=>Promise.all(refs.map(ref=>ref.get())),create:(ref,data)=>writes.push(["create",ref.path,clone(data)]),set:(ref,data)=>writes.push(["set",ref.path,clone(data)]),update:(ref,data)=>writes.push(["update",ref.path,clone(data)])};const result=await fn(t);for(const [op,path,data]of writes){if(op==="create")assert(!records.has(path),"duplicate creation");if(op==="update")assert(records.has(path),"missing update");records.set(path,op==="update"?{...records.get(path),...data}:data);}return result;}};
 const api=load("app/api/inventario/route.ts",{
 "@/lib/inventario/warehouse-access":access,
+"@/lib/inventario/request-preview":load("lib/inventario/request-preview.ts"),
 "@/lib/inventario/voucher-title":load("lib/inventario/voucher-title.ts"),
 "@/lib/inventario/kiv":{},"@/lib/inventario/cart":cart,"@/lib/inventario/fixed-recipes":{},"@/lib/inventario/storage":{},
 "@/lib/inventario/storage-server":{warehouseRecipients:async()=>["warehouse@example.com"],pushStorageAlerts:async()=>{}},
@@ -21,7 +22,7 @@ const api=load("app/api/inventario/route.ts",{
 });
 const componentId="component0000001",lotId="lot-00000000001",componentPath="inventario_componentes/"+componentId;
 records.set(componentPath,{id:componentId,code:"001.305",name:"Material",unit:"pz",project:"",lots:[{id:lotId,name:"LOTE-1",stock:{aprobado:10},expiry:"",notes:"",createdAt:"2026-01-01"}]});
-records.set("users/requester",{});records.set("users/warehouse",{warehouseSites:["B1"]});records.set("users/head",{isWarehouseHead:true});
+records.set("users/requester",{nombre:"Jahaziel",apellido:"Garza"});records.set("users/warehouse",{warehouseSites:["B1"]});records.set("users/head",{isWarehouseHead:true});
 const line={componentId,lotId,quantity:4,origin:"aprobado",destination:"externo:produccion"};
 const body={action:"movement-request",cart:true,kind:"salida",site:"B1",operationId:"request-00000001",project:"000.General",lines:[line]};
 async function post(body){return api.POST({json:async()=>clone(body),headers:{get:()=> "Bearer test"},nextUrl:{searchParams:new URLSearchParams("site="+(body.site||"B1"))},url:"https://example.test/api/inventario"});}
@@ -33,6 +34,10 @@ try{
  assert(!records.has("inventario_componentes_movement_requests/"+body.operationId));
  const created=await post(body);assert.equal(created.status,200);assert.equal(created.data.requestId,body.operationId);assert.equal(records.get(componentPath).lots[0].stock.aprobado,10);
  assert([...records.keys()].some(path=>path.startsWith("notifications/")));assert(![...records.keys()].some(path=>path.startsWith("inventario_vales/")));
+ assert.equal(records.get("inventario_componentes_movement_requests/"+body.operationId).requestedBy,"Jahaziel Garza");
+ records.get("inventario_componentes_movement_requests/"+body.operationId).requestedBy="requester@example.com";
+ const listing=await api.GET({headers:{get:()=>"Bearer test"},nextUrl:{searchParams:new URLSearchParams("site=B1&view=movement-requests")}});
+ assert.equal(listing.status,200);assert.equal(listing.data.requests[0].requestedBy,"Jahaziel Garza");
  assert.equal((await post(body)).status,200);assert.equal([...records.keys()].filter(path=>path.startsWith("notifications/")).length,1);
  assert.equal((await post({...body,lines:[{...line,quantity:5}]})).status,400);
  const fulfill={action:"fulfill-movement-request",site:"B1",requestId:body.operationId};

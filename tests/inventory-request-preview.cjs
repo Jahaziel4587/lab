@@ -1,0 +1,10 @@
+const fs=require('fs'),ts=require('typescript'),assert=require('node:assert/strict');
+const m={exports:{}};new Function('module','exports',ts.transpileModule(fs.readFileSync('lib/inventario/request-preview.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText)(m,m.exports);
+const {inventoryRequesterName,requestVoucherPreviews}=m.exports;
+assert.equal(inventoryRequesterName({nombre:'Jahaziel',apellido:'Garza'},'user@example.com'),'Jahaziel Garza');
+assert.equal(inventoryRequesterName({displayName:'Andrea Siller'}),'Andrea Siller');assert.equal(inventoryRequesterName({username:'Almacén B1'}),'Almacén B1');assert.equal(inventoryRequesterName(undefined,'user@example.com'),'Usuario');assert.equal(inventoryRequesterName(undefined,'Nombre registrado'),'Nombre registrado');
+const line={componentId:'component123',code:'MTS-001',name:'Alcohol',unit:'L',lot:'LOTE-1',lotId:'lot123',expiry:'2027-01-01',quantity:3,comments:'Nota lote',origin:'externo:recepcion',destination:'aprobado'};
+const request={id:'request123',status:'pending',kind:'entrada',project:'000.General',notes:'Nota vale',originOther:'regioMex',requestedBy:'Jahaziel Garza',createdAt:'2026-10-20T12:00:00Z',voucherIds:[],lines:[line,{...line,code:'MTS-002',quantity:5},{...line,destination:'cuarentena'}]};
+const before=JSON.stringify(request),result=requestVoucherPreviews(request,'B2','Almacenista','2026-10-20T20:00:00Z');
+assert.equal(result.length,2);assert.equal(result[0].lines.length,2);assert.equal(result[1].lines.length,1);assert.equal(result[0].originOther,'regioMex');assert.equal(result[0].site,'B2');assert.equal(result[0].notes,'Nota vale');assert.equal(result[0].requestedBy,'');assert.equal(result[0].receivedBy,'');assert.equal(result[0].id,'Pendiente de generar');assert.equal(result[0].lines[1].quantity,5);assert.equal(JSON.stringify(request),before);
+console.log('Request preview: names, historical fallback, grouping, quantities, supplier, blank signatures and unchanged request passed.');
