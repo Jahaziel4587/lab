@@ -10,6 +10,7 @@ import { auth } from "@/src/firebase/firebaseConfig";
 import { inventoryRequest } from "@/lib/inventario/service";
 import type { Voucher } from "@/lib/inventario/types";
 import InventoryShell from "@/app/components/inventario/InventoryShell";
+import VoucherTitle from "@/app/components/inventario/VoucherTitle";
 import MaterialVoucher from "@/app/components/inventario/MaterialVoucher";
 export default function VoucherPage() {
   const search = useSearchParams();
@@ -21,5 +22,5 @@ export default function VoucherPage() {
     if (!user) { setV(null); router.replace("/login"); return; }
     inventoryRequest<{ voucher: Voucher }>(undefined, `?voucherId=${encodeURIComponent(valeId)}`, site).then(r => { if (live) setV(r.voucher); }).catch(e => { if (live) setError(e.message); }).finally(() => { if (live) setLoading(false); });
   }); return () => { live = false; unsub(); }; }, [valeId, router, site]);
-  return <InventoryShell>{error ? <p role="alert">{error}</p> : loading ? <p>Cargando vale…</p> : v ? <>{related.length > 1 && <div className="flex flex-wrap gap-2">{related.map((id,i)=><Link key={id} className="rounded-xl border border-white/10 px-3 py-2 text-emerald-300" href={inventoryHref(`/inventario/vales/${id}`,site)+`&related=${encodeURIComponent(related.join(","))}`}>Vale {i+1} de {related.length}</Link>)}</div>}<MaterialVoucher voucher={v} /></> : <p>Vale no encontrado en los registros recientes.</p>}</InventoryShell>;
+  return <InventoryShell>{error ? <p role="alert">{error}</p> : loading ? <p>Cargando vale…</p> : v ? <>{related.length > 1 && <div className="flex flex-wrap gap-2">{related.map((id,i)=><Link key={id} className="rounded-xl border border-white/10 px-3 py-2 text-emerald-300" href={inventoryHref(`/inventario/vales/${id}`,site)+`&related=${encodeURIComponent(related.join(","))}`}>Vale {i+1} de {related.length}</Link>)}</div>}<VoucherTitle key={v.id} voucher={v} onSaved={title => setV(current => current ? { ...current, title } : current)} /><MaterialVoucher voucher={v} /></> : <p>Vale no encontrado en los registros recientes.</p>}</InventoryShell>;
 }

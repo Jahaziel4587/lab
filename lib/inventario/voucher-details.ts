@@ -6,6 +6,6 @@ export function voucherComments(line?: string, general?: string) {
 
 export function voucherLocation(location: string, detail?: string) {
   const name = locationName(location);
-  if (location === "externo:recepcion") return detail?.trim() ? `${name} · ${detail.trim()}` : name;
+  if (location === "externo:recepcion") return detail?.trim() || name;
   return detail?.trim() || name;
 }
