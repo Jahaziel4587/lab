@@ -26,3 +26,28 @@ assert.equal(wrong.documentProjectCode,"005");
 assert.ok(parseMsopPages([[]],"001.MSOP.pdf").warnings.length);
 assert.ok(!parseMsopPages([[cell("MTS-999 outside any target table",0,800)]],"001.MSOP.pdf").rows.length);
 console.log("MSOP extraction section boundaries, pages, missing codes, and blank-unit gate passed.");
+
+const wrapped=[
+ cell("List of Materials/Components",0,740),
+ cell("Part Number",0,720),cell("Component Name",150,720),cell("Spec #",380,720),
+ {...cell("006.301",10,700),width:45},cell("Top Dressing Foam",110,700),cell("SPEC.006.301",380,700),
+ cell("Two line",110,676),{...cell("006.302",10,670),width:45},cell("SPEC.006.302",380,670),cell("foam insert",110,664),
+ {...cell("006.303",10,640),width:45},cell("Partial Top SPEC.006.303",110,640)
+];
+const corrected=parseMsopPages([wrapped],"006.MSOP Rev3.pdf");
+assert.equal(corrected.rows.length,3);
+assert.equal(corrected.rows[0].name,"Top Dressing Foam");
+assert.equal(corrected.rows[0].spec,"SPEC.006.301");
+assert.equal(corrected.rows[1].name,"Two line foam insert");
+assert.equal(corrected.rows[1].spec,"SPEC.006.302");
+assert.equal(corrected.rows[2].name,"Partial Top");
+assert.equal(corrected.rows[2].spec,"SPEC.006.303");
+assert.equal(result.rows[2].name,"Cleaning wipe","Uncoded tool row must not be appended to preceding name");
+const specOnly=parseMsopPages([[cell("List of Materials/Components",0,740),cell("Part Number",0,720),cell("Description",120,720),cell("Spec #",380,720),cell("006.302",0,700),cell("SPEC.006.302",380,700)]],"006.MSOP.pdf");
+assert.equal(specOnly.rows[0].name,"");
+assert.ok(specOnly.warnings.some(w=>w.includes("sin código o nombre")));
+const spacing=parseMsopPages([[cell("List of Materials/Components",0,740),cell("006.301",0,700),cell("Top foam",120,700),cell("SPEC. 006.301",380,700)]],"006.MSOP.pdf");
+assert.equal(spacing.rows.length,1);
+assert.equal(spacing.rows[0].name,"Top foam");
+assert.equal(spacing.rows[0].spec,"SPEC.006.301");
+console.log("SPEC separation and centered-number multiline-row regressions passed.");
