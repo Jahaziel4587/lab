@@ -1,6 +1,7 @@
 /** Controlled transcription: QAP-013 Rev C, tables A/B (pp.11–12), Squeglia (p.13).
  * Normal single sampling only. Single-direction arrows follow their direction;
- * bidirectional ranges always select the lower plan (operational selection policy).
+ * bidirectional ranges keep the original sample and take only Ac/Re from below
+ * (custom operational rule; not the unmodified standard sampling plan).
  * No percentage approximation and no automatic normal/tightened/reduced switching.
  */
 export type AqlLevel = "I"|"II"|"III"|"S1"|"S2"|"S3"|"S4";
@@ -66,10 +67,11 @@ export function calculateAql(lotSize:number, level:AqlLevel, aql:string, plan:Aq
  const baseSampleSize=plan==="normal"?sizes[letters.indexOf(codeLetter)]:0;
  const tableSampleSize=sampleSize;
  const lotRange=lotSize===1?"1":row===bounds.length-1?"500001 o más":`${row===0?2:bounds[row-1]+1}–${bounds[row]}`;
+ if(bidirectionalArrow)sampleSize=baseSampleSize;
  const inspectEntireLot=sampleSize>=lotSize;
  // QAP table B: if n >= lot size, inspect 100%; existing 100% rule is Ac=0/Re=1.
  if(inspectEntireLot){sampleSize=lotSize;acceptanceNumber=0;}
- return {plan,lotRange,baseSampleSize,tableSampleSize,bidirectionalArrow, aql:options[column],codeLetter:plan==="normal"?codeLetter:"",effectiveCodeLetter,sampleSize,acceptanceNumber,rejectionNumber:acceptanceNumber+1,inspectEntireLot,reference:"QAP-013 Rev C"};
+ return {plan,lotRange,baseSampleSize,tableSampleSize,bidirectionalArrow,preserveBaseSample:bidirectionalArrow, aql:options[column],codeLetter:plan==="normal"?codeLetter:"",effectiveCodeLetter,sampleSize,acceptanceNumber,rejectionNumber:acceptanceNumber+1,inspectEntireLot,reference:"QAP-013 Rev C"};
 }
 export type AqlCalculation=ReturnType<typeof calculateAql>;
 
@@ -83,5 +85,5 @@ export function applyAutomaticAql<T extends {method:string;isFullInspection?:boo
 export function aqlPlanDescription(plan:{samplingPlan?:AqlPlan;inspectionType:string;inspectionLevel:string;aql:string;aqlCalculation?:AqlCalculation}):string {
  if(!plan.aqlCalculation)return `${plan.inspectionType === "special" ? "Especial" : "Normal"} | Nivel ${plan.inspectionLevel} | AQL ${plan.aql}`;
  const c=plan.aqlCalculation;
- return `${plan.samplingPlan === "squeglia" ? "Squeglia C=0" : `Normal | Nivel ${plan.inspectionLevel} | Letra ${c.codeLetter}${c.codeLetter!==c.effectiveCodeLetter?` -> ${c.effectiveCodeLetter}`:""}`} | AQL ${plan.aql} | Ac ${c.acceptanceNumber} / Re ${c.rejectionNumber}${c.inspectEntireLot?" | 100% del lote":""} | ${c.reference}`;
+ return `${plan.samplingPlan === "squeglia" ? "Squeglia C=0" : `Normal | Nivel ${plan.inspectionLevel} | Letra ${c.codeLetter}${c.preserveBaseSample?` | Muestra conservada: ${c.sampleSize} | Ac/Re de ${c.effectiveCodeLetter} (criterio interno)`:c.codeLetter!==c.effectiveCodeLetter?` -> ${c.effectiveCodeLetter}`:""}`} | AQL ${plan.aql} | Ac ${c.acceptanceNumber} / Re ${c.rejectionNumber}${c.inspectEntireLot?" | 100% del lote":""} | ${c.reference}`;
 }

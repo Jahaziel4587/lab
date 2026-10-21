@@ -7,7 +7,7 @@ vm.runInNewContext(ts.transpileModule(fs.readFileSync(path.join(__dirname,'../li
 const {calculateAql,applyAutomaticAql,NORMAL_AQLS,ZERO_AQLS}=exportsObject;
 test('QAP worked example: 3500, II, 1.0 = L/200/5/6',()=>{const x=calculateAql(3500,'II','1.0');assert.equal(x.codeLetter,'L');assert.equal(x.sampleSize,200);assert.equal(x.acceptanceNumber,5);assert.equal(x.rejectionNumber,6)});
 test('lot boundaries and special levels use table A',()=>{const max=[8,15,25,50,90,150,280,500,1200,3200,10000,35000,150000,500000,500001];const codes=['AABAAAA','ABCAAAA','BCDAABB','CDEABBC','CEFBBCC','DFGBBCD','EGHBCDE','FHJBCDE','GJKCCEF','HKLCDEG','JLMCDFG','KMNCDFH','LNPDEGJ','MPQDEGJ','NQRDEHK'];const levels=['I','II','III','S1','S2','S3','S4'];max.forEach((n,i)=>levels.forEach((l,j)=>{assert.equal(calculateAql(n,l,'1').codeLetter,codes[i][j]);if(i>0)assert.equal(calculateAql(max[i-1]+1,l,'1').codeLetter,codes[i][j])}))});
-test('table arrows change n upwards/downwards, including internal gaps',()=>{assert.equal(calculateAql(3500,'II','0.065').sampleSize,200);assert.equal(calculateAql(20000,'II','0.065').sampleSize,800);assert.equal(calculateAql(100000,'II','0.065').sampleSize,800);assert.equal(calculateAql(3500,'S1','1').sampleSize,13);assert.equal(calculateAql(500001,'III','6.5').sampleSize,200);assert.equal(calculateAql(100,'II','1').sampleSize,50);assert.equal(calculateAql(200,'II','1').sampleSize,50)});
+test('table arrows change n upwards/downwards, including internal gaps',()=>{assert.equal(calculateAql(3500,'II','0.065').sampleSize,200);assert.equal(calculateAql(20000,'II','0.065').sampleSize,315);assert.equal(calculateAql(100000,'II','0.065').sampleSize,500);assert.equal(calculateAql(3500,'S1','1').sampleSize,13);assert.equal(calculateAql(500001,'III','6.5').sampleSize,200);assert.equal(calculateAql(100,'II','1').sampleSize,20);assert.equal(calculateAql(200,'II','1').sampleSize,32)});
 test('small lots inspect all; no sample larger than lot',()=>{for(const plan of ['normal','squeglia'])for(const aql of plan==='normal'?NORMAL_AQLS:ZERO_AQLS){for(let n=1;n<=25;n++){const x=calculateAql(n,'II',aql,plan);assert.ok(x.sampleSize<=n);if(x.inspectEntireLot){assert.equal(x.acceptanceNumber,0);assert.equal(x.rejectionNumber,1)}}}});
 test('Squeglia is separate, zero acceptance, no level influence',()=>{for(const l of ['I','II','S4']){const x=calculateAql(3500,l,'1','squeglia');assert.equal(x.sampleSize,50);assert.equal(x.acceptanceNumber,0);assert.equal(x.rejectionNumber,1)}assert.equal(calculateAql(8,'II','1','squeglia').sampleSize,8);assert.equal(calculateAql(500001,'II','.01','squeglia').sampleSize,1250)});
 test('all supported cells give coherent plans',()=>{for(const n of [1,8,9,15,16,25,26,50,51,90,91,150,151,280,281,500,501,1200,1201,3200,3201,10000,10001,35000,35001,150000,150001,500000,500001])for(const level of ['I','II','III','S1','S2','S3','S4'])for(const plan of ['normal','squeglia'])for(const aql of plan==='normal'?NORMAL_AQLS:ZERO_AQLS){const x=calculateAql(n,level,aql,plan);assert.ok(x.sampleSize>=1&&x.sampleSize<=n);assert.ok(x.acceptanceNumber<x.sampleSize);assert.equal(x.rejectionNumber,x.acceptanceNumber+1)}});
@@ -56,7 +56,8 @@ test('both rows of every bidirectional range use the first lower numeric plan',(
    found=true;assert.equal(x.bidirectionalArrow,true);
    assert.equal(x.effectiveCodeLetter,effective);assert.equal(x.tableSampleSize,n);
    assert.ok(letters.indexOf(x.effectiveCodeLetter)>letters.indexOf(letter));
-   assert.equal(x.sampleSize,Math.min(n,lotSize));
+   assert.equal(x.sampleSize,Math.min(x.baseSampleSize,lotSize));
+   assert.equal(x.preserveBaseSample,true);
    assert.equal(x.acceptanceNumber,x.inspectEntireLot?0:1);
    assert.equal(x.rejectionNumber,x.inspectEntireLot?1:2);
   }
@@ -73,4 +74,24 @@ test('one-way up/down arrows and explicit numeric plans are unchanged',()=>{
  const numeric=calculateAql(3500,'II','0.65');
  assert.equal(numeric.sampleSize,200);assert.equal(numeric.acceptanceNumber,3);
  assert.equal(numeric.bidirectionalArrow,false);
+});
+
+test('J/80 sample stays 80 while Ac/Re come from lower L row',()=>{
+ const result=calculateAql(1000,'II','0.25');
+ assert.equal(result.codeLetter,'J');assert.equal(result.baseSampleSize,80);
+ assert.equal(result.effectiveCodeLetter,'L');assert.equal(result.tableSampleSize,200);
+ assert.equal(result.sampleSize,80);assert.equal(result.acceptanceNumber,1);
+ assert.equal(result.rejectionNumber,2);assert.equal(result.preserveBaseSample,true);
+});
+test('lower rejection-row sample reaching lot size does not force full-lot inspection',()=>{
+ const result=calculateAql(8,'III','6.5');
+ assert.equal(result.codeLetter,'B');assert.equal(result.effectiveCodeLetter,'D');
+ assert.equal(result.tableSampleSize,8);assert.equal(result.sampleSize,3);
+ assert.equal(result.inspectEntireLot,false);assert.equal(result.acceptanceNumber,1);
+ assert.equal(result.rejectionNumber,2);
+});
+test('creation saves original sample and lower acceptance limit together',()=>{
+ const result=applyAutomaticAql({method:'visual',inspectionLevel:'II',inspectionType:'normal',aql:'0.25',inspectedQuantity:1,allowedRejectedQuantity:0},1000);
+ assert.equal(result.inspectedQuantity,80);assert.equal(result.allowedRejectedQuantity,1);
+ assert.equal(result.aqlCalculation.preserveBaseSample,true);
 });
