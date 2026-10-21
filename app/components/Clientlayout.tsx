@@ -281,7 +281,7 @@ export default function ClientLayout({
         </NavigationGroup>
         <NavigationGroup label="Quality" mobile={mobile}>
           <Link data-tutorial="nav-inspections" href="/inspecciones" onClick={cerrarMenu} className={linkClass}>Inspecciones</Link>
-          <span aria-disabled="true" className={comingSoonClass}>DHR <span className="text-[10px]">Próximamente</span></span>
+          <Link href="/dhr" onClick={cerrarMenu} className={linkClass}>DHR</Link>
         </NavigationGroup>
         <NavigationGroup label="Inventory" mobile={mobile}>
           <Link href="/inventario?site=B1" onClick={cerrarMenu} className={linkClass}>Inventory B1</Link>
