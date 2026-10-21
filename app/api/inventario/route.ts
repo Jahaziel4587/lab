@@ -1,6 +1,6 @@
 import { inventoryRequesterName } from "@/lib/inventario/request-preview";
 import { canMoveInventory, canDeleteEmptyLots, isEmptyStock } from "@/lib/inventario/warehouse-access";
-import { FieldValue } from "firebase-admin/firestore";
+import { FieldValue, type DocumentReference } from "firebase-admin/firestore";
 import { sendPushToEmails } from "@/lib/pushNotifications";
 import { validateVoucherTitle } from "@/lib/inventario/voucher-title";
 import { kivLots } from "@/lib/inventario/kiv";
@@ -228,6 +228,18 @@ export async function POST(req: NextRequest) {
         return previous.data()?.voucherIds as string[];
       }
       if (b.fulfillMovementRequestId && fulfillmentStatus !== "pending") fail("La solicitud ya fue atendida.");
+      let productionRequest: { ref: DocumentReference; pdoId: string; units: number } | null = null;
+      if (b.requestId) {
+        const snap = await t.get(adminDB.collection("production_orders").doc(operationId)), order = snap.data();
+        if (!order || order.site !== site) fail("Solicitud de producción no encontrada.");
+        if (order.pdoId) {
+          if (order.status !== "pending") fail("La solicitud ya no está pendiente.");
+          const parent = await t.get(adminDB.collection("production_pdos").doc(order.pdoId));
+          if (!parent.exists) fail("PDO no encontrada.");
+          if (order.lines.some((l: { componentId: string; total: number; lotId: string; origin: string }) => !b.lines.some((x: CartLine) => x.componentId === l.componentId && x.quantity === l.total && x.lotId === l.lotId && x.origin === l.origin))) fail("Respeta los lotes y cantidades asignados a esta PDO.");
+          productionRequest = { ref: snap.ref, pdoId: order.pdoId, units: order.units };
+        }
+      }
       if (b.recipeId) {
         const current = await t.get(adminDB.collection(`${names.components}_fixed_recipes`).doc(b.recipeId));
         if (!current.data()?.active || current.data()?.version !== recipeVersion) fail("La receta cambió. Recarga antes de confirmar.");
@@ -305,7 +317,7 @@ export async function POST(req: NextRequest) {
       }
       for (const g of groups.values()) {
         const ref = vouchers.doc(); voucherIds.push(ref.id);
-        const v: Voucher = { id: ref.id, site, operationId, kind: b.action === "lot" ? "entrada" : b.kind, origin: g.origin, destination: g.destination, createdAt: now, actor, actorUid: user.uid, requestedBy, receivedBy, project, notes, originOther, destinationOther, lines: g.lines };
+        const v: Voucher = { ...(productionRequest ? { pdoId: productionRequest.pdoId, productionRequestId: operationId, productionUnits: productionRequest.units } : {}), id: ref.id, site, operationId, kind: b.action === "lot" ? "entrada" : b.kind, origin: g.origin, destination: g.destination, createdAt: now, actor, actorUid: user.uid, requestedBy, receivedBy, project, notes, originOther, destinationOther, lines: g.lines };
         t.create(ref, v);
       }
       if (b.fulfillMovementRequestId) {
@@ -316,6 +328,7 @@ export async function POST(req: NextRequest) {
           fulfillmentNotice = { email: requesterEmail, url };
         }
       }
+      if (productionRequest) t.update(productionRequest.ref, { status: "fulfilled", fulfilledAt: now, fulfilledBy: user.uid, voucherIds });
       t.create(operationRef, { uid: user.uid, fingerprint, site, voucherIds, createdAt: now });
       return voucherIds;
     });

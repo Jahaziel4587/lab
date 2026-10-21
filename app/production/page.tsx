@@ -1,16 +1,16 @@
 "use client";
-import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
+import { useEffect, useState } from "react";
 import MsopEditor from "./MsopEditor";
+import PdoPanel from "./PdoPanel";
 import InventoryDialog from "@/app/components/inventario/InventoryDialog";
 import { productionCatalog } from "@/lib/production/client";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "@/src/Context/AuthContext";
 import { useInspectionCatalog } from "@/app/inspecciones/hooks/useInspectionCatalog";
 import { inventoryRequest } from "@/lib/inventario/service";
-import { inventoryHref, type InventorySite } from "@/lib/inventario/sites";
-import type { InventoryComponent, Voucher } from "@/lib/inventario/types";
-import { ArrowLeft, Factory, Plus, Save, Trash2, ClipboardList, Download, CheckCircle2, LoaderCircle } from "lucide-react";
+import { type InventorySite } from "@/lib/inventario/sites";
+import type { InventoryComponent } from "@/lib/inventario/types";
+import { ArrowLeft, Factory, Plus, Save, Trash2, ClipboardList, CheckCircle2, LoaderCircle } from "lucide-react";
 import CatalogList from "@/app/inspecciones/components/CatalogList";
 import InspectionFlowProgress from "@/app/inspecciones/components/InspectionFlowProgress";
 import { inspectionPageClass, inspectionPanelClass, inspectionBackButtonClass } from "@/app/inspecciones/styles";
@@ -19,7 +19,6 @@ import type { RecipeLine } from "@/lib/production/calculate";
 const input = inputClass;
 const button = buttonClass;
 const panel = panelClass;
-type Order = { voucherIds?: string[]; id: string; pdo: string; units: number; projectName: string; wiTitle: string; recipeVersion: number; createdAt: string; lines: (RecipeLine & { code: string; name: string; unit: string; base: number; extra: number; total: number })[] };
 export default function Production() {
   const { user } = useAuth(), params = useSearchParams(), router = useRouter();
   const projectId = params.get("proyecto"), wiId = params.get("wi");
@@ -30,22 +29,20 @@ export default function Production() {
   const projects = useInspectionCatalog({ scope: "projects" });
   const wis = useInspectionCatalog({ scope: "process", projectId, enabled: !!projectId });
   const project = projects.projects.find(p => p.id === projectId), wi = wis.workInstructions.find(w => w.id === wiId);
-  const [components, setComponents] = useState<InventoryComponent[]>([]), [vouchers, setVouchers] = useState<Voucher[]>([]);
-  const [lines, setLines] = useState<RecipeLine[]>([]), [version, setVersion] = useState(0), [orders, setOrders] = useState<Order[]>([]), [selected, setSelected] = useState<Order | null>(null);
-  const [pdo, setPdo] = useState(""), [units, setUnits] = useState(""), [busy, setBusy] = useState(false), [loading, setLoading] = useState(false), [error, setError] = useState(""), [message, setMessage] = useState("");
-  const [allocation, setAllocation] = useState<Record<string, { origin: string; lotId: string }>>({});
-  const pending = useRef<{ signature: string; id: string } | null>(null);
+  const [components, setComponents] = useState<InventoryComponent[]>([]);
+  const [lines, setLines] = useState<RecipeLine[]>([]), [version, setVersion] = useState(0);
+  const [busy, setBusy] = useState(false), [loading, setLoading] = useState(false), [error, setError] = useState(""), [message, setMessage] = useState("");
   async function request(body?: unknown, signal?: AbortSignal) {
     if (!user) throw new Error("Inicia sesión.");
     const q = new URLSearchParams({ site, projectId: projectId || "", wiId: wiId || "" });
     const r = await fetch(`/api/production?${q}`, { method: body ? "POST" : "GET", headers: { Authorization: `Bearer ${await user.getIdToken()}`, "Content-Type": "application/json" }, ...(body ? { body: JSON.stringify({ ...(body as object), site, projectId, wiId }) } : {}), signal });
     const d = await r.json(); if (!r.ok) throw new Error(d.error); return d;
   }
-  async function inventory() { const d = await inventoryRequest<{ components: InventoryComponent[]; vouchers: Voucher[] }>(undefined, "", site); setComponents(d.components); setVouchers(d.vouchers); }
+  async function inventory() { const d = await inventoryRequest<{ components: InventoryComponent[] }>(undefined, "", site); setComponents(d.components); }
   useEffect(() => {
-    const controller = new AbortController(); setLines([]); setVersion(0); setOrders([]); setSelected(null); setAllocation({}); setError(""); setMessage(""); setLoading(true);
+    const controller = new AbortController(); setLines([]); setVersion(0); setError(""); setMessage(""); setLoading(true);
     if (!user || !projectId || !wiId) { setLoading(false); return () => controller.abort(); }
-    Promise.all([request(undefined, controller.signal), inventoryRequest<{ components: InventoryComponent[]; vouchers: Voucher[] }>(undefined, "", site)]).then(([d, inv]) => { if (controller.signal.aborted) return; setLines(d.recipe?.lines || []); setVersion(d.recipe?.version || 0); setOrders(d.orders); setComponents(inv.components); setVouchers(inv.vouchers); }).catch(e => { if (!controller.signal.aborted) setError(e.message); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    Promise.all([request(undefined, controller.signal), inventoryRequest<{ components: InventoryComponent[] }>(undefined, "", site)]).then(([d, inv]) => { if (controller.signal.aborted) return; setLines(d.recipe?.lines || []); setVersion(d.recipe?.version || 0); setComponents(inv.components); }).catch(e => { if (!controller.signal.aborted) setError(e.message); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
     // Request state follows the selected WI and warehouse.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -55,7 +52,7 @@ export default function Production() {
   useEffect(() => { if (!projectId || !user) return; let live = true; productionCatalog<{bom:{projectCode?:string;items:{code:string}[]}}>(site, undefined, projectId).then(d => { if(live){setBomCodes(d.bom.items.map(i=>i.code));setBomProjectCode(d.bom.projectCode || "");}}).catch(e=>setError(e.message)); return ()=>{live=false;}; }, [projectId, site, user, bomOpen]);
   const prefix = bomProjectCode || project?.title.match(/(?:^|\D)(\d{3})(?:\D|$)/)?.[1] || wi?.id.match(/WI\.(\d{3})/)?.[1] || "";
   const recipeComponents = components.filter(c => bomCodes.includes(c.code));
-  const issued = selected ? (selected.voucherIds?.length ? selected.voucherIds : vouchers.filter(v => v.operationId === selected.id).map(v => v.id)) : [];
+
   return <main className={`${inspectionPageClass} space-y-5`}>
     <button disabled={busy} className={inspectionBackButtonClass} onClick={() => wiId ? navigate(projectId!) : projectId ? navigate() : router.push("/")}><ArrowLeft size={17} />Regresar</button>
     <section className={inspectionPanelClass}>
@@ -85,18 +82,8 @@ export default function Production() {
         </div>)}
         <div className="flex flex-wrap gap-3"><button disabled={busy || lines.length >= 50} className={button} onClick={() => setLines([...lines, { componentId: "", perUnit: 1, extraPercent: 0 }])}><Plus size={16} />Agregar material</button><button disabled={busy || !lines.length} className={button} onClick={() => run(async () => { await request({ action: "recipe", lines, version }); setVersion(version + 1); setMessage("Receta guardada."); })}><Save size={16} />Guardar receta</button></div>
       </section>}
-      {tab === "pdo" && <section className={`${panel} space-y-4`}><h2 className="text-lg font-semibold">Preparar material para PDO</h2><p className="text-sm text-white/60">Se usará la última receta guardada. Total = cantidad por unidad × unidades PDO × (1 + extra / 100). Las piezas se redondean hacia arriba.</p>
-        <div className="grid gap-4 sm:grid-cols-2"><Field label="Número de PDO"><input disabled={busy} className={input} maxLength={300} value={pdo} onChange={e => setPdo(e.target.value)} /></Field><Field label="Unidades a manufacturar"><input disabled={busy} className={input} type="number" min="1" step="1" value={units} onChange={e => setUnits(e.target.value)} /></Field></div>
-        <button disabled={busy || !version || !pdo.trim() || !units} className={button} onClick={() => run(async () => { const signature = JSON.stringify([site, projectId, wiId, pdo, units]); if (pending.current?.signature !== signature) pending.current = { signature, id: crypto.randomUUID() }; const d = await request({ action: "order", pdo, units: Number(units), operationId: pending.current.id }); setOrders(prev => [d.order, ...prev.filter(o => o.id !== d.order.id)]); setSelected(d.order); setAllocation({}); pending.current = null; setMessage("Lista de material guardada para almacén."); })}><ClipboardList size={16} />Generar lista de material</button>
-        <div className="border-t border-white/10 pt-4"><h3 className="mb-3 text-sm font-semibold text-white/80">Órdenes guardadas</h3>{!orders.length && <p className="text-sm text-white/45">Aún no hay listas de material para esta WI.</p>}</div><div className="grid gap-3 sm:grid-cols-2">{orders.map(o => <button disabled={busy} key={o.id} aria-pressed={selected?.id === o.id} className={`min-h-20 rounded-2xl border p-4 text-left text-sm transition ${selected?.id === o.id ? "border-emerald-400/30 bg-emerald-400/10 text-emerald-200" : "border-white/10 bg-white/[0.04] hover:bg-white/[0.07]"}`} onClick={() => { setSelected(o); setAllocation({}); }}>{o.pdo} · {o.units} unidades · v{o.recipeVersion}<span className="block text-xs text-white/50">{new Date(o.createdAt).toLocaleString("es-MX")}</span></button>)}</div>
-      </section>}
-      {tab === "pdo" && selected && <section className={`${panel} space-y-4`}><h2 className="text-lg font-semibold">Material para {selected.pdo}</h2><p>{selected.projectName} · {selected.wiTitle} · {selected.units} unidades · receta v{selected.recipeVersion}</p>
-        <button className={secondaryButtonClass} onClick={() => { const rows = [["PDO", "WI", "Material", "Nombre", "Unidad", "Base", "Extra %", "Extra", "Total"], ...selected.lines.map(l => [selected.pdo, selected.wiTitle, l.code, l.name, l.unit, l.base, l.extraPercent, l.extra, l.total])]; const csv = "\uFEFF" + rows.map(row => row.map(x => '"' + String(x).replaceAll('"', '""') + '"').join(",")).join("\r\n"); const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" })); const a = document.createElement("a"); a.href = url; a.download = "material-production.csv"; a.click(); URL.revokeObjectURL(url); }}><Download size={16} />Descargar lista para almacén</button>
-        {selected.lines.map(l => { return <div key={l.componentId} className="space-y-3 rounded-xl border border-white/10 p-4"><div><strong>{l.code} · {l.name}</strong><p className="text-sm text-white/60">Base {l.base} + extra {l.extra} ({l.extraPercent}%) = <strong className="text-emerald-300">{l.total} {l.unit}</strong></p></div>
+      {tab === "pdo" && <PdoPanel key={`${site}:${projectId}:${wiId}`} site={site} projectId={projectId!} wiId={wiId!} wiTitle={wi.title} version={version} />}
 
-        </div>; })}
-        {!issued.length ? <div className="space-y-3"><p className="text-sm text-emerald-200">Solicitud enviada al Almacén {site}. El almacenista confirmará el retiro desde Inventario.</p><Link className={secondaryButtonClass} href={inventoryHref("/inventario/solicitudes", site)}>Consultar solicitudes de retiro</Link></div> : <div className="space-y-3"><p className="text-emerald-300">Retiro registrado</p>{issued.map(id => <Link key={id} className="block underline" href={inventoryHref(`/inventario/vales/${id}`, site)}>Abrir vale · {id.slice(-8)}</Link>)}</div>}
-      </section>}
     </>}
   </main>;
 }
