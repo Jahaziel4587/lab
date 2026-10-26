@@ -268,7 +268,6 @@ export default function ClientLayout({
 
   const navigation = (mobile: boolean) => {
     const linkClass = "flex min-h-11 items-center rounded-lg px-3 py-2 text-white/80 transition hover:bg-white/[0.07] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-emerald-400";
-    const comingSoonClass = "flex min-h-11 cursor-not-allowed items-center justify-between gap-3 rounded-lg px-3 py-2 text-white/45";
     return (
       <>
         <NavigationGroup label="Prototyping Lab" mobile={mobile}>
@@ -281,7 +280,7 @@ export default function ClientLayout({
         </NavigationGroup>
         <NavigationGroup label="Quality" mobile={mobile}>
           <Link data-tutorial="nav-inspections" href="/inspecciones" onClick={cerrarMenu} className={linkClass}>Inspecciones</Link>
-          <span aria-disabled="true" className={comingSoonClass}>DHR <span className="text-[10px]">Próximamente</span></span>
+          <Link href="/dhr" onClick={cerrarMenu} className={linkClass}>DHR</Link>
         </NavigationGroup>
         <NavigationGroup label="Inventory" mobile={mobile}>
           <Link href="/inventario?site=B1" onClick={cerrarMenu} className={linkClass}>Inventory B1</Link>
