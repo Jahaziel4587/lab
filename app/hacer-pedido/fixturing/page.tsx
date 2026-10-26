@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
-  FiArrowLeft,
   FiUpload,
   FiCheck,
   FiSend,
@@ -378,46 +377,45 @@ try {
   };
 
   const inputClass =
-    "w-full rounded-xl border border-white/10 bg-white/10 px-4 py-3 text-white placeholder:text-white/35 outline-none focus:border-emerald-300/60";
+    "mt-2 min-h-12 w-full rounded-xl border border-white/10 bg-white/[0.05] px-3.5 py-3 text-base text-white outline-none placeholder:text-white/35 transition focus:border-emerald-300/35 focus:ring-2 focus:ring-emerald-400/20 sm:min-h-11 sm:px-4 sm:text-sm";
 
-  const labelClass = "text-sm font-medium text-white/80";
+  const labelClass = "block text-sm font-medium leading-snug text-white/75";
   const sectionClass =
-    "rounded-3xl border border-white/10 bg-white/[0.06] p-5 md:p-6 shadow-[0_15px_45px_rgba(0,0,0,0.25)]";
+    "rounded-2xl border border-white/10 bg-white/[0.035] p-4 shadow-[0_12px_35px_rgba(0,0,0,0.18)] backdrop-blur-sm sm:p-6";
 
   return (
-    <div className="relative text-white">
-      <div className="mx-auto w-full max-w-7xl px-4 py-8 md:px-8 lg:px-10">
+    <div className="mx-auto w-full max-w-6xl px-3 py-4 text-white sm:px-6 sm:py-8">
+      <div className="mb-5 sm:mb-7">
         <button
+          type="button"
           onClick={() => router.push("/hacer-pedido/servicios")}
-          className="mb-6 inline-flex items-center gap-2 rounded-full border border-white/10 bg-white/10 px-4 py-2 text-white backdrop-blur transition hover:bg-white/20"
+          className="inline-flex min-h-11 items-center justify-center gap-2 rounded-xl border border-white/10 bg-white/[0.05] px-3.5 text-sm font-medium text-white/80 transition hover:bg-white/10 hover:text-white sm:min-h-10 sm:rounded-full sm:px-4"
         >
-          <FiArrowLeft /> Regresar
+          <span aria-hidden="true">←</span>
+          Regresar
         </button>
 
-        <div className="mb-8">
-          <p className="text-sm uppercase tracking-[0.3em] text-emerald-300/80">
-            Fixturing & Jigs
-          </p>
+        <p className="mt-5 text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-300/75 sm:text-xs">
+          Fixturing & Jigs
+        </p>
 
-          <h1 className="mt-2 text-3xl font-semibold md:text-4xl">
-            Solicitud formal · Proof of Concept
-          </h1>
+        <h1 className="mt-1.5 text-2xl font-semibold leading-tight text-white sm:text-3xl">
+          Solicitud formal · Proof of Concept
+        </h1>
 
-          <p className="mt-3 max-w-3xl text-sm text-white/60">
-            Completa la información mínima necesaria para documentar la necesidad,
-            alcance e inputs técnicos del fixture antes de iniciar el concepto de
-            diseño.
-          </p>
-        </div>
+        <p className="mt-2 max-w-3xl text-sm leading-relaxed text-white/55">
+          Documenta la necesidad, el alcance y los requisitos técnicos antes de
+          iniciar el concepto de diseño.
+        </p>
+      </div>
 
-        <div className="mx-auto w-full max-w-6xl rounded-[2rem] border border-white/10 bg-white/[0.035] p-4 shadow-[0_25px_80px_rgba(0,0,0,0.35)] backdrop-blur md:p-6">
-          <div className="grid gap-6">
+      <div className="grid gap-4 sm:gap-6">
             <section className={sectionClass}>
               <h2 className="mb-4 text-xl font-semibold text-white">
                 Información general
               </h2>
 
-              <div className="grid gap-4 md:grid-cols-2">
+              <div className="grid gap-4 sm:grid-cols-2">
                 <div>
                   <label className={labelClass}>Título del fixture</label>
                   <input
@@ -458,7 +456,7 @@ try {
                     Problemática que se quiere resolver
                   </label>
                   <textarea
-                    className={`${inputClass} min-h-[120px]`}
+                    className={`${inputClass} min-h-[120px] resize-y sm:min-h-[130px]`}
                     value={problematica}
                     onChange={(e) => setProblematica(e.target.value)}
                     placeholder="¿Qué pasa actualmente sin el fixture?"
@@ -471,7 +469,7 @@ try {
                     sellar, ensamblar, medir, etc.
                   </label>
                   <textarea
-                    className={`${inputClass} min-h-[90px]`}
+                    className={`${inputClass} min-h-[110px] resize-y`}
                     value={piezasProducto}
                     onChange={(e) => setPiezasProducto(e.target.value)}
                     placeholder="006.305 Foil pouch..."
@@ -489,7 +487,7 @@ try {
                 <div>
                   <label className={labelClass}>Para qué sí se usará</label>
                   <textarea
-                    className={`${inputClass} min-h-[100px]`}
+                    className={`${inputClass} min-h-[110px] resize-y`}
                     value={alcance}
                     onChange={(e) => setAlcance(e.target.value)}
                     placeholder="Describe el uso esperado y los límites del fixture."
@@ -499,13 +497,13 @@ try {
                 <div>
                   <label className={labelClass}>Proceso donde se usará</label>
 
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  <div className="mt-3 grid grid-cols-1 gap-2.5 min-[420px]:grid-cols-2 lg:grid-cols-3">
                     {procesosOptions.map((p) => (
                       <button
                         key={p}
                         type="button"
                         onClick={() => setProcesos([p])}
-                        className={`rounded-2xl border px-4 py-3 text-left text-sm transition ${
+                        className={`min-h-12 rounded-xl border px-4 py-3 text-left text-sm font-medium transition ${
                           procesos.includes(p)
                             ? "border-emerald-300/50 bg-emerald-400/15 text-emerald-100"
                             : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10"
@@ -524,7 +522,7 @@ try {
                 3. Explicación visual
               </h2>
 
-              <label className="flex cursor-pointer flex-col items-center justify-center rounded-3xl border border-dashed border-white/20 bg-white/5 px-6 py-8 text-center transition hover:bg-white/10">
+              <label className="flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-white/20 bg-white/[0.035] px-4 py-6 text-center transition hover:border-emerald-300/30 hover:bg-white/[0.06] sm:px-6 sm:py-8">
                 <FiUpload className="mb-3 text-2xl text-emerald-300" />
                 <span className="font-medium">Adjuntar fotos o videos</span>
                 <span className="mt-1 text-sm text-white/50">
@@ -547,14 +545,14 @@ try {
     {archivosVisuales.map((file, index) => (
       <div
         key={`${file.name}-${file.size}-${file.lastModified}`}
-        className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-2"
+        className="flex min-h-12 items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-2.5 sm:px-4"
       >
         <span className="min-w-0 truncate">{file.name}</span>
 
         <button
           type="button"
           onClick={() => removeFile(index, setArchivosVisuales)}
-          className="shrink-0 rounded-lg border border-red-300/20 bg-red-400/10 px-3 py-2 text-red-200 transition hover:bg-red-400/20"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-red-300/20 bg-red-400/10 text-red-200 transition hover:bg-red-400/20"
         >
           <FiTrash2 />
         </button>
@@ -674,13 +672,13 @@ try {
 
                 <div>
                   <label className={labelClass}>Tiempo para trabajar</label>
-                  <div className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                  <div className="mt-3 grid grid-cols-1 gap-2.5 min-[420px]:grid-cols-2 lg:grid-cols-4">
                     {tiempoOptions.map((t) => (
                       <button
                         key={t}
                         type="button"
                         onClick={() => setTiempoTrabajo(t)}
-                        className={`rounded-2xl border px-4 py-3 text-sm transition ${
+                        className={`min-h-12 rounded-xl border px-4 py-3 text-sm font-medium transition ${
                           tiempoTrabajo === t
                             ? "border-emerald-300/50 bg-emerald-400/15 text-emerald-100"
                             : "border-white/10 bg-white/5 text-white/70 hover:bg-white/10"
@@ -707,13 +705,13 @@ try {
   </p>
 </div>
                 <textarea
-                  className={`${inputClass} min-h-[100px]`}
+                  className={`${inputClass} min-h-[110px] resize-y`}
                   value={extra}
                   onChange={(e) => setExtra(e.target.value)}
                   placeholder="Especificar algo más..."
                 />
 
-                <label className="flex cursor-pointer flex-col items-center justify-center rounded-3xl border border-dashed border-white/20 bg-white/5 px-6 py-8 text-center transition hover:bg-white/10">
+                <label className="flex min-h-36 cursor-pointer flex-col items-center justify-center rounded-2xl border border-dashed border-white/20 bg-white/[0.035] px-4 py-6 text-center transition hover:border-emerald-300/30 hover:bg-white/[0.06] sm:px-6 sm:py-8">
                   <FiUpload className="mb-3 text-2xl text-emerald-300" />
                   <span className="font-medium">Adjuntar CAD, DWG, PDF, etc.</span>
                   <span className="mt-1 text-sm text-white/50">
@@ -735,14 +733,14 @@ try {
     {archivosTecnicos.map((file, index) => (
       <div
         key={`${file.name}-${file.size}-${file.lastModified}`}
-        className="flex items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/5 px-4 py-2"
+        className="flex min-h-12 items-center justify-between gap-3 rounded-xl border border-white/10 bg-white/[0.04] px-3.5 py-2.5 sm:px-4"
       >
         <span className="min-w-0 truncate">{file.name}</span>
 
         <button
           type="button"
           onClick={() => removeFile(index, setArchivosTecnicos)}
-          className="shrink-0 rounded-lg border border-red-300/20 bg-red-400/10 px-3 py-2 text-red-200 transition hover:bg-red-400/20"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-red-300/20 bg-red-400/10 text-red-200 transition hover:bg-red-400/20"
         >
           <FiTrash2 />
         </button>
@@ -759,7 +757,7 @@ try {
               </h2>
 
               <textarea
-                className={`${inputClass} min-h-[130px]`}
+                className={`${inputClass} min-h-[140px] resize-y`}
                 value={criteriosExito}
                 onChange={(e) => setCriteriosExito(e.target.value)}
                 placeholder='Ejemplo: "La pieza no se mueve", "reduce el tiempo de ensamble", "mantiene la alineación"...'
@@ -767,19 +765,21 @@ try {
             </section>
 
 
-            <div className="flex flex-col gap-3 sm:flex-row sm:justify-end">
-              <button
-                onClick={() => router.push("/hacer-pedido/servicios")}
-                className="rounded-full border border-white/10 bg-white/10 px-6 py-3 text-white transition hover:bg-white/20"
-              >
-                Regresar
-              </button>
+        <div className="flex flex-col-reverse gap-3 pt-1 sm:flex-row sm:justify-end">
+          <button
+            type="button"
+            onClick={() => router.push("/hacer-pedido/servicios")}
+            className="min-h-12 rounded-xl border border-white/10 bg-white/[0.05] px-6 py-3 font-medium text-white/80 transition hover:bg-white/10 hover:text-white sm:min-h-11 sm:rounded-full"
+          >
+            Regresar
+          </button>
 
-              <button
-                onClick={handleSubmit}
-                disabled={loading}
-                className="inline-flex items-center justify-center gap-2 rounded-full bg-emerald-400 px-6 py-3 font-semibold text-black transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60"
-              >
+          <button
+            type="button"
+            onClick={handleSubmit}
+            disabled={loading}
+            className="inline-flex min-h-12 items-center justify-center gap-2 rounded-xl bg-emerald-400 px-6 py-3 font-semibold text-black transition hover:bg-emerald-300 disabled:cursor-not-allowed disabled:opacity-60 sm:min-h-11 sm:rounded-full"
+          >
                 {loading ? (
                   "Enviando..."
                 ) : (
@@ -788,8 +788,6 @@ try {
                   </>
                 )}
               </button>
-            </div>
-          </div>
         </div>
       </div>
     </div>
@@ -809,18 +807,18 @@ function Checkbox({
     <button
       type="button"
       onClick={() => onChange(!checked)}
-      className="flex items-center gap-3 text-left"
+      className="flex min-h-12 w-full items-center gap-3 rounded-xl border border-white/10 bg-white/[0.03] px-3.5 py-3 text-left transition hover:bg-white/[0.06] active:bg-white/[0.08] sm:px-4"
     >
       <span
         className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md border transition ${
           checked
             ? "border-emerald-300 bg-emerald-400 text-black"
-            : "border-white/20 bg-white/5 text-transparent"
+            : "border-white/20 bg-black/10 text-transparent"
         }`}
       >
         <FiCheck size={14} />
       </span>
-      <span className="text-sm text-white/75">{label}</span>
+      <span className="text-sm font-medium leading-snug text-white/75">{label}</span>
     </button>
   );
 }
