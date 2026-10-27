@@ -101,7 +101,7 @@ export function useProyectoCalendario(
           status: data.status || "enviado",
           correoUsuario: correo,
           nombreUsuario:
-            data.nombreUsuario ||
+            (data.nombreUsuario && !String(data.nombreUsuario).includes("@") ? data.nombreUsuario : "") ||
             nameByEmail[correo] ||
             correo ||
             "Sin información",
