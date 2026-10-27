@@ -1,5 +1,7 @@
 "use client";
 
+import { loadOrderQuoteContexts, quoteSubtotal } from "@/lib/order-quote-contexts";
+
 import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
@@ -185,23 +187,9 @@ export default function ListadoPedidosPage() {
       const listaConCostos = await Promise.all(
         listaBase.map(async (p: any) => {
           try {
-            const linesRef = collection(
-              db,
-              "pedidos",
-              p.id,
-              "quote_live",
-              "live",
-              "lines",
-            );
-            const linesSnap = await getDocs(linesRef);
-            let subtotalBase = 0;
-
-            linesSnap.forEach((ln) => {
-              const data = ln.data() as any;
-              subtotalBase += Number(data?.subtotalMXN || 0);
-            });
-
-            return { ...p, costoBaseProyecto: subtotalBase };
+            const contexts = await loadOrderQuoteContexts(p.id, p);
+            const quoteContexts = contexts.map((context) => ({ fechaEntregaReal: context.data.fechaEntregaReal || "", subtotal: quoteSubtotal(context.lines) }));
+            return { ...p, quoteContexts, costoBaseProyecto: quoteContexts.reduce((sum, context) => sum + context.subtotal, 0) };
           } catch (err) {
             console.warn(
               "No se pudieron leer líneas de cotización para",
@@ -233,6 +221,7 @@ export default function ListadoPedidosPage() {
           ? {
               ...pedido,
               [campo]: valor,
+              ...(campo === "fechaEntregaReal" && pedido.quoteContexts ? { quoteContexts: pedido.quoteContexts.map((context: any, index: number) => index === 0 ? { ...context, fechaEntregaReal: valor } : context) } : {}),
             }
           : pedido,
       ),
@@ -307,6 +296,7 @@ export default function ListadoPedidosPage() {
             ? {
                 ...pedido,
                 [campo]: valorAnterior,
+              ...(campo === "fechaEntregaReal" && pedido.quoteContexts ? { quoteContexts: pedido.quoteContexts.map((context: any, index: number) => index === 0 ? { ...context, fechaEntregaReal: valorAnterior } : context) } : {}),
               }
             : pedido,
         ),
@@ -335,7 +325,7 @@ export default function ListadoPedidosPage() {
     return Array.from(
       new Set(
         pedidos
-          .map((pedido: any) => monthKeyFromValue(pedido.fechaEntregaReal))
+          .flatMap((pedido: any) => (pedido.quoteContexts || [{ fechaEntregaReal: pedido.fechaEntregaReal }]).map((context: any) => monthKeyFromValue(context.fechaEntregaReal)))
           .filter((month): month is string => Boolean(month))
       )
     ).sort((a, b) => b.localeCompare(a));
@@ -347,7 +337,7 @@ export default function ListadoPedidosPage() {
     return pedidos.filter((p: any) => {
       if (
         selectedMonth !== "all" &&
-        monthKeyFromValue(p.fechaEntregaReal) !== selectedMonth
+        !(p.quoteContexts || [{ fechaEntregaReal: p.fechaEntregaReal }]).some((context: any) => monthKeyFromValue(context.fechaEntregaReal) === selectedMonth)
       ) {
         return false;
       }
@@ -357,7 +347,10 @@ export default function ListadoPedidosPage() {
       const titulo = String(p?.titulo || "").toLowerCase();
       const id = String(p?.id || "").toLowerCase();
       return titulo.includes(q) || id.includes(q);
-    });
+    }).map((p: any) => selectedMonth === "all" ? p : ({
+      ...p,
+      costoBaseProyecto: (p.quoteContexts || []).filter((context: any) => monthKeyFromValue(context.fechaEntregaReal) === selectedMonth).reduce((sum: number, context: any) => sum + context.subtotal, 0),
+    }));
   }, [pedidos, busqueda, selectedMonth]);
 
   useEffect(() => {

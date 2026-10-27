@@ -17,6 +17,7 @@ export type Pedido = {
   correoUsuario?: string;
   nombreUsuario?: string;
   subtotalBaseMXN?: number;
+  quoteContexts?: { fechaEntregaReal: string; subtotal: number }[];
 };
 
 export type Usuario = {

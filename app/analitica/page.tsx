@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState, Fragment } from "react";
+import { loadOrderQuoteContexts } from "@/lib/order-quote-contexts";
 import { db } from "@/src/firebase/firebaseConfig";
 import { collection, getDocs } from "firebase/firestore";
 import { useAuth } from "@/src/Context/AuthContext";
@@ -209,8 +210,6 @@ export default function AnaliticaPage() {
             const proyecto = d.proyecto || "Sin proyecto";
             const status = d.status || "";
 
-            // excluir cancelados si quieres
-            if (status === "cancelado") return;
 
             const fechaPedido: string =
               d.fechaLimite || d.timestamp || "";
@@ -224,88 +223,42 @@ export default function AnaliticaPage() {
             const descripcion: string = d.descripcion || "";
             const maquina: string = d.maquina || "";
 
-            // crear entrada base para export, aunque luego no tenga líneas
-            if (!exportMap.has(pedidoId)) {
-              exportMap.set(pedidoId, {
-                pedidoId,
-                proyecto,
-                titulo,
-                fechaPedido,
-                fechaFinal,
-                servicios: new Set<string>(),
-                materiales: new Set<string>(),
-                totalMXN: 0,
-                // >>> NEW: inicializar costo material del pedido
-                materialCostMXN: 0,
-                servicioSolicitado,
-                materialSolicitado,
-                fechaPropuesta,
-                descripcion,
-                maquina,
-              });
-            }
-
-            // La analítica mensual se organiza exclusivamente por la fecha
-            // de entrega real. Si aún no existe, el pedido solo aparece al
-            // seleccionar "Todos los meses".
-            const fecha = parseDate(d.fechaEntregaReal);
-
             try {
-              const linesRef = collection(
-                db,
-                "pedidos",
-                pedidoId,
-                "quote_live",
-                "live",
-                "lines"
-              );
-              const linesSnap = await getDocs(linesRef);
-
-              linesSnap.forEach((ln) => {
-                const ld = ln.data() as any;
-
-                const subtotal = Number(ld?.subtotalMXN ?? ld?.displayTotal ?? 0);
-                if (!Number.isFinite(subtotal)) return;
-
-                // >>> NEW: calcular costo de material desde resolvedCalc
-                const materialCost = extractMaterialCost(
-                  (ld?.resolvedCalc as Record<string, any>) || {}
-                );
-
-                // SOLO info del cotizador
-                const rawService: string =
-                  ld?.selects?.serviceName ??
-                  ld?.costGroupName ??
-                  ld?.calcGroupName ??
-                  "(sin servicio)";
-
-                const rawMaterial: string =
-                  ld?.selects?.material ?? ld?.material ?? "(sin material)";
-
-                allLines.push({
-                  pedidoId,
-                  proyecto,
-                  fecha,
-                  subtotalMXN: subtotal,
-                  serviceName: rawService,
-                  material: rawMaterial,
-                  // >>> NEW
-                  materialCostMXN: materialCost,
-                });
-
-                // actualizar info para export
-                const row = exportMap.get(pedidoId);
-                if (row) {
+              const contexts = await loadOrderQuoteContexts(pedidoId, d);
+              for (const context of contexts) {
+                if (context.data.status === "cancelado") continue;
+                const fechaFinal = context.data.fechaEntregaReal || "";
+                const fecha = parseDate(fechaFinal);
+                const key = `${pedidoId}/${context.id}`;
+                const row: PedidoExportRow = {
+                  pedidoId, proyecto,
+                  titulo: context.data.titulo || titulo,
+                  fechaPedido, fechaFinal,
+                  servicios: new Set<string>(), materiales: new Set<string>(),
+                  totalMXN: 0, materialCostMXN: 0,
+                  servicioSolicitado, materialSolicitado,
+                  fechaPropuesta: context.data.fechaLimite || fechaPropuesta,
+                  descripcion, maquina,
+                };
+                exportMap.set(key, row);
+                for (const ld of context.lines) {
+                  const subtotal = Number(ld?.subtotalMXN ?? ld?.displayTotal ?? 0);
+                  if (!Number.isFinite(subtotal)) continue;
+                  const materialCost = extractMaterialCost(ld?.resolvedCalc || {});
+                  const rawService = ld?.selects?.serviceName ?? ld?.costGroupName ?? ld?.calcGroupName ?? "(sin servicio)";
+                  const rawMaterial = ld?.selects?.material ?? ld?.material ?? "(sin material)";
+                  allLines.push({ pedidoId, proyecto, fecha, subtotalMXN: subtotal, serviceName: rawService, material: rawMaterial, materialCostMXN: materialCost });
                   row.totalMXN += subtotal;
                   row.servicios.add(rawService);
                   row.materiales.add(rawMaterial);
-                  // >>> NEW: acumular costo de material del pedido
                   row.materialCostMXN += materialCost;
                 }
-              });
+              }
             } catch (err) {
-              console.error("Error leyendo lines de", pedidoId, err);
+              console.error("Error leyendo cotizaciones de", pedidoId, err);
+              throw err;
             }
+
           })
         );
 

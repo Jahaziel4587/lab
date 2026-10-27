@@ -12,6 +12,7 @@ import {
   where,
 } from "firebase/firestore";
 import {  auth,db } from "@/src/firebase/firebaseConfig";
+import { loadOrderQuoteContexts, quoteSubtotal } from "@/lib/order-quote-contexts";
 import type { Pedido, Usuario } from "../types";
 
 export function useProyectoCalendario(
@@ -112,31 +113,12 @@ export function useProyectoCalendario(
       const pedidosConSubtotal = await Promise.all(
         pedidosBase.map(async (pedido) => {
           try {
-            const linesRef = collection(
-              db,
-              "pedidos",
-              pedido.pedidoId,
-              "quote_live",
-              "live",
-              "lines"
-            );
-
-            const linesSnap = await getDocs(linesRef);
-            let subtotal = 0;
-
-            linesSnap.forEach((lineDoc) => {
-              const line = lineDoc.data() as Record<string, any>;
-              const value = Number(line.subtotalMXN || 0);
-
-              if (Number.isFinite(value)) {
-                subtotal += value;
-              }
-            });
-
-            return {
-              ...pedido,
-              subtotalBaseMXN: subtotal,
-            };
+            const contexts = await loadOrderQuoteContexts(pedido.pedidoId, pedido);
+            const quoteContexts = contexts.map((context) => ({
+              fechaEntregaReal: context.data.fechaEntregaReal || "",
+              subtotal: quoteSubtotal(context.lines),
+            }));
+            return { ...pedido, quoteContexts, subtotalBaseMXN: quoteContexts.reduce((sum, item) => sum + item.subtotal, 0) };
           } catch (subtotalError) {
             console.error(
               `Error al cargar subtotal de ${pedido.id}:`,
@@ -155,8 +137,8 @@ export function useProyectoCalendario(
         pedidosConSubtotal
           .filter(
             (pedido) =>
-              pedido.fechaEntregaReal &&
-              pedido.fechaEntregaReal.trim() !== ""
+              (pedido.fechaEntregaReal && pedido.fechaEntregaReal.trim() !== "") ||
+              pedido.quoteContexts?.some((context) => context.fechaEntregaReal)
           )
           .sort((a, b) => {
             const dateA = new Date(
@@ -237,6 +219,7 @@ const actualizarCampo = useCallback(
           ? {
               ...item,
               [campo]: valor,
+              ...(campo === "fechaEntregaReal" && item.quoteContexts ? { quoteContexts: item.quoteContexts.map((context: any, index: number) => index === 0 ? { ...context, fechaEntregaReal: valor } : context) } : {}),
             }
           : item
       )
@@ -362,6 +345,7 @@ const actualizarCampo = useCallback(
             ? {
                 ...item,
                 [campo]: valorAnterior,
+              ...(campo === "fechaEntregaReal" && item.quoteContexts ? { quoteContexts: item.quoteContexts.map((context: any, index: number) => index === 0 ? { ...context, fechaEntregaReal: valorAnterior } : context) } : {}),
               }
             : item
         )
