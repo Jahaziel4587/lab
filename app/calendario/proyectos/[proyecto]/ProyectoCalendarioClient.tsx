@@ -2,6 +2,11 @@
 
 import { useEffect, useMemo, useState } from "react";
 
+import { getDoc, doc } from "firebase/firestore";
+import { getDownloadURL, ref } from "firebase/storage";
+import { db, storage } from "@/src/firebase/firebaseConfig";
+import { loadPdfMake } from "@/app/solicitudes/listado/[id]/utils";
+import { buildProjectCostReport } from "@/lib/project-cost-report";
 import { useAuth } from "@/src/Context/AuthContext";
 import { PROJECT_PAGE_SIZE } from "../../constants";
 import SearchInput from "../../components/SearchInput";
@@ -68,6 +73,7 @@ export default function ProyectoCalendarioClient({
   const [busqueda, setBusqueda] = useState("");
   const [selectedMonth, setSelectedMonth] = useState("all");
   const [page, setPage] = useState(1);
+  const [generandoPdf, setGenerandoPdf] = useState(false);
   const [abiertoCompartir, setAbiertoCompartir] =
     useState(false);
 
@@ -120,6 +126,40 @@ export default function ProyectoCalendarioClient({
       ),
     [pedidosFiltrados]
   );
+
+  const generarReporte = async () => {
+    if (!pedidosFiltrados.length || generandoPdf) return;
+    setGenerandoPdf(true);
+    try {
+      const [pdfMake, branding, logo] = await Promise.all([
+        loadPdfMake(),
+        getDoc(doc(db, "org_settings", "branding")).then((snap) => snap.data()?.companyName || "Bioana SAPI de CV").catch(() => "Bioana SAPI de CV"),
+        getDownloadURL(ref(storage, "org/logo.png")).then(async (url) => {
+          const response = await fetch(url);
+          if (!response.ok) throw new Error("No se pudo cargar el logo");
+          const blob = await response.blob();
+          return new Promise<string>((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(String(reader.result));
+            reader.onerror = () => reject(reader.error);
+            reader.readAsDataURL(blob);
+          });
+        }).catch(() => null),
+      ]);
+      const report = buildProjectCostReport({
+        proyecto, pedidos: pedidosFiltrados, total: totalFiltradoMXN,
+        monthLabel: selectedMonth === "all" ? "Todos los meses" : formatMonthLabel(selectedMonth),
+        search: busqueda, date: new Date().toLocaleDateString("es-MX"), company: branding, logo,
+      });
+      const safeProject = proyecto.replace(/[^a-zA-Z0-9._-]+/g, "_");
+      pdfMake.createPdf(report).download(`Reporte_pedidos_${safeProject}_${selectedMonth}.pdf`);
+    } catch (error) {
+      console.error("No se pudo generar el reporte de pedidos:", error);
+      alert("No se pudo generar el PDF. Inténtalo de nuevo.");
+    } finally {
+      setGenerandoPdf(false);
+    }
+  };
 
   useEffect(() => {
     setPage(1);
@@ -236,12 +276,17 @@ if (!user) {
             </label>
           </div>
 
-          <div className="text-sm text-white/60">
+          <div className="flex flex-wrap items-center gap-3 text-sm text-white/60">
+            <button type="button" onClick={generarReporte} disabled={!pedidosFiltrados.length || generandoPdf} className="min-h-11 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-black transition hover:bg-emerald-400 disabled:cursor-not-allowed disabled:opacity-40">
+              {generandoPdf ? "Generando…" : "Generar PDF"}
+            </button>
+            <span>
             Mostrando{" "}
             <span className="font-semibold text-white/80">
               {pedidosFiltrados.length}
             </span>{" "}
             pedidos
+            </span>
           </div>
         </div>
       </div>
