@@ -75,7 +75,7 @@ export default function ProyectoCalendarioClient({
     return Array.from(
       new Set(
         pedidos
-          .map((pedido) => monthKeyFromValue(pedido.fechaEntregaReal))
+          .flatMap((pedido) => (pedido.quoteContexts || [{ fechaEntregaReal: pedido.fechaEntregaReal }]).map((context) => monthKeyFromValue(context.fechaEntregaReal)))
           .filter((month): month is string => Boolean(month))
       )
     ).sort((a, b) => b.localeCompare(a));
@@ -87,7 +87,7 @@ export default function ProyectoCalendarioClient({
     return pedidos.filter((pedido) => {
       if (
         selectedMonth !== "all" &&
-        monthKeyFromValue(pedido.fechaEntregaReal) !== selectedMonth
+        !(pedido.quoteContexts || [{ fechaEntregaReal: pedido.fechaEntregaReal }]).some((context: any) => monthKeyFromValue(context.fechaEntregaReal) === selectedMonth)
       ) {
         return false;
       }
@@ -106,7 +106,10 @@ export default function ProyectoCalendarioClient({
         id.includes(searchQuery) ||
         solicitante.includes(searchQuery)
       );
-    });
+    }).map((pedido: any) => selectedMonth === "all" ? pedido : ({
+      ...pedido,
+      subtotalBaseMXN: (pedido.quoteContexts || []).filter((context: any) => monthKeyFromValue(context.fechaEntregaReal) === selectedMonth).reduce((sum: number, context: any) => sum + context.subtotal, 0),
+    }));
   }, [pedidos, busqueda, selectedMonth]);
 
   const totalFiltradoMXN = useMemo(
