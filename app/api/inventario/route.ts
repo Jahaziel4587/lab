@@ -1,3 +1,5 @@
+import { prepareNumbering, hydrateNumbering } from "@/lib/inventario/voucher-numbering-server";
+import { confirmNumbering, numberingSuggestions } from "@/lib/inventario/voucher-numbering";
 import { inventoryRequesterName } from "@/lib/inventario/request-preview";
 import { canMoveInventory, canDeleteEmptyLots, isEmptyStock } from "@/lib/inventario/warehouse-access";
 import { FieldValue, type DocumentReference } from "firebase-admin/firestore";
@@ -64,21 +66,21 @@ export async function GET(req: NextRequest) {
       if (!/^[a-zA-Z0-9]{10,100}$/.test(voucherId)) return NextResponse.json({ error: "Folio inválido." }, { status: 400 });
       const doc = await vouchers.doc(voucherId).get();
       if (!doc.exists) return NextResponse.json({ error: "Vale no encontrado." }, { status: 404 });
-      return NextResponse.json({ voucher: { ...doc.data(), id: doc.id } });
+      return NextResponse.json({ voucher: (await hydrateNumbering(vouchers, [{ ...doc.data(), id: doc.id } as Voucher]))[0] });
     }
     const historyComponent = req.nextUrl.searchParams.get("historyComponent");
     if (historyComponent) {
       if (!/^[a-zA-Z0-9]{10,100}$/.test(historyComponent)) return NextResponse.json({ error: "Componente inválido." }, { status: 400 });
       // Include legacy vouchers too: their component IDs exist only inside lines.
       const history = await vouchers.orderBy("createdAt", "desc").get();
-      return NextResponse.json({ vouchers: history.docs.map(d => ({ ...d.data(), id: d.id } as Voucher)).filter(v => v.lines.some(l => l.componentId === historyComponent)) });
+      return NextResponse.json({ vouchers: await hydrateNumbering(vouchers, history.docs.map(d => ({ ...d.data(), id: d.id } as Voucher)).filter(v => v.lines.some(l => l.componentId === historyComponent))) });
     }
     if (req.nextUrl.searchParams.get("view") === "kiv") {
       const cs = await components.get(), today = mexicoToday();
       return NextResponse.json({ today, lots: kivLots(cs.docs.map(d => ({ ...d.data(), id: d.id } as InventoryComponent)), today) });
     }
     const [cs, vs] = await Promise.all([components.get(), vouchers.orderBy("createdAt", "desc").limit(300).get()]);
-    return NextResponse.json({ components: cs.docs.map(d => ({ ...d.data(), id: d.id })), vouchers: vs.docs.map(d => ({ ...d.data(), id: d.id })) });
+    return NextResponse.json({ components: cs.docs.map(d => ({ ...d.data(), id: d.id })), vouchers: await hydrateNumbering(vouchers, vs.docs.map(d => ({ ...d.data(), id: d.id } as Voucher))) });
   } catch (e) { console.error("Inventario GET", e); return NextResponse.json({ error: "No se pudo cargar el inventario." }, { status: 500 }); }
 }
 export async function POST(req: NextRequest) {
@@ -119,16 +121,51 @@ export async function POST(req: NextRequest) {
       });
       return NextResponse.json({ deleted: true });
     }
-    if (b.action === "voucher-title") {
-      const voucherId = str(b.voucherId), title = validateVoucherTitle(b.title), expectedTitle = validateVoucherTitle(b.expectedTitle);
+    if (["voucher-title", "voucher-numbering-exclude"].includes(b.action)) {
+      const voucherId = str(b.voucherId);
       if (!/^[a-zA-Z0-9]{10,100}$/.test(voucherId)) fail("Folio inválido.");
       await adminDB.runTransaction(async transaction => {
-        const ref = vouchers.doc(voucherId), snapshot = await transaction.get(ref);
+        const [profile, snapshot] = await Promise.all([transaction.get(adminDB.collection("users").doc(user.uid)), transaction.get(vouchers.doc(voucherId))]);
+        if (!canMoveInventory(profile.data(), site)) fail("Solo el almacenista asignado puede confirmar el ID del vale.");
         if (!snapshot.exists) fail("Vale no encontrado.");
-        if ((snapshot.data()?.title || "") !== expectedTitle) fail("Otro usuario cambió el título. Recarga el vale antes de editarlo.");
-        transaction.update(ref, { title, titleUpdatedAt: now, titleUpdatedBy: user.uid });
+        const value = snapshot.data() as Voucher;
+        if (value.numberingStatus === "pending") {
+          const state = await prepareNumbering(transaction, vouchers, site, value.createdAt);
+          if (state.key !== value.numberingWeek) fail("Periodo del vale inválido.");
+          if (b.action === "voucher-numbering-exclude") {
+            const reason = str(b.reason), entry = state.ledger.entries.find(e => e.id === voucherId);
+            if (!entry || entry.excluded || entry.confirmedTitle) fail("El estado del vale cambió. Recarga antes de continuar.");
+            if (numberingSuggestions(state.ledger)[voucherId] !== str(b.expectedSuggestion)) fail("La sugerencia cambió. Recarga el vale.");
+            entry.excluded = true;
+            transaction.update(snapshot.ref, { numberingStatus: "excluded", numberingExcludedSuggestion: str(b.expectedSuggestion), numberingExclusionReason: reason, numberingExcludedAt: now, numberingExcludedBy: user.uid });
+          } else {
+            const title = validateVoucherTitle(b.title).toUpperCase();
+            confirmNumbering(state.ledger, voucherId, title, str(b.expectedSuggestion));
+            transaction.update(snapshot.ref, { title, numberingStatus: "confirmed", titleConfirmedAt: now, titleConfirmedBy: user.uid, titleUpdatedAt: now, titleUpdatedBy: user.uid });
+          }
+          transaction.set(state.ref, state.ledger);
+        } else if (value.numberingStatus) fail("El ID ya está confirmado o excluido; no se modificó el movimiento.");
+        else {
+          if (b.action !== "voucher-title") fail("Este vale no tiene sugerencia pendiente.");
+          const title = validateVoucherTitle(b.title), expectedTitle = validateVoucherTitle(b.expectedTitle);
+          if ((value.title || "") !== expectedTitle) fail("Otro usuario cambió el título. Recarga el vale antes de editarlo.");
+          // Legacy IDs remain as recorded. Use a dedicated lock to serialize legacy title edits.
+          const lock = adminDB.collection(`${names.vouchers}_numbering`).doc("legacy-title-lock");
+          await transaction.get(lock);
+          const duplicate = title ? await transaction.get(vouchers.where("title", "==", title)) : null;
+          if (duplicate?.docs.some(d => d.id !== voucherId)) fail("Ese ID ya está registrado en otro vale.");
+          // Existing registered IDs are kept immutable once a weekly ledger references them.
+          if (value.title || !title) fail("Los IDs históricos registrados se conservan. Solo puedes asignar un ID a un vale histórico sin título.");
+          const state = await prepareNumbering(transaction, vouchers, site, value.createdAt);
+          state.ledger.entries.push({ id: voucherId });
+          confirmNumbering(state.ledger, voucherId, title.toUpperCase(), numberingSuggestions(state.ledger)[voucherId]);
+          transaction.set(state.ref, state.ledger);
+          transaction.set(lock, { updatedAt: now });
+          transaction.update(snapshot.ref, { title: title.toUpperCase(), numberingWeek: state.key, numberingStatus: "confirmed", titleConfirmedAt: now, titleConfirmedBy: user.uid });
+        }
       });
-      return NextResponse.json({ title });
+      const snapshot = await vouchers.doc(voucherId).get();
+      return NextResponse.json({ voucher: (await hydrateNumbering(vouchers, [{ ...snapshot.data(), id: voucherId } as Voucher]))[0] });
     }
     if (b.action === "component") {
       const parsed = parseComponentCode(str(b.code));
@@ -244,6 +281,7 @@ export async function POST(req: NextRequest) {
         const current = await t.get(adminDB.collection(`${names.components}_fixed_recipes`).doc(b.recipeId));
         if (!current.data()?.active || current.data()?.version !== recipeVersion) fail("La receta cambió. Recarga antes de confirmar.");
       }
+      const numbering = isRequestCreation ? null : await prepareNumbering(t, vouchers, site, now);
       const groups = new Map<string, { origin: string; destination: string; lines: VoucherLine[] }>();
       const changed = new Map<string, InventoryComponent>();
       const addLine = (origin: string, destination: string, c: InventoryComponent, l: Lot, q: number) => {
@@ -317,9 +355,11 @@ export async function POST(req: NextRequest) {
       }
       for (const g of groups.values()) {
         const ref = vouchers.doc(); voucherIds.push(ref.id);
-        const v: Voucher = { ...(productionRequest ? { pdoId: productionRequest.pdoId, productionRequestId: operationId, productionUnits: productionRequest.units } : {}), id: ref.id, site, operationId, kind: b.action === "lot" ? "entrada" : b.kind, origin: g.origin, destination: g.destination, createdAt: now, actor, actorUid: user.uid, requestedBy, receivedBy, project, notes, originOther, destinationOther, lines: g.lines };
+        if (numbering) numbering.ledger.entries.push({ id: ref.id });
+        const v: Voucher = { ...(numbering ? { numberingWeek: numbering.key, numberingStatus: "pending" as const } : {}), ...(productionRequest ? { pdoId: productionRequest.pdoId, productionRequestId: operationId, productionUnits: productionRequest.units } : {}), id: ref.id, site, operationId, kind: b.action === "lot" ? "entrada" : b.kind, origin: g.origin, destination: g.destination, createdAt: now, actor, actorUid: user.uid, requestedBy, receivedBy, project, notes, originOther, destinationOther, lines: g.lines };
         t.create(ref, v);
       }
+      if (numbering) t.set(numbering.ref, numbering.ledger);
       if (b.fulfillMovementRequestId) {
         t.update(requestCollection.doc(b.fulfillMovementRequestId), { status: "fulfilled", fulfilledAt: now, fulfilledBy: user.uid, voucherIds });
         if (requesterEmail) {

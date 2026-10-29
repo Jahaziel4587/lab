@@ -1,4 +1,6 @@
 "use client";
+import { voucherDisplayTitle } from "@/lib/inventario/voucher-numbering";
+import { VoucherNumberingBadge } from "@/app/components/inventario/VoucherTitle";
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { inventoryRequest } from "@/lib/inventario/service";
@@ -23,7 +25,7 @@ export default function ComponentHistory({ componentId, revision }: { componentI
   return <section className={`${panelClass} space-y-4`}>
     <div><h2 className="text-lg font-semibold">Historial de movimientos</h2><p className="mt-1 text-xs text-white/45">Vales de material que incluyen este componente.</p></div>
     {loading ? <p className="text-sm text-white/50">Cargando historial…</p> : error ? <p role="alert" className="text-sm text-red-300">{error}</p> : !vouchers.length ? <p className="py-6 text-center text-sm text-white/45">Todavía no hay movimientos registrados.</p> : vouchers.map(v => <Link key={v.id} href={inventoryHref(`/inventario/vales/${v.id}`, site)} className="block space-y-2 rounded-2xl border border-white/10 bg-white/[0.035] p-4 hover:bg-white/[0.06]">
-      <div className="flex flex-wrap justify-between gap-2"><strong className="text-sm">{v.title || `Vale · ${v.id.slice(-8)}`}</strong><span className="text-xs text-emerald-300">{v.kind === "entrada" ? "Entrada / devolución" : v.kind === "salida" ? "Retiro / salida" : "Traslado"}</span></div>
+      <div className="flex flex-wrap justify-between gap-2"><strong className="text-sm">{voucherDisplayTitle(v)}</strong><VoucherNumberingBadge voucher={v} /><span className="text-xs text-emerald-300">{v.kind === "entrada" ? "Entrada / devolución" : v.kind === "salida" ? "Retiro / salida" : "Traslado"}</span></div>
       <p className="text-xs text-white/50">{new Date(v.createdAt).toLocaleString("es-MX", { timeZone: "America/Mexico_City" })} · {locationName(v.origin)} → {locationName(v.destination)}</p>
       <p className="text-sm text-white/75">{v.lines.filter(l => l.componentId === componentId).map(l => `${l.lot}: ${l.quantity} ${l.unit}`).join(" · ")}</p>
       <p className="text-xs text-emerald-200">Ver vale de material →</p>
