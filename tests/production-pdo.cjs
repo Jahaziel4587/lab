@@ -3,7 +3,7 @@ let records = new Map(), uid = 'planner', counter = 0;
 const clone = x => x === undefined ? undefined : JSON.parse(JSON.stringify(x));
 const snapshot = p => ({ id: p.split('/').at(-1), ref: doc(p), exists: records.has(p), data: () => clone(records.get(p)) });
 function doc(p) { return { path: p, id: p.split('/').at(-1), get: async () => snapshot(p) }; }
-function collection(name, filters = []) { return { doc: id => doc(name + '/' + (id || 'generated' + ++counter)), where: (field, op, value) => collection(name, [...filters, [field, op, value]]), get: async () => { const docs = [...records.keys()].filter(p => p.startsWith(name + '/') && !p.slice(name.length + 1).includes('/')).map(snapshot).filter(d => filters.every(([f, op, v]) => op === 'array-contains' ? d.data()[f]?.includes(v) : d.data()[f] === v)); return { docs, empty: !docs.length }; } }; }
+function collection(name, filters = []) { return { id: name, doc: id => doc(name + '/' + (id || 'generated' + ++counter)), where: (field, op, value) => collection(name, [...filters, [field, op, value]]), get: async () => { const docs = [...records.keys()].filter(p => p.startsWith(name + '/') && !p.slice(name.length + 1).includes('/')).map(snapshot).filter(d => filters.every(([f, op, v]) => op === 'array-contains' ? d.data()[f]?.includes(v) : op === '>=' ? d.data()[f] >= v : op === '<=' ? d.data()[f] <= v : d.data()[f] === v)); return { docs, empty: !docs.length }; } }; }
 const db = { collection, getAll: async (...refs) => Promise.all(refs.map(r => r.get())), runTransaction: async fn => {
   const writes = []; let writing = false;
   const read = r => { assert(!writing, 'Firestore reads must precede writes'); return r.get(); };

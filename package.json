@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "node tests/inventory-warehouse-workflow.cjs && node tests/production-pdo.cjs && next build",
+    "build": "node tests/voucher-numbering.cjs && node tests/voucher-numbering-concurrency.cjs && node tests/inventory-warehouse-workflow.cjs && node tests/production-pdo.cjs && next build",
     "start": "next start",
     "lint": "next lint"
   },
