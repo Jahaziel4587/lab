@@ -971,7 +971,7 @@ export default function DetalleFixture({
         </h1>
         <p className="mt-3 max-w-3xl text-sm text-white/60">
           Expediente formal del fixture: Solicitud, Concepto de diseño, Prueba,
-          SPEC Draft, Beta y SPEC Final.
+          Beta y SPEC Final.
         </p>
       </div>
 
