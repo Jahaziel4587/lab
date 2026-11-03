@@ -1,4 +1,5 @@
 "use client";
+import { useProjects } from "@/lib/operacional/client";
 
 import { loadOrderQuoteContexts, quoteSubtotal } from "@/lib/order-quote-contexts";
 
@@ -45,6 +46,7 @@ function formatMonthLabel(key: string) {
 }
 
 export default function ListadoPedidosPage() {
+  const { displayProject } = useProjects();
   const searchParams = useSearchParams();
   const proyectoSeleccionado = searchParams.get("proyecto");
   const { user, isAdmin } = useAuth();
@@ -422,7 +424,7 @@ export default function ListadoPedidosPage() {
           </p>
           <h1 className="mt-1 break-words text-2xl font-semibold tracking-tight sm:mt-0 sm:text-3xl">
             <span className="hidden sm:inline">Pedidos del proyecto · </span>
-            <span className="text-white/85">{proyectoSeleccionado}</span>
+            <span className="text-white/85">{displayProject(proyectoSeleccionado)}</span>
           </h1>
 
           <div className="mt-2 text-sm text-white/70">
