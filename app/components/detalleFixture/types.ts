@@ -51,6 +51,5 @@ export type TabKey =
   | "resumen"
   | "concepto"
   | "prueba"
-  | "specDraft"
   | "beta"
   | "specFinal";

@@ -39,7 +39,6 @@ import { buildFixtureFirmaPayload } from "./detalleFixture/services/fixtureDecis
 import ResumenSolicitud from "./detalleFixture/sections/ResumenSolicitud";
 import ConceptoDiseno from "./detalleFixture/sections/ConceptoDiseno";
 import PruebaDiseno from "./detalleFixture/sections/PruebaDiseno";
-import SpecDraft from "./detalleFixture/sections/SpecDraft";
 import FaseBeta from "./detalleFixture/sections/FaseBeta";
 import SpecFinal from "./detalleFixture/sections/SpecFinal";
 
@@ -64,10 +63,7 @@ export default function DetalleFixture({
     Boolean(pedido?.mondayFixturing?.groupId)
   );
   const [faseActual, setFaseActual] = useState(
-    pedido?.faseFixture || "proof_of_concept_solicitud"
-  );
-  const [specDraftGenerada, setSpecDraftGenerada] = useState(
-    !!pedido?.specDraft?.generado
+    pedido?.faseFixture === "spec_draft" ? "fase_beta" : pedido?.faseFixture || "proof_of_concept_solicitud"
   );
   const [specFinalGenerada, setSpecFinalGenerada] = useState(
     !!pedido?.specFinal?.generado
@@ -145,7 +141,6 @@ export default function DetalleFixture({
     { key: "resumen", label: "Solicitud formal", done: true },
     { key: "concepto", label: "Concepto de diseño", done: hasConceptApproved },
     { key: "prueba", label: "Prueba de diseño", done: hasPruebaApproved },
-    { key: "specDraft", label: "Spec Draft", done: specDraftGenerada },
     { key: "beta", label: "Beta", done: hasBetaApproved },
     { key: "specFinal", label: "Spec Final", done: specFinalGenerada },
   ];
@@ -568,9 +563,9 @@ export default function DetalleFixture({
 
       if (completa && !rechazada) {
         await updateDoc(doc(db, "pedidos", pedidoId), {
-          faseFixture: "spec_draft",
+          faseFixture: "fase_beta",
         });
-        setFaseActual("spec_draft");
+        setFaseActual("fase_beta");
         await registrarHistorial(
           "prueba_diseno_aprobada",
           `La prueba ${prueba.versionLabel} fue aprobada por PM, diseñador y encargado.`
@@ -699,42 +694,6 @@ export default function DetalleFixture({
     } catch (error) {
       console.error(error);
       alert("No se pudo registrar la decisión beta.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const generarSpecDraft = async () => {
-    if (!isAdmin) return;
-
-    const pruebaAprobada = pruebas.some((p) => p.status === "aprobado");
-    if (!pruebaAprobada) {
-      alert(
-        "No se puede registrar la Spec Draft hasta que PM, diseñador y encargado aprueben una prueba."
-      );
-      return;
-    }
-
-    try {
-      setLoading(true);
-      await updateDoc(doc(db, "pedidos", pedidoId), {
-        faseFixture: "spec_draft",
-        specDraft: {
-          generado: true,
-          generadoPor: user?.email || "",
-          fecha: new Date().toISOString(),
-        },
-      });
-      setFaseActual("spec_draft");
-      setSpecDraftGenerada(true);
-      await registrarHistorial(
-        "spec_draft_generada",
-        "Se generó la Spec Draft como guía para la versión beta."
-      );
-      alert("Spec Draft registrada.");
-    } catch (error) {
-      console.error(error);
-      alert("No se pudo registrar la Spec Draft.");
     } finally {
       setLoading(false);
     }
@@ -936,18 +895,6 @@ export default function DetalleFixture({
       );
     }
 
-    if (activeTab === "specDraft") {
-      return (
-        <SpecDraft
-          pedidoId={pedidoId}
-          specDraftGenerada={specDraftGenerada}
-          loading={loading}
-          isAdmin={isAdmin}
-          onGenerarSpecDraft={generarSpecDraft}
-        />
-      );
-    }
-
     if (activeTab === "beta") {
       return (
         <FaseBeta
@@ -1024,7 +971,7 @@ export default function DetalleFixture({
         </h1>
         <p className="mt-3 max-w-3xl text-sm text-white/60">
           Expediente formal del fixture: Solicitud, Concepto de diseño, Prueba,
-          SPEC Draft, Beta y SPEC Final.
+          Beta y SPEC Final.
         </p>
       </div>
 

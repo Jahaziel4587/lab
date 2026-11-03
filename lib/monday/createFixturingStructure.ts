@@ -43,7 +43,6 @@ export type FixturingPhaseKey =
   | "solicitudFormal"
   | "conceptoDiseno"
   | "pruebaDiseno"
-  | "specDraft"
   | "versionBeta"
   | "specFinal";
 
@@ -95,11 +94,6 @@ const PHASES: PhaseDefinition[] = [
       "Firma y aprobación Project Manager",
       "Firma y aprobación Encargado del proceso",
     ],
-  },
-  {
-    key: "specDraft",
-    name: "SPEC Draft",
-    subitems: [],
   },
   {
     key: "versionBeta",

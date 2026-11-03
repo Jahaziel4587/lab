@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { arrayUnion, doc, updateDoc } from "firebase/firestore";
 import {
   FiCheck,
+  FiDownload,
   FiChevronDown,
   FiChevronRight,
   FiLink,
@@ -124,7 +125,29 @@ export default function PruebaDiseno({
   ) => void | Promise<void>;
 }) {
   const router = useRouter();
-  void isAdmin;
+  const [generandoResumen, setGenerandoResumen] = useState(false);
+  const descargarResumen = async () => {
+    try {
+      setGenerandoResumen(true);
+      const response = await fetch(`/api/fixtures/${pedidoId}/spec-draft-docx`, { method: "POST" });
+      if (!response.ok) {
+        const error = await response.json().catch(() => null);
+        throw new Error(error?.detail || error?.error || "No se pudo generar el resumen.");
+      }
+      const url = URL.createObjectURL(await response.blob());
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "Resumen de diseño.docx";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "No se pudo descargar el resumen.");
+    } finally {
+      setGenerandoResumen(false);
+    }
+  };
   const [expandedPruebaIds, setExpandedPruebaIds] = useState<string[]>([]);
   const [uploadingVersionId, setUploadingVersionId] = useState<string | null>(null);
   const [addedFilesByVersion, setAddedFilesByVersion] = useState<
@@ -207,6 +230,11 @@ export default function PruebaDiseno({
           </p>
         </div>
 
+        <div className="flex flex-wrap gap-3">
+          <button type="button" onClick={descargarResumen}
+            disabled={loading || generandoResumen || !isAdmin} className={btnPrimary}>
+            <FiDownload /> {generandoResumen ? "Generando resumen..." : "Descargar resumen"}
+          </button>
         <button
           type="button"
           onClick={() => {
@@ -218,6 +246,7 @@ export default function PruebaDiseno({
         >
           <FiPlus /> Agregar {nextPruebaLabel}
         </button>
+        </div>
       </div>
 
       <div className="mt-5 rounded-2xl border border-white/10 bg-white/[0.035] px-4 py-3">

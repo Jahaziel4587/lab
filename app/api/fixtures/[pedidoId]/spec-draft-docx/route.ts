@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import fs from "fs/promises";
 import path from "path";
 import PizZip from "pizzip";
-import Docxtemplater from "docxtemplater";
+import { descriptionWidths, versionPhotos, renderSummary } from "../../../../../lib/fixtures/summary-docx";
 import { adminDB } from "../../../../../lib/firebaseAdmin";
 
 function clean(value: any) {
@@ -119,11 +119,6 @@ export async function POST(
       ...pedidoSnap.data(),
     };
 
-    const fixture = pedido.fixtureSolicitud || {};
-    const necesidad = fixture.necesidad || {};
-    const alcance = fixture.alcance || {};
-    const inputs = fixture.inputs || {};
-
     const solicitante = await getNombreUsuarioPorCorreo(pedido.correoUsuario);
 
     const conceptosSnap = await adminDB
@@ -152,61 +147,6 @@ export async function POST(
 
     const pedidosAsociados = await getPedidosAsociados(pedidoId);
 
-    const especificacionesExtra = conceptos.flatMap((concepto) => {
-      const specs = Array.isArray(concepto.especificacionesExtra)
-        ? concepto.especificacionesExtra
-        : [];
-
-      if (!specs.length) {
-        return [
-          {
-            version: clean(concepto.versionLabel),
-            especificacion: "NA",
-            descripcion: clean(concepto.descripcion),
-          },
-        ];
-      }
-
-      return specs.map((spec: string) => ({
-        version: clean(concepto.versionLabel),
-        especificacion: clean(spec),
-        descripcion: clean(concepto.descripcion),
-      }));
-    });
-
-    const conceptoAprobado =
-      [...conceptos].reverse().find((c) => c.status === "aprobado") || null;
-
-    const pruebasDiseno = pruebas.map((prueba) => {
-      const pedidosDePrueba = pedidosAsociados.filter(
-        (p) =>
-          p.fase === "prueba" &&
-          p.version === prueba.versionLabel
-      );
-
-      return {
-        version: clean(prueba.versionLabel),
-        descripcion: clean(prueba.descripcion),
-        pedidosAsociados: pedidosToText(pedidosDePrueba),
-      };
-    });
-
-    const pruebaAprobada =
-      [...pruebas].reverse().find((p) => p.status === "aprobado") || null;
-
-    const pedidosVersionFinal = pruebaAprobada
-      ? pedidosAsociados.filter(
-          (p) =>
-            p.fase === "prueba" &&
-            p.version === pruebaAprobada.versionLabel
-        )
-      : [];
-
-    const costoVersionFinal = pedidosVersionFinal.reduce(
-      (sum, p) => sum + Number(p.subtotal || 0),
-      0
-    );
-
     const templatePath = path.join(
       process.cwd(),
       "public",
@@ -217,89 +157,33 @@ export async function POST(
     const content = await fs.readFile(templatePath);
     const zip = new PizZip(content);
 
-    const docx = new Docxtemplater(zip, {
-      paragraphLoop: true,
-      linebreaks: true,
-    });
-
-    docx.render({
-      titulo: clean(pedido.titulo),
-      idReferencia: clean(pedido.io),
-      proyecto: clean(pedido.proyecto),
-      solicitante: clean(solicitante),
-
-      problematica: clean(necesidad.problematica),
-      piezasProducto: clean(necesidad.piezasProducto),
-
-      alcance: clean(alcance.descripcion),
-      procesos: clean(alcance.procesos),
-
-      cuartoLimpio: clean(inputs.cuartoLimpio),
-      horno: clean(
-        inputs.horno
-          ? inputs.temperaturaMax
-            ? `Sí, temperatura máxima: ${inputs.temperaturaMax}`
-            : "Sí"
-          : "NA"
-      ),
-      rigidezDureza: clean(
-        inputs.rigidezDureza
-          ? inputs.rigidezDetalle || "Sí"
-          : inputs.rigidezDetalle || "NA"
-      ),
-      esterilizable: clean(inputs.esterilizable),
-      equipos: clean(
-        inputs.requiereEquipo
-          ? `${inputs.equipoId || ""} ${inputs.equipoNombre || ""}`.trim()
-          : inputs.equipoNombre || inputs.equipoId || "NA"
-      ),
-      dimensionesCriticas: clean(
-        inputs.dimensionesCriticas
-          ? inputs.referenciaDWG || "Sí"
-          : inputs.noTieneDimensiones
-          ? "No tiene dimensiones críticas definidas"
-          : inputs.referenciaDWG || "NA"
-      ),
-      tiempoTrabajo: clean(inputs.tiempoTrabajo),
-      reportarPresupuesto: clean(inputs.presupuestoPM),
-      masEspecificaciones: clean(inputs.extra),
-
-      criteriosExito: clean(fixture.criteriosExito),
-
-      especificacionesExtra:
-        especificacionesExtra.length > 0
-          ? especificacionesExtra
-          : [
-              {
-                version: "NA",
-                especificacion: "NA",
-                descripcion: "NA",
-              },
-            ],
-
-      conceptoAprobadoVersion: clean(conceptoAprobado?.versionLabel),
-      conceptoAprobadoDescripcion: clean(conceptoAprobado?.descripcion),
-
-      pruebasDiseno:
-        pruebasDiseno.length > 0
-          ? pruebasDiseno
-          : [
-              {
-                version: "NA",
-                descripcion: "NA",
-                pedidosAsociados: "NA",
-              },
-            ],
-
-      versionFinal: clean(pruebaAprobada?.versionLabel),
-      versionFinalDescripcion: clean(pruebaAprobada?.descripcion),
-      versionFinalPedidos: pedidosToText(pedidosVersionFinal),
-      versionFinalCosto: formatMoney(costoVersionFinal),
-    });
-
-    const finalDocx = docx.getZip().generate({
-      type: "nodebuffer",
-      compression: "DEFLATE",
+    const widths = descriptionWidths(zip);
+    if (widths.length !== 2) throw new Error("La plantilla debe contener una celda de fotos en cada tabla de versiones.");
+    const estatus = (status: string) => status === "aprobado" ? "Aprobada" : status === "rechazado" ? "Rechazada" : "Pendiente";
+    const especificacionesExtra = [];
+    for (const concepto of conceptos) {
+      especificacionesExtra.push({
+        version: clean(concepto.versionLabel),
+        especificacion: clean((concepto.especificacionesExtra || []).join("\n")),
+        descripcion: clean(concepto.descripcion),
+        estatus: estatus(concepto.status),
+        fotos: await versionPhotos(concepto.archivos, pedidoId, widths[0]),
+      });
+    }
+    const pruebasDiseno = [];
+    for (const prueba of pruebas) {
+      pruebasDiseno.push({
+        version: clean(prueba.versionLabel),
+        descripcion: clean(prueba.descripcion),
+        pedidosAsociados: pedidosToText(pedidosAsociados.filter(p => p.fase === "prueba" && p.version === prueba.versionLabel)),
+        estatus: estatus(prueba.status),
+        fotos: await versionPhotos(prueba.archivos, pedidoId, widths[1]),
+      });
+    }
+    const finalDocx = renderSummary(zip, {
+      titulo: clean(pedido.titulo), idReferencia: clean(pedido.io),
+      proyecto: clean(pedido.proyecto), solicitante: clean(solicitante),
+      especificacionesExtra, pruebasDiseno,
     });
 
     const body = new Uint8Array(finalDocx);
