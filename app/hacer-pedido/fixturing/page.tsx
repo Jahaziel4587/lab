@@ -15,6 +15,9 @@ import { getDownloadURL, ref, uploadBytes } from "firebase/storage";
 import { db, storage } from "@/src/firebase/firebaseConfig";
 import { useAuth } from "@/src/Context/AuthContext";
 
+import { useProjects } from "@/lib/operacional/client";
+import { fixtureTitle } from "@/lib/operacional/project-labels";
+
 type UploadedFile = {
   nombre: string;
   url: string;
@@ -24,6 +27,7 @@ type UploadedFile = {
 export default function FixturingPage() {
   const router = useRouter();
   const { user } = useAuth();
+  const { projects } = useProjects();
 
   const [proyecto, setProyecto] = useState("");
   const [servicio, setServicio] = useState("Fixture");
@@ -87,8 +91,8 @@ export default function FixturingPage() {
 
   const tituloFinal = useMemo(() => {
     if (!titulo.trim()) return "";
-    return `FXT. ${proyecto || "SIN PROYECTO"}. ${titulo.trim()}`;
-  }, [titulo, proyecto]);
+    return fixtureTitle(proyecto, titulo, projects);
+  }, [titulo, proyecto, projects]);
 
   const updateEquipo = (index: number, value: string) => {
     setEquipos((prev) =>
