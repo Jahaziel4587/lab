@@ -18,7 +18,7 @@ const cache=new Map();function load(file){file=path.resolve(file);if(cache.has(f
  assert.equal(normalizedCode('TS . 005 . 02'),'TS.005.02');
  assert(msopCodeForProject('TS.005.01','005'));assert(!msopCodeForProject('TS.006.01','005'));
  for(const invalid of ['TS.005.00','TS.005.1','TS.05.01','TS.005.01oops','TS.005.01.02'])assert.throws(()=>parseComponentCode(invalid));
- assert.equal(parseComponentCode('005.303C').type,'300');assert.equal(parseComponentCode('MTS-005').type,'MTS');
+ assert.equal(parseComponentCode('005.303C').type,'300');assert.equal(normalizedCode('005.303C'),'005.303C');assert.notEqual(normalizedCode('005.303'),normalizedCode('005.303C'));assert.equal(parseComponentCode('MTS-005').type,'MTS');
  const {TYPES}=load('lib/inventario/catalogs.ts');assert.equal(TYPES.TS,'TS');
  const api=load('app/api/production/msop/route.ts');
  const row=(code,id)=>({id,code,name:'Tool '+id,unit:'pz',section:'production',page:3,supplier:'',spec:''});
@@ -70,14 +70,26 @@ const cache=new Map();function load(file){file=path.resolve(file);if(cache.has(f
  assert.equal(late.status,200,late.data.error);assert.deepEqual(records.get(latePath),lateArticle);
  assert.deepEqual(records.get('inventario_b2_componentes/'+lateId).lots,[]);
  version++;
- // Never overwrite a different/corrupt article just because its document ID collides.
+ // A historical article retains its QR/document ID after changing 005.304 to 005.304C.
  const conflictCode='005.304',conflictId=createHash('sha256').update(conflictCode).digest('hex');
- records.set('inventario_componentes/'+conflictId,{code:'005.399',name:'Different article',unit:'pz',lots:[]});
- const conflict=await post({...body,version:version+1,rows:[row(conflictCode,'conflict')]});
- assert.equal(conflict.status,400);assert.match(conflict.data.error,/ficha.*código distinto/);
- assert(!records.has('inventario_b2_componentes/'+conflictId));
- records.delete('inventario_componentes/'+conflictId);
- console.log('MSOP mirrors missing B1/B2 definitions, preserves manual lots and legacy IDs, reads concurrent creations directly, reimports safely and rejects mismatched identities.');
+ const variant={code:'005.304C',name:'Existing curette variant',unit:'pz',lots:[{id:'variant-lot',stock:{aprobado:17}}],createdBy:'quality'};
+ records.set('inventario_componentes/'+conflictId,clone(variant));
+ const variantBody={...body,version:version+1,rows:[{...row(conflictCode,'base'),name:'Base head'},row('005.304C','variant')]};
+ const conflict=await post(variantBody);
+ assert.equal(conflict.status,200,conflict.data.error);
+ assert.deepEqual(records.get('inventario_componentes/'+conflictId),variant,'Existing variant QR, lots, stock and name stay untouched');
+ const baseInB1=[...records].filter(([p,v])=>p.startsWith('inventario_componentes/')&&v.code===conflictCode);
+ assert.equal(baseInB1.length,1);assert.notEqual(baseInB1[0][0],'inventario_componentes/'+conflictId);
+ assert.equal(baseInB1[0][1].name,'Base head');assert.deepEqual(baseInB1[0][1].lots,[]);
+ for(const prefix of ['inventario_componentes/','inventario_b2_componentes/']){
+  assert.equal([...records].filter(([p,v])=>p.startsWith(prefix)&&v.code==='005.304').length,1);
+  assert.equal([...records].filter(([p,v])=>p.startsWith(prefix)&&v.code==='005.304C').length,1);
+ }
+ const versionAfterVariant=variantBody.version+1;
+ assert.equal((await post({...variantBody,version:versionAfterVariant})).status,200);
+ assert.equal([...records].filter(([p,v])=>p.startsWith('inventario_componentes/')&&v.code==='005.304').length,1,'Reimport reuses the alternative identity');
+ assert.deepEqual(records.get('inventario_componentes/'+conflictId),variant);
+ console.log('MSOP distinguishes base/suffixed articles even with historical document IDs; both warehouses receive separate definitions and existing QR/stock survive reimports.');
  const defaults=load('lib/operacional/catalog.ts').DEFAULT_PROJECTS;
  assert.equal(defaults.filter(p=>p.code==='003').length,1);
  assert.equal(defaults.find(p=>p.code==='003').label,'003.XSONX Handpiece');

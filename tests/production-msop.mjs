@@ -124,3 +124,7 @@ assert.deepEqual(tsTools.rows.map(r=>r.code),["TS.005.01","TS.005.02"]);
 assert.equal(tsTools.rows[0].name,"Vibration post master part");
 assert.equal(tsTools.rows[1].name,"Debriding head with curette master part");
 console.log("TS tool IDs recognized and deduplicated without including the code in the description.");
+
+const variants=parseMsopPages([[cell("List of Materials/Components",0,760),cell("Part Number",0,740),cell("Component Name",120,740),cell("005.303",0,700),cell("Base head",120,700),cell("005.303C",0,670),cell("Curette head",120,670)]],"005.MSOP.pdf");
+assert.deepEqual(variants.rows.map(r=>[r.code,r.name]),[["005.303","Base head"],["005.303C","Curette head"]]);
+console.log("Numeric component IDs and their C variants remain separate codes and descriptions.");
