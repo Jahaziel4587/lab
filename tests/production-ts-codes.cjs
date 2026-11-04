@@ -8,8 +8,8 @@ const db={collection,runTransaction:async fn=>{const writes=[];let writing=false
 const stubs={
  'next/server':{NextResponse:{json:(data,o)=>({status:o?.status||200,data})}},
  '@/lib/firebaseAdmin':{adminDB:db},
- '@/lib/operacional/server':{identify:async()=>({uid:'planner'}),projectCatalog:async()=>[{code:'005',label:'005.XSONXS'}]},
- '@/lib/box/boxCatalog':{getDmrProjects:async()=>[{id:'project005',title:'DMR.005.XSONXS'}]},
+ '@/lib/operacional/server':{identify:async()=>({uid:'planner'}),projectCatalog:async()=>[{code:'005',label:'005.XSONXS'},...load('lib/operacional/catalog.ts').DEFAULT_PROJECTS.filter(p=>p.code==='003')]},
+ '@/lib/box/boxCatalog':{getDmrProjects:async()=>[{id:'project005',title:'DMR.005.XSONXS'},{id:'287774790255',title:'DMR.003.XSONX Handpiece'},{id:'unknown999',title:'DMR.999.Unregistered'}]},
 };
 const cache=new Map();function load(file){file=path.resolve(file);if(cache.has(file))return cache.get(file).exports;const m={exports:{}};cache.set(file,m);new Function('require','module','exports',ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText)(n=>{if(n in stubs)return stubs[n];if(n.startsWith('@/')||n.startsWith('.')){const p=n.startsWith('@/')?path.resolve(n.slice(2)):path.resolve(path.dirname(file),n);return load([p,p+'.ts',p+'.mjs'].find(x=>fs.existsSync(x)&&fs.statSync(x).isFile()));}return require(n);},m,m.exports);return m.exports;}
 (async()=>{
@@ -35,5 +35,23 @@ const cache=new Map();function load(file){file=path.resolve(file);if(cache.has(f
  const catalogue=[...records].find(([p])=>p.startsWith('production_msops/'))[1];
  assert.equal(catalogue.items.length,2);assert.equal(catalogue.rows.length,2);
  assert.equal((await post({...body,version:1})).status,200);assert.equal(records.size,5,'Reimport must not duplicate components');
+ const defaults=load('lib/operacional/catalog.ts').DEFAULT_PROJECTS;
+ assert.equal(defaults.filter(p=>p.code==='003').length,1);
+ assert.equal(defaults.find(p=>p.code==='003').label,'003.XSONX Handpiece');
+ const opened=await api.GET({nextUrl:{searchParams:new URLSearchParams({site:'B1',projectId:'287774790255'})}});
+ assert.equal(opened.status,200,opened.data.error);assert.equal(opened.data.projectCode,'003');
+ const handpiece={...body,projectId:'287774790255',source:{...body.source,fileName:'003.MSOP Rev1.pdf',documentProjectCode:'003'},rows:[row('003.301','handpiece-component'),row('TS.003.01','handpiece-tool')]};
+ const handpieceSaved=await post(handpiece);assert.equal(handpieceSaved.status,200,handpieceSaved.data.error);
+ for(const prefix of ['inventario_componentes/','inventario_b2_componentes/']){
+  const articles=[...records].filter(([p,v])=>p.startsWith(prefix)&&v.code.startsWith('003.')).map(([,v])=>v);
+  assert.equal(articles.length,1);assert.equal(articles[0].project,'003.XSONX Handpiece');
+ }
+ assert.equal((await post({...handpiece,version:1,rows:[row('005.301','wrong')]})).status,400);
+ const missing=await api.GET({nextUrl:{searchParams:new URLSearchParams({site:'B1',projectId:'unknown999'})}});
+ assert.equal(missing.status,400);assert.match(missing.data.error,/999.*Operacional/);
+ const server=load('lib/operacional/server.ts');
+ records.set('operacional_proyectos/003',{name:'Custom Handpiece',label:'003.Custom Handpiece'});
+ assert.equal((await server.projectCatalog()).find(p=>p.code==='003').label,'003.Custom Handpiece','Existing Operational project takes precedence over the default');
+ console.log('DMR.003: opens MSOP, saves project articles in both warehouses, rejects foreign codes, preserves configured project labels and explains missing catalogue entries.');
  console.log('TS codes: normalization, project boundaries, invalid formats, inventory type, MSOP finalization, stable QR/article IDs in B1/B2 and repeat imports passed.');
 })().catch(e=>{console.error(e);process.exitCode=1;});
