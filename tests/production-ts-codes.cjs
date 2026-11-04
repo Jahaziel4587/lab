@@ -1,10 +1,10 @@
 const fs=require('node:fs'),path=require('node:path'),ts=require('typescript'),assert=require('node:assert/strict');
-const records=new Map();let counter=0;
+const records=new Map();let counter=0,afterQuerySnapshot=null,beforeCommit=null;
 const clone=v=>v===undefined?undefined:JSON.parse(JSON.stringify(v));
 const snap=p=>({id:p.split('/').at(-1),ref:doc(p),exists:records.has(p),data:()=>clone(records.get(p))});
 const doc=p=>({path:p,id:p.split('/').at(-1),get:async()=>snap(p)});
-const collection=name=>({doc:id=>doc(name+'/'+(id||'generated'+ ++counter)),get:async()=>({docs:[...records.keys()].filter(p=>p.startsWith(name+'/')&&!p.slice(name.length+1).includes('/')).map(snap)})});
-const db={collection,runTransaction:async fn=>{const writes=[];let writing=false;const get=r=>{assert(!writing,'Reads must precede writes');return r.get();};const result=await fn({get,create:(r,d)=>{writing=true;writes.push([r.path,d,true]);},set:(r,d)=>{writing=true;writes.push([r.path,d,false]);}});for(const [p,d,create]of writes){if(create)assert(!records.has(p));records.set(p,clone(d));}return result;}};
+const collection=name=>({doc:id=>doc(name+'/'+(id||'generated'+ ++counter)),get:async()=>{const docs=[...records.keys()].filter(p=>p.startsWith(name+'/')&&!p.slice(name.length+1).includes('/')).map(snap);if(afterQuerySnapshot)afterQuerySnapshot(name);return {docs};}});
+const db={collection,runTransaction:async fn=>{const writes=[];let writing=false;const get=r=>{assert(!writing,'Reads must precede writes');return r.get();};const result=await fn({get,getAll:(...refs)=>Promise.all(refs.map(get)),create:(r,d)=>{writing=true;writes.push([r.path,d,true]);},set:(r,d)=>{writing=true;writes.push([r.path,d,false]);}});if(beforeCommit){const hook=beforeCommit;beforeCommit=null;hook();}for(const [p,d,create]of writes)if(create&&records.has(p))throw Object.assign(new Error('ALREADY_EXISTS'),{code:6});for(const [p,d]of writes)records.set(p,clone(d));return result;}};
 const stubs={
  'next/server':{NextResponse:{json:(data,o)=>({status:o?.status||200,data})}},
  '@/lib/firebaseAdmin':{adminDB:db},
@@ -35,6 +35,49 @@ const cache=new Map();function load(file){file=path.resolve(file);if(cache.has(f
  const catalogue=[...records].find(([p])=>p.startsWith('production_msops/'))[1];
  assert.equal(catalogue.items.length,2);assert.equal(catalogue.rows.length,2);
  assert.equal((await post({...body,version:1})).status,200);assert.equal(records.size,5,'Reimport must not duplicate components');
+ // Manual article in only one warehouse: reuse it, preserve its lots and mirror only its definition.
+ const {createHash}=require('node:crypto');
+ for(const sourceSite of ['B1','B2']){
+  const code=sourceSite==='B1'?'005.301':'005.302',id=createHash('sha256').update(code).digest('hex');
+  const sourcePrefix=sourceSite==='B1'?'inventario_componentes/':'inventario_b2_componentes/';
+  const targetPrefix=sourceSite==='B1'?'inventario_b2_componentes/':'inventario_componentes/';
+  const manual={code,name:'Manual '+code,unit:'roll',lots:[{id:'manual-lot',stock:{aprobado:42},notes:'Keep me'}],createdAt:'2025-01-01',createdBy:'quality'};
+  const sourcePath=sourcePrefix+(sourceSite==='B1'?'legacy-random-component-id':id);
+  records.set(sourcePath,clone(manual));
+  const currentVersion=[...records].find(([p])=>p.startsWith('production_msops/'))[1].version;
+  const result=await post({...body,site:sourceSite,version:currentVersion,rows:[row(code,'manual')]});
+  assert.equal(result.status,200,result.data.error);
+  assert.deepEqual(records.get(sourcePath),manual,'Source lots, stock, QR identity and metadata must remain untouched');
+  const mirrored=records.get(targetPrefix+id);assert.equal(mirrored.name,manual.name);assert.equal(mirrored.unit,'roll');assert.deepEqual(mirrored.lots,[]);
+ }
+ // A concurrent manual creation appears after the collection query snapshot.
+ const racedCode='005.303',racedId=createHash('sha256').update(racedCode).digest('hex'),racedPath='inventario_componentes/'+racedId;
+ const racedArticle={code:racedCode,name:'Created concurrently',unit:'pz',lots:[{id:'real-lot',stock:{aprobado:12}}]};
+ afterQuerySnapshot=name=>{if(name==='inventario_componentes'){records.set(racedPath,clone(racedArticle));afterQuerySnapshot=null;}};
+ let version=[...records].find(([p])=>p.startsWith('production_msops/'))[1].version;
+ const raced=await post({...body,version,rows:[row(racedCode,'race')]});
+ assert.equal(raced.status,200,raced.data.error);assert.deepEqual(records.get(racedPath),racedArticle);
+ assert.deepEqual(records.get('inventario_b2_componentes/'+racedId).lots,[]);
+ version++;
+ assert.equal((await post({...body,version,rows:[row(racedCode,'repeat')]})).status,200);
+ const both=await api.GET({nextUrl:{searchParams:new URLSearchParams({site:'B1',projectId:'project005'})}});
+ assert.deepEqual(both.data.existing.find(c=>c.code===racedCode).sites,['B1','B2']);
+ // Also retry a real ALREADY_EXISTS commit collision, without overriding the concurrent writer.
+ const lateCode='005.306',lateId=createHash('sha256').update(lateCode).digest('hex'),latePath='inventario_componentes/'+lateId;
+ const lateArticle={code:lateCode,name:'Late manual creation',unit:'pz',lots:[{id:'late-lot',stock:{aprobado:25}}]};
+ beforeCommit=()=>records.set(latePath,clone(lateArticle));
+ const late=await post({...body,version:version+1,rows:[row(lateCode,'late')]});
+ assert.equal(late.status,200,late.data.error);assert.deepEqual(records.get(latePath),lateArticle);
+ assert.deepEqual(records.get('inventario_b2_componentes/'+lateId).lots,[]);
+ version++;
+ // Never overwrite a different/corrupt article just because its document ID collides.
+ const conflictCode='005.304',conflictId=createHash('sha256').update(conflictCode).digest('hex');
+ records.set('inventario_componentes/'+conflictId,{code:'005.399',name:'Different article',unit:'pz',lots:[]});
+ const conflict=await post({...body,version:version+1,rows:[row(conflictCode,'conflict')]});
+ assert.equal(conflict.status,400);assert.match(conflict.data.error,/ficha.*código distinto/);
+ assert(!records.has('inventario_b2_componentes/'+conflictId));
+ records.delete('inventario_componentes/'+conflictId);
+ console.log('MSOP mirrors missing B1/B2 definitions, preserves manual lots and legacy IDs, reads concurrent creations directly, reimports safely and rejects mismatched identities.');
  const defaults=load('lib/operacional/catalog.ts').DEFAULT_PROJECTS;
  assert.equal(defaults.filter(p=>p.code==='003').length,1);
  assert.equal(defaults.find(p=>p.code==='003').label,'003.XSONX Handpiece');
