@@ -86,3 +86,36 @@ assert.equal(saved[0].unit,"","Deduplication must not mutate saved/editor source
 assert.deepEqual(uniqueMsopRows(deduped),deduped,"Deduplication must be idempotent");
 assert.equal(uniqueMsopRows([{code:"006.302",name:""},{code:"006.302",name:"Foam"}])[0].name,"Foam");
 console.log("Bilingual/repeated MSOP rows and saved catalogues deduplicated by ID; missing metadata filled and uncoded/distinct articles preserved.");
+
+// A wrapped Drawing / Reference header must not close a table that starts next page.
+const splitTable=parseMsopPages([
+ [cell("3. List of Materials/Components",0,140),cell("Part Number",0,115),cell("Component Name",120,115),{...cell("SPEC",350,115),width:30},cell("Drawing /",450,115),cell("Reference",450,100),cell("CONFIDENTIAL",260,40)],
+ [cell("MSOP Example",240,760),cell("Page 2 of 3",440,730),cell("005.301",0,700),cell("Sleeves",120,700),{...cell("SPEC.005.301",350,700),width:75},cell("DWG.005.301",450,700),
+  cell("005.302",0,670),cell("Scrubbing Head",120,670),cell("SPEC.005.302",350,670),
+  cell("4. Manufacturing Process and Quality Inspection Information",0,610),cell("005.399",0,580),cell("Not in the materials table",120,580)]
+],"005.MSOP.pdf");
+assert.equal(splitTable.rows.length,2);
+assert.ok(splitTable.rows.every(r=>r.section==="materials"&&r.page===2));
+assert.equal(splitTable.rows[0].name,"Sleeves");
+assert.equal(splitTable.rows[1].name,"Scrubbing Head");
+const actualReferences=parseMsopPages([[cell("List of Materials/Components",0,760),cell("Part Number",0,740),cell("Component Name",120,740),cell("Drawing /",450,740),cell("Reference",450,725),cell("005.301",0,700),cell("Sleeves",120,700),cell("References",0,650),cell("005.399",0,620),cell("Outside the table",120,620)]],"005.MSOP.pdf");
+assert.deepEqual(actualReferences.rows.map(r=>r.code),["005.301"],"A real References heading must still close the table");
+
+const fragment=(str,x,y,width)=>({...cell(str,x,y),width});
+const splitCodes=parseMsopPages([[cell("List of Materials/Components",0,760),cell("Part Number",0,740),cell("Component Name",120,740),
+ fragment("00",0,700,12),fragment("5",12,700,6),fragment(".",18,700,3),fragment("3",21,700,6),fragment("0",27,700,6),fragment("1",33,700,6),cell("Sleeves",120,700),
+ fragment("MTS",0,670,23),fragment("-",23,670,4),fragment("046",27,670,18),cell("Label roll",120,670)]],"005.MSOP.pdf");
+assert.deepEqual(splitCodes.rows.map(r=>r.code),["005.301","MTS-046"]);
+assert.deepEqual(splitCodes.rows.map(r=>r.name),["Sleeves","Label roll"]);
+const tools=parseMsopPages([[cell("List of Production Materials/Tools",0,760),cell("Material/Tool ID",0,740),cell("Material/Tool Name",120,740),cell("TS.005.01",0,715),cell("Master part requiring review",120,715),fragment("MTS",0,700,23),fragment("-",23,700,4),fragment("002",27,700,18),cell("Distilled Water",120,700)]],"005.MSOP.pdf");
+assert.equal(tools.rows.length,2);
+assert.equal(tools.rows[0].code,"TS.005.01");
+assert.equal(tools.rows[1].name,"Distilled Water","Do not absorb the preceding unrecognized tool into the MTS name");
+
+const groupedDevices=parseMsopPages([[cell("Device Name",0,760),cell("Device Trade Name",120,740),cell("Device Model Number",240,740),cell("Part Number",380,740),cell("Reference",470,740),
+ cell("1.1.",90,715),cell("005.101",390,715),cell("005.102",390,690),cell("Wound heads",120,707),cell("with sleeve",120,682),
+ cell("1.2.",90,660),cell("005.102C",390,652),cell("005.103C",390,630),cell("Wound heads with",120,652),cell("curette and sleeve",120,630),
+ cell("2. Description of the Product",0,590),cell("Prose",120,560),cell("not an article",380,560)]],"005.MSOP.pdf");
+assert.equal(groupedDevices.rows.length,4);
+assert.deepEqual(groupedDevices.rows.map(r=>r.name),["Wound heads with sleeve","Wound heads with sleeve","Wound heads with curette and sleeve","Wound heads with curette and sleeve"]);
+console.log("Cross-page tables, wrapped Reference headers, fragmented codes, shared device cells and table boundaries passed.");
