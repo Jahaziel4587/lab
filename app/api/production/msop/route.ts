@@ -19,8 +19,9 @@ async function context(projectId:string){
  const project=(await getDmrProjects()).find(p=>p.id===projectId);
  if(!project)throw new Error("Proyecto DMR inválido.");
  const code=projectCodeFromDmr(project.title);
+ if(!code)throw new Error("No se pudo identificar el número de proyecto en el nombre de la carpeta DMR.");
  const operational=(await projectCatalog()).find(p=>p.code===code);
- if(!operational)throw new Error("No se pudo identificar el proyecto del DMR.");
+ if(!operational)throw new Error("El proyecto "+code+" existe en el DMR, pero falta en el catálogo de Operacional. Regístralo allí para cargar su MSOP.");
  return {project,code,operational};
 }
 export async function GET(req:NextRequest){
