@@ -60,14 +60,27 @@ export async function POST(req:NextRequest){
   const codes=[...new Set(rows.map(r=>r.code))];
   if(codes.length>200)throw new Error("Esta versión admite hasta 200 artículos únicos.");
   const ref=adminDB.collection("production_msops").doc(idFor(projectId));
-  await adminDB.runTransaction(async t=>{
+  for(let attempt=0;;attempt++){
+   try{await adminDB.runTransaction(async t=>{
    const cols=[adminDB.collection(inventoryCollections(site).components),adminDB.collection(inventoryCollections(site==="B1"?"B2":"B1").components)];
    const [prior,current,other]=await Promise.all([t.get(ref),t.get(cols[0]),t.get(cols[1])]);
    if((prior.data()?.version||0)!==b.version)throw new Error("El MSOP cambió. Cierra y vuelve a abrir para recargarlo.");
    const snapshots=[current,other];
-   const items=codes.map(articleCode=>{
+   // Query results alone do not protect a missing canonical document from concurrent creation.
+   // Read each target explicitly so Firestore retries if another request creates it meanwhile.
+   const articleIds=codes.map(articleCode=>createHash("sha256").update(articleCode).digest("hex"));
+   const targets=await t.getAll(...cols.flatMap(col=>articleIds.map(id=>col.doc(id))));
+   const items=codes.map((articleCode,articleIndex)=>{
     const sourceRows=rows.filter(r=>r.code===articleCode);
-    const existing=snapshots.map(s=>s.docs.filter(d=>normalized(d.data().code)===articleCode));
+    const existing=snapshots.map((s,index)=>{
+     const matches=s.docs.filter(d=>normalized(d.data().code)===articleCode);
+     const target=targets[index*codes.length+articleIndex];
+     if(target.exists){
+      if(normalized(target.data()?.code)!==articleCode)throw new Error(articleCode+": la ficha de inventario tiene un código distinto o incompleto. Revísala en inventario antes de finalizar.");
+      if(!matches.some(d=>d.id===target.id))matches.push(target as typeof matches[number]);
+     }
+     return matches;
+    });
     if(existing.some(matches=>matches.length>1))throw new Error(articleCode+": hay artículos duplicados en inventario. Corrígelos antes de finalizar.");
     const known=(existing[0][0]||existing[1][0])?.data() as InventoryComponent|undefined;
     if(existing[0][0]&&existing[1][0]&&existing[0][0].data().unit!==existing[1][0].data().unit)throw new Error(articleCode+": las unidades de B1 y B2 no coinciden.");
@@ -77,13 +90,19 @@ export async function POST(req:NextRequest){
     if(!known&&sourceRows.some(r=>r.unit!==unit))throw new Error(articleCode+": usa la misma unidad en todos los renglones.");
     for(const r of sourceRows){r.name=name;r.unit=unit;}
     for(let index=0;index<2;index++)if(!existing[index].length){
-     const id=createHash("sha256").update(articleCode).digest("hex"),parsed=parseComponentCode(articleCode);
+     const id=articleIds[articleIndex],parsed=parseComponentCode(articleCode);
      t.create(cols[index].doc(id),{id,site:index===0?site:(site==="B1"?"B2":"B1"),code:articleCode,name,unit,type:parsed.type,project:parsed.type==="MTS"?"":operational.label,lots:[],createdAt:new Date().toISOString(),createdBy:user.uid});
     }
     return {code:articleCode,name,unit,children:[],sections:[...new Set(sourceRows.map(r=>r.section))]};
    });
    t.set(ref,{projectId,projectCode:code,source,rows:uniqueMsopRows(rows),items,version:b.version+1,updatedAt:new Date().toISOString(),updatedBy:user.uid});
-  });
+   });break;
+   }catch(error){
+    const code=(error as {code?:unknown})?.code;
+    if(attempt>=2||![6,"6","already-exists","ALREADY_EXISTS"].includes(code as string|number))throw error;
+    // Another writer may have created a definition after our first read. Re-read and reuse it.
+   }
+  }
   return NextResponse.json({ok:true});
  }catch(e){return NextResponse.json({error:e instanceof Error?e.message:"No se pudo finalizar el MSOP."},{status:400});}
 }
