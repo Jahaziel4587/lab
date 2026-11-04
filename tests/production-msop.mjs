@@ -119,3 +119,8 @@ const groupedDevices=parseMsopPages([[cell("Device Name",0,760),cell("Device Tra
 assert.equal(groupedDevices.rows.length,4);
 assert.deepEqual(groupedDevices.rows.map(r=>r.name),["Wound heads with sleeve","Wound heads with sleeve","Wound heads with curette and sleeve","Wound heads with curette and sleeve"]);
 console.log("Cross-page tables, wrapped Reference headers, fragmented codes, shared device cells and table boundaries passed.");
+const tsTools=parseMsopPages([[cell("List of Production Materials/Tools",0,760),cell("Material/Tool ID",0,740),cell("Material/Tool Name",120,740),cell("TS.005.01",0,700),cell("Vibration post master part",120,700),cell("TS.005.02",0,670),cell("Debriding head with curette master part",120,670)],[cell("List of Production Materials/Tools",0,760),cell("TS.005.01",0,700),cell("Pieza maestra",120,700)]],"005.MSOP.pdf");
+assert.deepEqual(tsTools.rows.map(r=>r.code),["TS.005.01","TS.005.02"]);
+assert.equal(tsTools.rows[0].name,"Vibration post master part");
+assert.equal(tsTools.rows[1].name,"Debriding head with curette master part");
+console.log("TS tool IDs recognized and deduplicated without including the code in the description.");

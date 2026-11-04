@@ -5,7 +5,7 @@ import {identify,projectCatalog} from "@/lib/operacional/server";
 import {getDmrProjects} from "@/lib/box/boxCatalog";
 import {projectCodeFromDmr} from "@/lib/production/bom";
 import {uniqueMsopRows} from "@/lib/production/msop-parser.mjs";
-import {normalizedCode} from "@/lib/production/codes";
+import {normalizedCode,msopCodeForProject} from "@/lib/production/codes";
 import {parseComponentCode} from "@/lib/operacional/catalog";
 import {inventoryCollections,inventorySite} from "@/lib/inventario/sites";
 import type {InventoryComponent} from "@/lib/inventario/types";
@@ -52,7 +52,7 @@ export async function POST(req:NextRequest){
   if(!Array.isArray(b.rows)||!b.rows.length||b.rows.length>600)throw new Error("Agrega entre 1 y 600 renglones.");
   const rows:MsopRow[]=b.rows.map((r:MsopRow,index:number)=>{
    const articleCode=normalizedCode(str(r.code,100));
-   if(!articleCode.startsWith(code+".")&&!articleCode.startsWith("MTS-"))throw new Error(articleCode+": artículo de otro proyecto.");
+   if(!msopCodeForProject(articleCode,code))throw new Error(articleCode+": artículo de otro proyecto.");
    if(!["device","materials","production"].includes(r.section)||!Number.isInteger(r.page)||r.page<0||r.page>source.pageCount)throw new Error("Tabla o página inválida.");
    return {id:"msop-"+index,code:articleCode,name:str(r.name),unit:str(r.unit,40),section:r.section,page:r.page,supplier:str(r.supplier||""),spec:str(r.spec||"")};
   });

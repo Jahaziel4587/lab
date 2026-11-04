@@ -16,5 +16,5 @@ export const EXTERNAL_LOCATIONS = [
 ];
 export const LEGACY_LOCATIONS = [{ id: "ssc", name: "SSC (ubicación anterior)", usable: false }, { id: "limpieza", name: "Limpieza (ubicación anterior)", usable: false }];
 export const LOCATIONS = [...WAREHOUSES, ...EXTERNAL_LOCATIONS];
-export const TYPES = { "100": "Ensamble", "200": "Subensamble", "300": "Componente", "400": "Materia prima", MTS: "MTS" };
+export const TYPES = { "100": "Ensamble", "200": "Subensamble", "300": "Componente", "400": "Materia prima", MTS: "MTS", TS: "TS" };
 export function locationName(id: string) { return [...LOCATIONS, ...LEGACY_LOCATIONS].find(x => x.id === id)?.name || id; }
