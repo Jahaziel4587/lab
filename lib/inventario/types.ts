@@ -1,5 +1,5 @@
 import type { InventorySite } from "./sites";
-export type ArticleType = "100" | "200" | "300" | "400" | "MTS";
+export type ArticleType = "100" | "200" | "300" | "400" | "MTS" | "TS";
 export type Lot = { reservedProject?: string; temperatureCondition?: string; humidityCondition?: string; id: string; name: string; expiry: string; supplier: string; notes: string; createdAt: string; stock: Record<string, number> };
 export type InventoryComponent = { temperatureCondition?: string; humidityCondition?: string; id: string; site?: InventorySite; code: string; name: string; project: string; type: ArticleType; unit: string; lots: Lot[]; createdAt: string };
 export type MovementKind = "salida" | "entrada" | "traslado";

@@ -4,7 +4,7 @@ import {Upload,Save,Trash2,Plus,FileText,LoaderCircle} from "lucide-react";
 import {useAuth} from "@/src/Context/AuthContext";
 import {readMsopPdf,type MsopRow,type MsopSource,type MsopSection} from "@/lib/production/msop-pdf";
 import {MSOP_SECTIONS,uniqueMsopRows} from "@/lib/production/msop-parser.mjs";
-import {normalizedCode} from "@/lib/production/codes";
+import {normalizedCode,msopCodeForProject} from "@/lib/production/codes";
 import {inputClass,buttonClass,secondaryButtonClass,Field} from "@/app/components/inventario/InventoryShell";
 import type {InventoryComponent} from "@/lib/inventario/types";
 import type {InventorySite} from "@/lib/inventario/sites";
@@ -36,7 +36,7 @@ export default function MsopEditor({projectId,site,onSaved,onBusyChange}:{projec
    return next;
   }));
  }
- const missing=rows.filter(r=>(!codeOf(r.code)||(!codeOf(r.code).startsWith(projectCode+".")&&!codeOf(r.code).startsWith("MTS-")))||!r.name.trim()||!r.unit.trim()||known(r.code)?.unitConflict).length;
+ const missing=rows.filter(r=>!msopCodeForProject(r.code,projectCode)||!r.name.trim()||!r.unit.trim()||known(r.code)?.unitConflict).length;
  const unique=new Set(rows.map(r=>codeOf(r.code)).filter(Boolean)).size;
  if(loading)return <p className="text-sm text-white/55">Cargando catálogo e inventario…</p>;
  return <div className="space-y-5">
@@ -69,7 +69,7 @@ export default function MsopEditor({projectId,site,onSaved,onBusyChange}:{projec
      <td className="w-40 border-r border-white/10 p-1"><input aria-label="Código de artículo" disabled={busy} className={cellInput} maxLength={100} value={r.code} onChange={e=>update(r.id,"code",e.target.value)} onBlur={()=>setRows(prior=>uniqueMsopRows(prior))}/></td>
      <td className="min-w-64 border-r border-white/10 p-1"><input aria-label={"Nombre "+r.code} disabled={busy||!!k} className={cellInput} maxLength={300} value={k?.name||r.name} onChange={e=>update(r.id,"name",e.target.value)}/></td>
      <td className="min-w-36 border-r border-white/10 p-1">{k?<span className="px-2 text-emerald-200">{k.unit}</span>:<><input list="msop-units" aria-label={"Unidad de "+r.code} disabled={busy} className={cellInput+(!r.unit?" !border-amber-300/30":"")} maxLength={40} placeholder="Selecciona o escribe…" value={r.unit} onChange={e=>update(r.id,"unit",e.target.value)}/></>}</td>
-     <td className="min-w-40 border-r border-white/10 px-3 py-2">{k?.unitConflict?<span className="text-red-200">Unidades B1/B2 distintas. Corrige el artículo en inventario.</span>:k?<span className="text-emerald-200">Existente · {k.sites.join(" / ")}</span>:<span className="text-amber-200">{r.unit?"Nuevo · listo":"Nuevo · falta unidad"}</span>}</td>
+     <td className="min-w-40 border-r border-white/10 px-3 py-2">{!msopCodeForProject(r.code,projectCode)?<span className="text-red-200">{codeOf(r.code)?"Código de otro proyecto":"Código no válido"}</span>:!r.name.trim()?<span className="text-amber-200">Falta nombre</span>:k?.unitConflict?<span className="text-red-200">Unidades B1/B2 distintas. Corrige el artículo en inventario.</span>:k?<span className="text-emerald-200">Existente · {k.sites.join(" / ")}</span>:<span className="text-amber-200">{r.unit?"Nuevo · listo":"Nuevo · falta unidad"}</span>}</td>
      {(["supplier","spec"] as const).map(key=><td key={key} className="min-w-32 border-r border-white/10 p-1"><input aria-label={key+" "+r.code} disabled={busy} className={cellInput} maxLength={300} value={r[key]} onChange={e=>update(r.id,key,e.target.value)}/></td>)}
      <td className="px-3 py-2">{r.page&&pdfUrl?<a href={pdfUrl+"#page="+r.page} className="text-emerald-200 underline" target="_blank" rel="noreferrer">{r.page}</a>:r.page||"Manual"}</td>
      <td className="px-2"><button disabled={busy} className="inline-flex h-9 w-9 items-center justify-center rounded-md text-white/40 hover:bg-red-400/10 hover:text-red-200" aria-label={"Excluir "+(r.code||"renglón")} title="Excluir renglón de esta carga" onClick={()=>setRows(rows.filter(row=>row.id!==r.id))}><Trash2 size={15}/></button></td>
