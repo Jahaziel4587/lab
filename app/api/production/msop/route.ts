@@ -69,15 +69,16 @@ export async function POST(req:NextRequest){
    // Query results alone do not protect a missing canonical document from concurrent creation.
    // Read each target explicitly so Firestore retries if another request creates it meanwhile.
    const articleIds=codes.map(articleCode=>createHash("sha256").update(articleCode).digest("hex"));
-   const targets=await t.getAll(...cols.flatMap(col=>articleIds.map(id=>col.doc(id))));
+   // Historical articles may have been renamed (e.g. 005.303 -> 005.303C) without
+   // changing their document ID. Keep that identity/QR and use a separate ID for the new article.
+   const alternateIds=codes.map(articleCode=>createHash("sha256").update(JSON.stringify(["msop-article",articleCode])).digest("hex"));
+   const targets=await t.getAll(...cols.flatMap(col=>articleIds.flatMap((id,i)=>[col.doc(id),col.doc(alternateIds[i])])));
    const items=codes.map((articleCode,articleIndex)=>{
     const sourceRows=rows.filter(r=>r.code===articleCode);
     const existing=snapshots.map((s,index)=>{
      const matches=s.docs.filter(d=>normalized(d.data().code)===articleCode);
-     const target=targets[index*codes.length+articleIndex];
-     if(target.exists){
-      if(normalized(target.data()?.code)!==articleCode)throw new Error(articleCode+": la ficha de inventario tiene un código distinto o incompleto. Revísala en inventario antes de finalizar.");
-      if(!matches.some(d=>d.id===target.id))matches.push(target as typeof matches[number]);
+     for(const target of targets.slice((index*codes.length+articleIndex)*2,(index*codes.length+articleIndex)*2+2)){
+      if(target.exists&&normalized(target.data()?.code)===articleCode&&!matches.some(d=>d.id===target.id))matches.push(target as typeof matches[number]);
      }
      return matches;
     });
@@ -90,7 +91,10 @@ export async function POST(req:NextRequest){
     if(!known&&sourceRows.some(r=>r.unit!==unit))throw new Error(articleCode+": usa la misma unidad en todos los renglones.");
     for(const r of sourceRows){r.name=name;r.unit=unit;}
     for(let index=0;index<2;index++)if(!existing[index].length){
-     const id=articleIds[articleIndex],parsed=parseComponentCode(articleCode);
+     const candidates=targets.slice((index*codes.length+articleIndex)*2,(index*codes.length+articleIndex)*2+2);
+     const available=candidates.find(target=>!target.exists);
+     if(!available)throw new Error(articleCode+": las ubicaciones internas de la ficha ya están ocupadas por otros artículos. Contacta al administrador sin modificar sus códigos.");
+     const id=available.id,parsed=parseComponentCode(articleCode);
      t.create(cols[index].doc(id),{id,site:index===0?site:(site==="B1"?"B2":"B1"),code:articleCode,name,unit,type:parsed.type,project:parsed.type==="MTS"?"":operational.label,lots:[],createdAt:new Date().toISOString(),createdBy:user.uid});
     }
     return {code:articleCode,name,unit,children:[],sections:[...new Set(sourceRows.map(r=>r.section))]};
