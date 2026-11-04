@@ -4,6 +4,7 @@ import {adminDB} from "@/lib/firebaseAdmin";
 import {identify,projectCatalog} from "@/lib/operacional/server";
 import {getDmrProjects} from "@/lib/box/boxCatalog";
 import {projectCodeFromDmr} from "@/lib/production/bom";
+import {uniqueMsopRows} from "@/lib/production/msop-parser.mjs";
 import {normalizedCode} from "@/lib/production/codes";
 import {parseComponentCode} from "@/lib/operacional/catalog";
 import {inventoryCollections,inventorySite} from "@/lib/inventario/sites";
@@ -35,7 +36,7 @@ export async function GET(req:NextRequest){
    if(prior){if(prior.unit!==c.unit)prior.unitConflict=true;if(prior.sites.includes(siteName))prior.unitConflict=true;else prior.sites.push(siteName);}
    else existing.set(key,{id:doc.id,code:key,name:c.name,unit:c.unit,sites:[siteName],unitConflict:false});
   }
-  return NextResponse.json({projectCode:code,msop:saved.exists?saved.data():null,existing:[...existing.values()]});
+  return NextResponse.json({projectCode:code,msop:saved.exists?{...saved.data(),rows:uniqueMsopRows(saved.data()?.rows||[])}:null,existing:[...existing.values()]});
  }catch(e){return NextResponse.json({error:e instanceof Error?e.message:"No se pudo cargar el MSOP."},{status:400});}
 }
 export async function POST(req:NextRequest){
@@ -80,7 +81,7 @@ export async function POST(req:NextRequest){
     }
     return {code:articleCode,name,unit,children:[],sections:[...new Set(sourceRows.map(r=>r.section))]};
    });
-   t.set(ref,{projectId,projectCode:code,source,rows,items,version:b.version+1,updatedAt:new Date().toISOString(),updatedBy:user.uid});
+   t.set(ref,{projectId,projectCode:code,source,rows:uniqueMsopRows(rows),items,version:b.version+1,updatedAt:new Date().toISOString(),updatedBy:user.uid});
   });
   return NextResponse.json({ok:true});
  }catch(e){return NextResponse.json({error:e instanceof Error?e.message:"No se pudo finalizar el MSOP."},{status:400});}
