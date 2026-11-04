@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import {parseMsopPages} from "../lib/production/msop-parser.mjs";
+import {parseMsopPages,uniqueMsopRows} from "../lib/production/msop-parser.mjs";
 const cell=(str,x,y)=>({str,transform:[1,0,0,1,x,y],width:100});
 const document=[
  cell("001.MSOP Rev3",0,800),cell("Device Name",0,770),cell("001.101",0,750),cell("Final assembly",120,750),
@@ -18,9 +18,9 @@ assert.equal(result.rows[3].code,"");
 assert.equal(result.rows[3].name,"Tool requiring a code");
 assert.ok(result.rows.every(row=>row.unit===""),"PDF import must never invent stock units");
 const continued=parseMsopPages([document,[cell("MTS-005",0,740),cell("Cleaning wipe",120,740)]],"001.MSOP.pdf");
-assert.equal(continued.rows.length,5);
-assert.equal(continued.rows[4].page,2);
-assert.equal(continued.rows[4].section,"production");
+assert.equal(continued.rows.length,4);
+assert.equal(continued.rows[2].page,1);
+assert.equal(continued.rows[2].section,"production");
 const wrong=parseMsopPages([[cell("005.MSOP Rev6",0,800),...document.slice(1)]],"005.MSOP.pdf");
 assert.equal(wrong.documentProjectCode,"005");
 assert.ok(parseMsopPages([[]],"001.MSOP.pdf").warnings.length);
@@ -51,3 +51,38 @@ assert.equal(spacing.rows.length,1);
 assert.equal(spacing.rows[0].name,"Top foam");
 assert.equal(spacing.rows[0].spec,"SPEC.006.301");
 console.log("SPEC separation and centered-number multiline-row regressions passed.");
+
+const repeated=parseMsopPages([document,[
+ cell("List of Materials/Components",0,740),
+ cell("Part Number",0,720),cell("Description",120,720),
+ cell("001.304",0,700),cell("Pasador",120,700),
+ cell("List of Production Materials/Tools",0,660),
+ cell("Part Number",0,640),cell("Description",120,640),
+ cell("MTS-005",0,620),cell("Toallita de limpieza",120,620),
+ cell("MTS-006",0,580),cell("Toallita de limpieza",120,580)
+]],"001.MSOP.pdf");
+assert.equal(repeated.rows.filter(r=>r.code==="001.304").length,1);
+assert.equal(repeated.rows.find(r=>r.code==="001.304").name,"Pin");
+assert.equal(repeated.rows.filter(r=>r.code==="MTS-005").length,1);
+assert.ok(repeated.rows.some(r=>r.code==="MTS-006"),"Same name with another ID remains separate");
+const saved=[
+ {id:"a",code:" mts-005 ",name:"Wipe",unit:"",section:"materials",page:1,supplier:"",spec:""},
+ {id:"b",code:"MTS–005",name:"Toallita",unit:"pz",section:"production",page:3,supplier:"Bioana",spec:"SPEC.MTS-005"},
+ {id:"c",code:"",name:"Tool 1"}, {id:"d",code:"",name:"Tool 2"},
+ {id:"e",code:"NA",name:"Tool 3"}, {id:"f",code:"NA",name:"Tool 4"},
+ {id:"g",code:"001.303A",name:"Component"}, {id:"h",code:"001.303B",name:"Component"},
+ {id:"i",code:"MTS-000",name:"Invalid 1"}, {id:"j",code:"MTS-000",name:"Invalid 2"}
+];
+const deduped=uniqueMsopRows(saved);
+assert.equal(deduped.length,9);
+assert.equal(deduped[0].id,"a");
+assert.equal(deduped[0].section,"materials");
+assert.equal(deduped[0].page,1);
+assert.equal(deduped[0].name,"Wipe");
+assert.equal(deduped[0].unit,"pz");
+assert.equal(deduped[0].supplier,"Bioana");
+assert.equal(deduped[0].spec,"SPEC.MTS-005");
+assert.equal(saved[0].unit,"","Deduplication must not mutate saved/editor source rows");
+assert.deepEqual(uniqueMsopRows(deduped),deduped,"Deduplication must be idempotent");
+assert.equal(uniqueMsopRows([{code:"006.302",name:""},{code:"006.302",name:"Foam"}])[0].name,"Foam");
+console.log("Bilingual/repeated MSOP rows and saved catalogues deduplicated by ID; missing metadata filled and uncoded/distinct articles preserved.");
