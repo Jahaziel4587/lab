@@ -9,6 +9,8 @@ const component = { code: 'MTS-012', name: 'Tyvek Dupont XL', lots: [{ name: 'NL
 assert(matchesRecord('abc123', component, [{ field: 'name', value: 'TYVEK' }, { field: 'lots.name', value: '1526b' }]));
 assert(!matchesRecord('abc123', component, [{ field: 'name', value: 'Tyvek' }, { field: 'lots.name', value: 'otro' }]));
 assert(matchesRecord('abc123', component, [{ field: '__id__', value: 'abc' }]));
+assert(matchesRecord('abc123', component, [{ field: '', value: 'abc' }]));
+assert(!matchesRecord('abc123', component, [{ field: 'name', value: 'abc' }]));
 assert(matchesRecord('abc123', component, [{ field: '', value: 'inspeccion' }]));
 assert(!matchesRecord('abc123', component, [{ field: 'missing', value: 'x' }]));
 assert(recordFields(component).includes('lots.stock.aprobado'));
