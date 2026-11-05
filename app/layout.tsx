@@ -8,17 +8,17 @@ import ServiceWorkerRegister from "./components/ServiceWorkerRegister";
 
 export const metadata: Metadata = {
   title: {
-    default: "Bioana Prototyping Lab",
-    template: "%s | Bioana Lab",
+    default: "Bioana Central",
+    template: "%s | Bioana",
   },
   description:
-    "Plataforma de solicitudes y seguimiento del Laboratorio de Prototipado de Bioana",
-  applicationName: "Bioana Prototyping Lab",
+    "Plataforma Operativa de Bioana",
+  applicationName: "Bioana",
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title: "Bioana Lab",
+    title: "Bioana",
   },
   formatDetection: {
     telephone: false,

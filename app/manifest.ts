@@ -2,8 +2,8 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Bioana Prototyping Lab",
-    short_name: "Bioana Lab",
+    name: "Bioana Central",
+    short_name: "Bioana",
     description:
       "Plataforma de solicitudes y seguimiento del Laboratorio de Prototipado de Bioana",
     start_url: "/",

@@ -343,10 +343,10 @@ export default function ClientLayout({
             className="min-w-0 shrink font-semibold tracking-wider text-white/90 hover:text-white transition"
           >
             <span className="hidden sm:inline text-sm">
-              BIOANA PROTOTYPING LAB
+              BIOANA CENTRAL
             </span>
             <span className="sm:hidden text-[11px] leading-tight whitespace-nowrap">
-              BIOANA PROTOLAB
+              BIOANA CENTRAL
             </span>
           </Link>
 
