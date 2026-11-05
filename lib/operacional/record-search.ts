@@ -7,7 +7,7 @@ export function fieldValues(value: unknown, path: string[]): unknown[] {
   return fieldValues((value as Record<string, unknown>)[path[0]], path.slice(1));
 }
 export function matchesRecord(id: string, data: Record<string, unknown>, filters: RecordFilter[]) {
-  return filters.every(({ field, value }) => (field === "__id__" ? [id] : fieldValues(data, field ? field.split(".") : [])).some(item => normalize(item).includes(normalize(value))));
+  return filters.every(({ field, value }) => (field === "__id__" ? [id] : field ? fieldValues(data, field.split(".")) : [id, ...fieldValues(data, [])]).some(item => normalize(item).includes(normalize(value))));
 }
 export function recordFields(value: unknown, prefix = "", depth = 0): string[] {
   if (depth > 8 || !value || typeof value !== "object") return [];
