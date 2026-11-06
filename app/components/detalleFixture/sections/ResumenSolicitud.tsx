@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { FiFileText, FiDownload, FiPaperclip } from "react-icons/fi";
+import { FiFileText, FiDownload, FiPaperclip, FiUpload } from "react-icons/fi";
 import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/src/firebase/firebaseConfig";
 import { cardClass, btnPrimary } from "../styles";
 import { Info, InfoText, BooleanInfo, Block } from "../components/InfoBlocks";
-import { listFixtureFolderFiles } from "../services/fixtureStorage";
+import { listFixtureFolderFiles, uploadFixtureFiles } from "../services/fixtureStorage";
 import type { UploadedFile } from "../types";
 
 function ArchivosSolicitud({
@@ -67,6 +67,40 @@ export default function ResumenSolicitud({
   const [archivosVisuales, setArchivosVisuales] = useState<UploadedFile[]>([]);
   const [archivosTecnicos, setArchivosTecnicos] = useState<UploadedFile[]>([]);
   const [loadingArchivos, setLoadingArchivos] = useState(false);
+  const [uploadingArchivos, setUploadingArchivos] = useState(false);
+  const [archivoError, setArchivoError] = useState("");
+  const [archivoMensaje, setArchivoMensaje] = useState("");
+
+  const agregarArchivos = async (files: File[]) => {
+    if (!pedidoId || files.length === 0 || uploadingArchivos) return;
+    setUploadingArchivos(true);
+    setArchivoError("");
+    setArchivoMensaje("");
+    let uploadedCount = 0;
+    try {
+      // Save each successful file immediately so partial uploads remain visible.
+      for (const file of files) {
+        const uploaded = await uploadFixtureFiles({
+          pedidoId,
+          files: [file],
+          folder: "archivos-tecnicos",
+        });
+        setArchivosTecnicos((prev) => [...prev, ...uploaded]);
+        uploadedCount += uploaded.length;
+      }
+      setArchivoMensaje("Archivos agregados correctamente.");
+    } catch (error) {
+      console.error("Error agregando archivos de solicitud:", error);
+      setArchivoError(
+        uploadedCount > 0
+          ? `Se agregaron ${uploadedCount} archivo(s), pero no se completó la carga. Selecciona de nuevo los archivos faltantes.`
+          : "No se pudieron agregar los archivos. Intenta nuevamente."
+      );
+    } finally {
+      setUploadingArchivos(false);
+    }
+  };
+
   const [solicitanteNombre, setSolicitanteNombre] = useState<string>("");
 
   useEffect(() => {
@@ -141,7 +175,7 @@ export default function ResumenSolicitud({
             Resumen de solicitud formal
           </h2>
           <p className="mt-1 text-sm leading-relaxed text-white/55">
-            Esta información se considera congelada como base del proceso.
+            Esta información se considera congelada como base del proceso. Puedes agregar archivos complementarios a la solicitud.
           </p>
 
           <button
@@ -183,6 +217,28 @@ export default function ResumenSolicitud({
         </Block>
 
         <Block title="3. Archivos adjuntos de solicitud">
+          <label className={`${btnPrimary} relative w-full sm:w-fit ${uploadingArchivos || loadingArchivos ? "cursor-wait opacity-50" : "cursor-pointer"}`}>
+            <FiUpload />
+            {uploadingArchivos ? "Subiendo archivos..." : "Agregar más archivos"}
+            <input
+              type="file"
+              multiple
+              aria-label="Agregar más archivos a la solicitud formal"
+              disabled={uploadingArchivos || loadingArchivos}
+              className="absolute inset-0 h-full w-full cursor-pointer opacity-0 disabled:cursor-wait"
+              onChange={(event) => {
+                const files = Array.from(event.target.files || []);
+                event.target.value = "";
+                void agregarArchivos(files);
+              }}
+            />
+          </label>
+          {archivoError && (
+            <p role="alert" className="mt-3 text-sm text-red-200">{archivoError}</p>
+          )}
+          {archivoMensaje && (
+            <p role="status" className="mt-3 text-sm text-emerald-200">{archivoMensaje}</p>
+          )}
           {loadingArchivos && (
             <p className="text-sm text-white/55">Cargando archivos...</p>
           )}
