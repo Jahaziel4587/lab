@@ -14,17 +14,9 @@ type PedidoCalendarioItemProps = {
 
 export default function PedidoCalendarioItem({
   pedido,
-  isAdmin,
 }: PedidoCalendarioItemProps) {
   const className = calendarPedidoClass(pedido.status);
 
-  if (!isAdmin) {
-    return (
-      <div className={className} title={pedido.titulo}>
-        {pedido.titulo}
-      </div>
-    );
-  }
 
   return (
     <Link
