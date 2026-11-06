@@ -1,3 +1,4 @@
+import { inspectionNotificationRecipients } from "@/lib/inspections/notificationRecipients";
 import {
   NextRequest,
   NextResponse,
@@ -221,6 +222,8 @@ export async function POST(
       });
     }
 
+    const recipientEmails = await inspectionNotificationRecipients([responsiblePmEmail], decoded.email);
+
     const inspectorName =
       await getDisplayNameForUid(
         decoded.uid,
@@ -340,9 +343,7 @@ export async function POST(
 
     const pushResult =
       await sendPushToEmails({
-        emails: [
-          responsiblePmEmail,
-        ],
+        emails: recipientEmails,
         title,
         body: notificationBody,
         url: absoluteUrl,
@@ -351,11 +352,10 @@ export async function POST(
     /*
      * Notificación interna para la campana.
      */
-    await adminDB
+    await Promise.all(recipientEmails.map(recipient => adminDB
       .collection("notifications")
       .add({
-        userEmail:
-          responsiblePmEmail,
+        userEmail: recipient,
         tipo:
           "inspection_anomaly_created",
         mensaje:
@@ -388,7 +388,7 @@ export async function POST(
         createdAt:
           FieldValue.serverTimestamp(),
         leido: false,
-      });
+      })));
 
     await anomalyReference.set(
       {
@@ -398,6 +398,7 @@ export async function POST(
             FieldValue.serverTimestamp(),
           initialReportRecipient:
             responsiblePmEmail,
+          initialReportRecipients: recipientEmails,
         },
         updatedAt:
           FieldValue.serverTimestamp(),
@@ -411,6 +412,7 @@ export async function POST(
       ok: true,
       recipientEmail:
         responsiblePmEmail,
+      recipientEmails,
       ...pushResult,
     });
   } catch (error) {

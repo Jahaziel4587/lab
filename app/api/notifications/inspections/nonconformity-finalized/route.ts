@@ -1,3 +1,4 @@
+import { getQualityManagerEmails } from "@/lib/inspections/notificationRecipients";
 import {
   NextRequest,
   NextResponse,
@@ -332,25 +333,7 @@ export async function POST(
      *
      * isQualityManager: true
      */
-    const qualityManagersSnapshot =
-      await adminDB
-        .collection("users")
-        .where(
-          "isQualityManager",
-          "==",
-          true,
-        )
-        .get();
-
-    const qualityManagerEmails =
-      qualityManagersSnapshot.docs
-        .map((userDocument) =>
-          normalizeEmail(
-            userDocument.data()
-              .email,
-          ),
-        )
-        .filter(Boolean);
+    const qualityManagerEmails = await getQualityManagerEmails();
 
     const recipientEmails =
       Array.from(

@@ -1,3 +1,4 @@
+import { inspectionNotificationRecipients } from "@/lib/inspections/notificationRecipients";
 import {
   NextRequest,
   NextResponse,
@@ -221,7 +222,8 @@ export async function POST(
         clean(messageSnapshot.data()?.text).slice(0, 140);
     }
 
-    if (!targetEmail || targetEmail === senderEmail) {
+    const recipients = await inspectionNotificationRecipients([targetEmail], senderEmail);
+    if (!recipients.length) {
       return NextResponse.json({
         ok: true,
         notified: false,
@@ -232,7 +234,7 @@ export async function POST(
       buildUrl(scope, anomalyId);
 
     const result = await sendPushToEmails({
-      emails: [targetEmail],
+      emails: recipients,
       title,
       body: notificationBody,
       url: new URL(
@@ -241,10 +243,10 @@ export async function POST(
       ).toString(),
     });
 
-    await adminDB
+    await Promise.all(recipients.map(recipient => adminDB
       .collection("notifications")
       .add({
-        userEmail: targetEmail,
+        userEmail: recipient,
         tipo:
           activityType === "occurrence"
             ? "inspection_anomaly_occurrence"
@@ -257,7 +259,7 @@ export async function POST(
         createdAt:
           FieldValue.serverTimestamp(),
         read: false,
-      });
+      })));
 
     return NextResponse.json({
       ok: true,

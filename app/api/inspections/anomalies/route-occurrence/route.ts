@@ -1,3 +1,4 @@
+import { inspectionNotificationRecipients } from "@/lib/inspections/notificationRecipients";
 import {
   NextRequest,
   NextResponse,
@@ -502,10 +503,11 @@ export async function POST(
         targetReference.id,
       );
 
-    if (reporterEmail) {
+    const recipients = await inspectionNotificationRecipients([reporterEmail], decoded.email);
+    if (recipients.length) {
       await Promise.all([
         sendPushToEmails({
-          emails: [reporterEmail],
+          emails: recipients,
           title:
             mode === "new"
               ? "Tu reporte es una nueva anormalidad"
@@ -516,11 +518,10 @@ export async function POST(
             notificationOrigin(request),
           ).toString(),
         }),
-        adminDB
+        ...recipients.map(recipient => adminDB
           .collection("notifications")
           .add({
-            userEmail:
-              reporterEmail,
+            userEmail: recipient,
             tipo:
               mode === "new"
                 ? "inspection_anomaly_created_from_occurrence"
@@ -537,7 +538,7 @@ export async function POST(
             createdAt:
               FieldValue.serverTimestamp(),
             read: false,
-          }),
+          })),
       ]);
     }
 

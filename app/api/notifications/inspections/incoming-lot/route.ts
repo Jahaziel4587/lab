@@ -1,3 +1,4 @@
+import { inspectionNotificationRecipients } from "@/lib/inspections/notificationRecipients";
 import { NextRequest, NextResponse } from "next/server";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminAuth, adminDB } from "@/lib/firebaseAdmin";
@@ -110,8 +111,7 @@ export async function POST(request: NextRequest) {
       const allowedQuantity = Number(methodPlan?.allowedRejectedQuantity ?? lot.allowedRejectedQuantity ?? 0);
       if (lot.inspectionResult !== "will_fail" || (!documentaryFailure && !shiftFailure && (methodPlan?.perShift || Number(lot.confirmedUniqueRejectedQuantity || 0) <= allowedQuantity))) return NextResponse.json({ ok: false, error: "El lote todavía no excede el límite confirmado." }, { status: 409 });
       if (lot.failureNotificationSent === true) return NextResponse.json({ ok: true, alreadyNotified: true });
-      const qmSnapshot = await adminDB.collection("users").where("isQualityManager", "==", true).get();
-      recipients = [pmEmail, ...qmSnapshot.docs.map((entry) => email(entry.data().email))];
+      recipients = [pmEmail];
       title = "Lote fuera del límite de aceptación";
       const methodName = inspectionMethod === "documentary" ? "documental" : inspectionMethod === "dimensional" ? "dimensional" : inspectionMethod === "functional" ? "funcional" : "visual";
       notificationBody = inspectionMethod === "documentary" ? `El lote ${clean(lot.lotName)} no pasó la inspección documental: se reportó un documento faltante por SPEC.` : methodPlan?.perShift ? `El lote ${clean(lot.lotName)} superó el límite de ${allowedQuantity} piezas rechazadas únicas en una inspección por turno del método ${methodName}.` : `El lote ${clean(lot.lotName)} tiene ${Number(lot.confirmedUniqueRejectedQuantity || 0)} piezas rechazadas confirmadas en inspección ${methodName}; el máximo permitido para ese método es ${allowedQuantity}. El lote no pasará la inspección.`;
@@ -123,14 +123,13 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: false, error: "El lote todavía no tiene un cierre válido." }, { status: 409 });
       }
       if (lot.finalRejectionNotificationSent === true) return NextResponse.json({ ok: true, alreadyNotified: true });
-      const qmSnapshot = await adminDB.collection("users").where("isQualityManager", "==", true).get();
-      recipients = [pmEmail, ...qmSnapshot.docs.map((entry) => email(entry.data().email))];
+      recipients = [pmEmail];
       title = "Inspección de lote finalizada";
       notificationBody = `El lote ${clean(lot.lotName)} finalizó con ${Number(lot.finalRejectedPieces)} piezas que no pasaron la inspección y no estarán disponibles para producción.`;
       type = "inspection_incoming_lot_finalized";
     }
 
-    recipients = Array.from(new Set(recipients.filter((recipient) => recipient && recipient !== senderEmail)));
+    recipients = await inspectionNotificationRecipients(recipients, senderEmail);
     await Promise.all([
       recipients.length > 0 ? sendPushToEmails({ emails: recipients, title, body: notificationBody, url: absoluteUrl }) : Promise.resolve(),
       ...recipients.map((recipient) => adminDB.collection("notifications").add({

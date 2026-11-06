@@ -1,3 +1,4 @@
+import { inspectionNotificationRecipients } from "@/lib/inspections/notificationRecipients";
 import {
   NextRequest,
   NextResponse,
@@ -240,10 +241,8 @@ export async function POST(request: NextRequest) {
     const relativeUrl =
       buildInspectionUrl(scope, anomalyId);
 
-    if (
-      reporterEmail &&
-      reporterEmail !== authenticatedEmail
-    ) {
+    const recipients = await inspectionNotificationRecipients([reporterEmail], authenticatedEmail);
+    if (recipients.length) {
       const notificationTitle =
         decision === "pass"
           ? "Anormalidad aprobada"
@@ -253,7 +252,7 @@ export async function POST(request: NextRequest) {
 
       await Promise.all([
         sendPushToEmails({
-          emails: [reporterEmail],
+          emails: recipients,
           title: notificationTitle,
           body: notificationBody,
           url: new URL(
@@ -261,8 +260,8 @@ export async function POST(request: NextRequest) {
             notificationOrigin(request),
           ).toString(),
         }),
-        adminDB.collection("notifications").add({
-          userEmail: reporterEmail,
+        ...recipients.map(recipient => adminDB.collection("notifications").add({
+          userEmail: recipient,
           tipo: "inspection_anomaly_decision",
           mensaje: notificationBody,
           scopeKey,
@@ -271,7 +270,7 @@ export async function POST(request: NextRequest) {
           url: relativeUrl,
           createdAt: FieldValue.serverTimestamp(),
           read: false,
-        }),
+        })),
       ]);
     }
 
