@@ -15,7 +15,7 @@ const api=load("app/api/inventario/route.ts",{
 "@/lib/inventario/voucher-numbering-server":numberingServer,
 "@/lib/inventario/request-preview":load("lib/inventario/request-preview.ts"),
 "@/lib/inventario/voucher-title":load("lib/inventario/voucher-title.ts"),
-"@/lib/inventario/kiv":{},"@/lib/inventario/cart":cart,"@/lib/inventario/fixed-recipes":{},"@/lib/inventario/storage":{},
+"@/lib/inventario/kiv":{},"@/lib/inventario/cart":cart,"@/lib/inventario/fixed-recipes":load("lib/inventario/fixed-recipes.ts"),"@/lib/inventario/storage":{},
 "@/lib/inventario/storage-server":{warehouseRecipients:async()=>["warehouse@example.com"],pushStorageAlerts:async()=>{}},
 "next/server":{after:()=>{},NextResponse:{json:(data,options)=>({status:options?.status||200,data})}},
 "@/lib/firebaseAdmin":{adminDB:db,adminAuth:{verifyIdToken:async()=>currentUser}},
@@ -74,12 +74,39 @@ try{
  assert.equal((await post({action:"voucher-title",site:"B1",voucherId:third,title:c.suggestedTitle,expectedSuggestion:c.suggestedTitle})).status,400,"Stale confirmation rejected");
  assert.equal((await post({action:"voucher-title",site:"B1",voucherId:third,title:confirm.title,expectedSuggestion:b.suggestedTitle})).status,400,"Duplicate ID rejected");
  assert.equal((await post({action:"voucher-title",site:"B1",voucherId:third,title:b.suggestedTitle,expectedSuggestion:b.suggestedTitle})).status,200);
+ // A period withdrawal may omit lines and change amounts without writing to its recipe.
+ const omittedId="component0000002", omittedPath="inventario_componentes/"+omittedId;
+ records.set(omittedPath,{...clone(records.get(componentPath)),id:omittedId,code:"001.306"});
+ const recipeId="recipe000000001", recipePath="inventario_componentes_fixed_recipes/"+recipeId;
+ const recipe={title:"Semanal",startDate:selection.mexicoToday(),intervalDays:7,active:true,version:1,lines:[{componentId,quantity:1},{componentId:omittedId,quantity:3}]};
+ records.set(recipePath,clone(recipe));
+ const withdrawal={action:"movement",kind:"salida",site:"B1",recipeId,recipeVersion:1,operationId:`recipe-${recipeId}-0`,project:"000.General",lines:[{...line,quantity:2}]};
+ for(const invalid of [
+   {...withdrawal,lines:[]},
+   {...withdrawal,lines:[{...line,componentId:"foreign00000001"}]},
+   {...withdrawal,lines:[line,line]},
+   {...withdrawal,lines:[{...line,destination:"externo:otro"}]},
+   {...withdrawal,lines:[{...line,quantity:1.5}]},
+   {...withdrawal,lines:[{...line,quantity:5}]},
+   {...withdrawal,recipeVersion:0},
+ ]) assert.equal((await post(invalid)).status,400);
+ assert.equal(records.get(componentPath).lots[0].stock.aprobado,4);
+ const adjusted=await post(withdrawal);assert.equal(adjusted.status,200);
+ const adjustedVoucher=await readVoucher(adjusted.data.voucherIds[0]);
+ assert.deepEqual(adjustedVoucher.lines.map(l=>[l.componentId,l.quantity]),[[componentId,2]]);
+ assert.equal(records.get(componentPath).lots[0].stock.aprobado,2);
+ assert.equal(records.get(omittedPath).lots[0].stock.aprobado,4);
+ assert.deepEqual(records.get(recipePath),recipe);
+ assert.deepEqual((await post(withdrawal)).data,adjusted.data);
+ assert.equal((await post({...withdrawal,lines:[{...line,quantity:1}]})).status,400);
+ assert.equal(records.get(componentPath).lots[0].stock.aprobado,2);
+ console.log("Recipe withdrawal: edited quantities, excluded materials, unchanged recipe and one withdrawal per period passed.");
  const remove={action:"delete-empty-lot",site:"B1",componentId,lotId};
  assert.equal((await post(remove)).status,400);currentUser={uid:"head"};
  assert.equal((await post(remove)).status,400);
  records.get(componentPath).lots[0].stock={aprobado:0,ssc:1};assert.equal((await post(remove)).status,400);
  records.get(componentPath).lots[0].stock={aprobado:0};assert.equal((await post(remove)).status,200);assert.equal(records.get(componentPath).lots.length,0);
- assert([...records.keys()].some(path=>path.startsWith("inventario_componentes_deleted_lots/")));assert.equal([...records.keys()].filter(path=>path.startsWith("inventario_vales/")).length,3);
+ assert([...records.keys()].some(path=>path.startsWith("inventario_componentes_deleted_lots/")));assert.equal([...records.keys()].filter(path=>path.startsWith("inventario_vales/")).length,4);
  console.log("Warehouse workflow: permissions, insufficient/cumulative stock, notifications, pending requests without deduction, fulfillment/retry, empty-lot deletion and retained audit/vouchers passed.");
 }finally{console.error=error;}
 })().catch(error=>{console.error(error);process.exitCode=1;});

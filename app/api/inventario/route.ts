@@ -217,8 +217,16 @@ export async function POST(req: NextRequest) {
       const recipe = snap.data() as FixedRecipe | undefined;
       if (!recipe?.active || b.action !== "movement" || b.kind !== "salida") fail("Receta inactiva o movimiento inválido.");
       recipeVersion = recipe.version;
+      if (b.recipeVersion !== undefined && b.recipeVersion !== recipeVersion) fail("La receta cambió. Recarga antes de confirmar.");
       const period = recipePeriod(recipe, mexicoToday());
-      if (b.operationId !== `recipe-${snap.id}-${period}` || !Array.isArray(b.lines) || b.lines.length !== recipe.lines.length || recipe.lines.some(l => !b.lines.some((line: CartLine) => line.componentId === l.componentId && line.quantity === l.quantity && line.destination === "externo:produccion")) || new Set(b.lines.map((l:CartLine)=>l.componentId)).size !== b.lines.length) fail("El retiro no coincide con la receta.");
+      if (b.operationId !== `recipe-${snap.id}-${period}`) fail("El periodo del retiro no coincide con la receta.");
+      if (!Array.isArray(b.lines) || b.lines.length < 1 || b.lines.length > recipe.lines.length) fail("Selecciona al menos un componente de la receta.");
+      const allowed = new Set(recipe.lines.map(l => l.componentId));
+      const selected = new Set<string>();
+      for (const line of b.lines as CartLine[]) {
+        if (!line || !allowed.has(line.componentId) || selected.has(line.componentId) || line.destination !== "externo:produccion") fail("El retiro solo admite componentes únicos de la receta con destino a producción.");
+        selected.add(line.componentId);
+      }
     }
     const operationId = str(b.operationId);
     if (!/^[a-zA-Z0-9-]{10,100}$/.test(operationId)) fail("Identificador de operación inválido.");
