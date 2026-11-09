@@ -4,12 +4,12 @@ const clone=v=>v===undefined?undefined:JSON.parse(JSON.stringify(v));
 const snap=p=>({id:p.split('/').at(-1),ref:doc(p),exists:records.has(p),data:()=>clone(records.get(p))});
 const doc=p=>({path:p,id:p.split('/').at(-1),get:async()=>snap(p)});
 const collection=name=>({doc:id=>doc(name+'/'+(id||'generated'+ ++counter)),get:async()=>{const docs=[...records.keys()].filter(p=>p.startsWith(name+'/')&&!p.slice(name.length+1).includes('/')).map(snap);if(afterQuerySnapshot)afterQuerySnapshot(name);return {docs};}});
-const db={collection,runTransaction:async fn=>{const writes=[];let writing=false;const get=r=>{assert(!writing,'Reads must precede writes');return r.get();};const result=await fn({get,getAll:(...refs)=>Promise.all(refs.map(get)),create:(r,d)=>{writing=true;writes.push([r.path,d,true]);},set:(r,d)=>{writing=true;writes.push([r.path,d,false]);}});if(beforeCommit){const hook=beforeCommit;beforeCommit=null;hook();}for(const [p,d,create]of writes)if(create&&records.has(p))throw Object.assign(new Error('ALREADY_EXISTS'),{code:6});for(const [p,d]of writes)records.set(p,clone(d));return result;}};
+const db={collection,getAll:(...refs)=>Promise.all(refs.map(ref=>ref.get())),runTransaction:async fn=>{const writes=[];let writing=false;const get=r=>{assert(!writing,'Reads must precede writes');return r.get();};const result=await fn({get,getAll:(...refs)=>Promise.all(refs.map(get)),create:(r,d)=>{writing=true;writes.push([r.path,d,true]);},set:(r,d)=>{writing=true;writes.push([r.path,d,false]);}});if(beforeCommit){const hook=beforeCommit;beforeCommit=null;hook();}for(const [p,d,create]of writes)if(create&&records.has(p))throw Object.assign(new Error('ALREADY_EXISTS'),{code:6});for(const [p,d]of writes)records.set(p,clone(d));return result;}};
 const stubs={
  'next/server':{NextResponse:{json:(data,o)=>({status:o?.status||200,data})}},
- '@/lib/firebaseAdmin':{adminDB:db},
+ '@/lib/firebaseAdmin':{adminDB:db,adminAuth:{verifyIdToken:async()=>({uid:'planner'})}},
  '@/lib/operacional/server':{identify:async()=>({uid:'planner'}),projectCatalog:async()=>[{code:'005',label:'005.XSONXS'},...load('lib/operacional/catalog.ts').DEFAULT_PROJECTS.filter(p=>p.code==='003')]},
- '@/lib/box/boxCatalog':{getDmrProjects:async()=>[{id:'project005',title:'DMR.005.XSONXS'},{id:'287774790255',title:'DMR.003.XSONX Handpiece'},{id:'unknown999',title:'DMR.999.Unregistered'}]},
+ '@/lib/box/boxCatalog':{getProjectWorkInstructions:async()=>({workInstructions:[{id:'WI.005.01',title:'Assembly'}]}),getDmrProjects:async()=>[{id:'project005',title:'DMR.005.XSONXS'},{id:'287774790255',title:'DMR.003.XSONX Handpiece'},{id:'unknown999',title:'DMR.999.Unregistered'}]},
 };
 const cache=new Map();function load(file){file=path.resolve(file);if(cache.has(file))return cache.get(file).exports;const m={exports:{}};cache.set(file,m);new Function('require','module','exports',ts.transpileModule(fs.readFileSync(file,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2020}}).outputText)(n=>{if(n in stubs)return stubs[n];if(n.startsWith('@/')||n.startsWith('.')){const p=n.startsWith('@/')?path.resolve(n.slice(2)):path.resolve(path.dirname(file),n);return load([p,p+'.ts',p+'.mjs'].find(x=>fs.existsSync(x)&&fs.statSync(x).isFile()));}return require(n);},m,m.exports);return m.exports;}
 (async()=>{
@@ -108,5 +108,24 @@ const cache=new Map();function load(file){file=path.resolve(file);if(cache.has(f
  records.set('operacional_proyectos/003',{name:'Custom Handpiece',label:'003.Custom Handpiece'});
  assert.equal((await server.projectCatalog()).find(p=>p.code==='003').label,'003.Custom Handpiece','Existing Operational project takes precedence over the default');
  console.log('DMR.003: opens MSOP, saves project articles in both warehouses, rejects foreign codes, preserves configured project labels and explains missing catalogue entries.');
+ const recipeApi=load('app/api/production/route.ts');
+ const recipeBody={action:'recipe',site:'B1',projectId:'project005',wiId:'WI.005.01',version:0};
+ const saveRecipe=(...ids)=>recipeApi.POST({headers:{get:()=>'Bearer test'},json:async()=>({...recipeBody,lines:ids.map(componentId=>({componentId,perUnit:1,extraPercent:0}))})});
+ for(const [id,code] of [['manual-subassembly','005.201'],['another-project','003.201'],['msop-mts','MTS-001'],['bom-only-mts','MTS-002']]){
+  records.set('inventario_componentes/'+id,{code,unit:'pz',lots:[]});
+ }
+ const catalogueId=createHash('sha256').update('project005').digest('hex');
+ records.set('production_boms/'+catalogueId,{items:[{code:'MTS-002'}]});
+ records.delete('production_msops/'+catalogueId);
+ assert.equal((await saveRecipe('bom-only-mts')).status,400,'A BOM-only MTS must not be selectable');
+ const manualRecipe=await saveRecipe('manual-subassembly');
+ assert.equal(manualRecipe.status,200,manualRecipe.data.error);
+ recipeBody.version=1;
+ records.set('production_msops/'+catalogueId,{items:[{code:'MTS-001'},{code:'003.201'}]});
+ assert.equal((await saveRecipe('another-project')).status,400,'Other-project items must be rejected even if present in an MSOP');
+ assert.equal((await saveRecipe('bom-only-mts')).status,400);
+ const withMts=await saveRecipe('manual-subassembly','msop-mts');
+ assert.equal(withMts.status,200,withMts.data.error);
+ console.log('Production recipes accept manual project subassemblies without an MSOP, restrict MTS to the MSOP, and reject other-project inventory.');
  console.log('TS codes: normalization, project boundaries, invalid formats, inventory type, MSOP finalization, stable QR/article IDs in B1/B2 and repeat imports passed.');
 })().catch(e=>{console.error(e);process.exitCode=1;});
