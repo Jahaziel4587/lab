@@ -4,7 +4,8 @@ import MsopEditor from "./MsopEditor";
 import PdoPanel from "./PdoPanel";
 import RecipeMaterialPicker from "@/app/components/inventario/RecipeMaterialPicker";
 import InventoryDialog from "@/app/components/inventario/InventoryDialog";
-import { productionCatalog } from "@/lib/production/client";
+import { projectCodeFromDmr } from "@/lib/production/bom";
+import { recipeMaterialAllowed } from "@/lib/production/codes";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "@/src/Context/AuthContext";
 import { useInspectionCatalog } from "@/app/inspecciones/hooks/useInspectionCatalog";
@@ -24,7 +25,7 @@ export default function Production() {
   const { user } = useAuth(), params = useSearchParams(), router = useRouter();
   const projectId = params.get("proyecto"), wiId = params.get("wi");
   const [msopBusy, setMsopBusy] = useState(false);
-  const [bomOpen, setBomOpen] = useState(false), [bomCodes, setBomCodes] = useState<string[]>([]), [bomProjectCode, setBomProjectCode] = useState("");
+  const [bomOpen, setBomOpen] = useState(false), [msopCodes, setMsopCodes] = useState<string[]>([]);
   const [tab, setTab] = useState<"recipe" | "pdo">("recipe");
   const [site, setSite] = useState<InventorySite>("B1");
   const projects = useInspectionCatalog({ scope: "projects" });
@@ -41,18 +42,18 @@ export default function Production() {
   }
   async function inventory() { const d = await inventoryRequest<{ components: InventoryComponent[] }>(undefined, "", site); setComponents(d.components); }
   useEffect(() => {
-    const controller = new AbortController(); setLines([]); setVersion(0); setError(""); setMessage(""); setLoading(true);
+    const controller = new AbortController(); setLines([]); setMsopCodes([]); setVersion(0); setError(""); setMessage(""); setLoading(true);
     if (!user || !projectId || !wiId) { setLoading(false); return () => controller.abort(); }
-    Promise.all([request(undefined, controller.signal), inventoryRequest<{ components: InventoryComponent[] }>(undefined, "", site)]).then(([d, inv]) => { if (controller.signal.aborted) return; setLines(d.recipe?.lines || []); setVersion(d.recipe?.version || 0); setComponents(inv.components); }).catch(e => { if (!controller.signal.aborted) setError(e.message); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    Promise.all([request(undefined, controller.signal), inventoryRequest<{ components: InventoryComponent[] }>(undefined, "", site)]).then(([d, inv]) => { if (controller.signal.aborted) return; setLines(d.recipe?.lines || []); setVersion(d.recipe?.version || 0); setMsopCodes(d.msopCodes || []); setComponents(inv.components); }).catch(e => { if (!controller.signal.aborted) setError(e.message); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
     // Request state follows the selected WI and warehouse.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user, projectId, wiId, site]);
   async function run(task: () => Promise<void>) { setBusy(true); setError(""); setMessage(""); try { await task(); } catch (e) { setError(e instanceof Error ? e.message : "No se pudo guardar."); } finally { setBusy(false); } }
   function navigate(p?: string, w?: string) { const q = new URLSearchParams(); if (p) q.set("proyecto", p); if (w) q.set("wi", w); router.push(`/production?${q}`); }
-  useEffect(() => { if (!projectId || !user) return; let live = true; productionCatalog<{bom:{projectCode?:string;items:{code:string}[]}}>(site, undefined, projectId).then(d => { if(live){setBomCodes(d.bom.items.map(i=>i.code));setBomProjectCode(d.bom.projectCode || "");}}).catch(e=>setError(e.message)); return ()=>{live=false;}; }, [projectId, site, user, bomOpen]);
-  const prefix = bomProjectCode || project?.title.match(/(?:^|\D)(\d{3})(?:\D|$)/)?.[1] || wi?.id.match(/WI\.(\d{3})/)?.[1] || "";
-  const recipeComponents = components.filter(c => bomCodes.includes(c.code));
+  const prefix = projectCodeFromDmr(project?.title || "");
+  const allowedMts = new Set(msopCodes);
+  const recipeComponents = components.filter(c => recipeMaterialAllowed(c.code, prefix, allowedMts));
 
   return <main className={`${inspectionPageClass} space-y-5`}>
     <button disabled={busy} className={inspectionBackButtonClass} onClick={() => wiId ? navigate(projectId!) : projectId ? navigate() : router.push("/")}><ArrowLeft size={17} />Regresar</button>
@@ -73,7 +74,7 @@ export default function Production() {
     {bomOpen && projectId && <InventoryDialog label="Production" wide title="Cargar MSOP" onClose={()=>{if(!msopBusy)setBomOpen(false);}}><h2 className="mb-4 text-xl font-semibold">MSOP · {project?.title}</h2><MsopEditor projectId={projectId} site={site} onBusyChange={setMsopBusy} onSaved={()=>{setMsopBusy(false);setBomOpen(false);void inventory();}} /></InventoryDialog>}
     {project && wi && !loading && <>
       <nav aria-label="Secciones de producción" className="flex w-fit max-w-full gap-1 rounded-2xl border border-white/10 bg-white/[0.035] p-1">{[{ id: "recipe", title: "Receta básica", Icon: Factory }, { id: "pdo", title: "PDO y material", Icon: ClipboardList }].map(({ id, title, Icon }) => <button disabled={busy} key={id} aria-pressed={tab === id} onClick={() => setTab(id as "recipe" | "pdo")} className={`inline-flex min-h-11 items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition ${tab === id ? "bg-emerald-400/10 text-emerald-300" : "text-white/55 hover:bg-white/5 hover:text-white"}`}><Icon size={16} />{title}</button>)}</nav>
-      {tab === "recipe" && <section className={`${panel} space-y-4`}><h2 className="text-lg font-semibold">Receta básica · {wi.title}</h2><p className="text-sm text-white/60">Cantidades por una unidad producida en esta WI. Selecciona dispositivos, componentes, MTS y materiales de manufactura del catálogo MSOP del proyecto, incluso sin existencias. Versión {version || "sin guardar"}.</p>
+      {tab === "recipe" && <section className={`${panel} space-y-4`}><h2 className="text-lg font-semibold">Receta básica · {wi.title}</h2><p className="text-sm text-white/60">Cantidades por una unidad producida en esta WI. Selecciona artículos del proyecto en el inventario, incluidos los subensambles registrados manualmente. Los MTS se limitan a los del MSOP. Puedes elegir materiales sin existencias. Versión {version || "sin guardar"}.</p>
         {!lines.length && <div className="rounded-2xl border border-dashed border-white/15 bg-black/15 p-7 text-center"><Factory size={28} className="mx-auto text-white/40" /><p className="mt-3 text-sm text-white/55">Esta WI aún no tiene receta. Agrega los materiales necesarios por unidad.</p></div>}
         {lines.map((l, i) => <div key={i} className="grid items-end gap-3 rounded-xl border border-white/10 p-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
           <Field label="Material"><RecipeMaterialPicker
