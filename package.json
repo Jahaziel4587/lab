@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev --turbopack",
-    "build": "node tests/voucher-numbering.cjs && node tests/voucher-numbering-concurrency.cjs && node tests/inventory-warehouse-workflow.cjs && node tests/production-pdo.cjs && node tests/production-ts-codes.cjs && node tests/production-msop.mjs && next build",
+    "build": "node tests/voucher-numbering.cjs && node tests/voucher-numbering-concurrency.cjs && node tests/inventory-warehouse-workflow.cjs && node tests/inventory-recipe-forecast.cjs && node tests/production-pdo.cjs && node tests/production-ts-codes.cjs && node tests/production-msop.mjs && next build",
     "start": "next start",
     "lint": "next lint"
   },

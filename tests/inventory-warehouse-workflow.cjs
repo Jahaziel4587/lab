@@ -78,9 +78,9 @@ try{
  const omittedId="component0000002", omittedPath="inventario_componentes/"+omittedId;
  records.set(omittedPath,{...clone(records.get(componentPath)),id:omittedId,code:"001.306"});
  const recipeId="recipe000000001", recipePath="inventario_componentes_fixed_recipes/"+recipeId;
- const recipe={title:"Semanal",startDate:selection.mexicoToday(),intervalDays:7,active:true,version:1,lines:[{componentId,quantity:1},{componentId:omittedId,quantity:3}]};
+ const recipe={title:"Semanal",startDate:"2099-01-01",intervalDays:7,active:true,version:1,lines:[{componentId,quantity:1},{componentId:omittedId,quantity:3}]};
  records.set(recipePath,clone(recipe));
- const withdrawal={action:"movement",kind:"salida",site:"B1",recipeId,recipeVersion:1,operationId:`recipe-${recipeId}-0`,project:"000.General",lines:[{...line,quantity:2}]};
+ const withdrawal={action:"movement",kind:"salida",site:"B1",recipeId,recipeVersion:1,operationId:"recipe-withdrawal-one",project:"000.General",lines:[{...line,quantity:2}]};
  for(const invalid of [
    {...withdrawal,lines:[]},
    {...withdrawal,lines:[{...line,componentId:"foreign00000001"}]},
@@ -100,13 +100,18 @@ try{
  assert.deepEqual((await post(withdrawal)).data,adjusted.data);
  assert.equal((await post({...withdrawal,lines:[{...line,quantity:1}]})).status,400);
  assert.equal(records.get(componentPath).lots[0].stock.aprobado,2);
- console.log("Recipe withdrawal: edited quantities, excluded materials, unchanged recipe and one withdrawal per period passed.");
+ const again=await post({...withdrawal,operationId:"recipe-withdrawal-two",lines:[{...line,quantity:1}]});
+ assert.equal(again.status,200,"A second intentional withdrawal is allowed on the same day");
+ assert.notDeepEqual(again.data,adjusted.data);
+ assert.equal(records.get(componentPath).lots[0].stock.aprobado,1);
+ assert.deepEqual(records.get(recipePath),recipe);
+ console.log("Recipe withdrawal: adjustments, unchanged recipe, multiple withdrawals and safe retries passed.");
  const remove={action:"delete-empty-lot",site:"B1",componentId,lotId};
  assert.equal((await post(remove)).status,400);currentUser={uid:"head"};
  assert.equal((await post(remove)).status,400);
  records.get(componentPath).lots[0].stock={aprobado:0,ssc:1};assert.equal((await post(remove)).status,400);
  records.get(componentPath).lots[0].stock={aprobado:0};assert.equal((await post(remove)).status,200);assert.equal(records.get(componentPath).lots.length,0);
- assert([...records.keys()].some(path=>path.startsWith("inventario_componentes_deleted_lots/")));assert.equal([...records.keys()].filter(path=>path.startsWith("inventario_vales/")).length,4);
+ assert([...records.keys()].some(path=>path.startsWith("inventario_componentes_deleted_lots/")));assert.equal([...records.keys()].filter(path=>path.startsWith("inventario_vales/")).length,5);
  console.log("Warehouse workflow: permissions, insufficient/cumulative stock, notifications, pending requests without deduction, fulfillment/retry, empty-lot deletion and retained audit/vouchers passed.");
 }finally{console.error=error;}
 })().catch(error=>{console.error(error);process.exitCode=1;});

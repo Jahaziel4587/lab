@@ -1,4 +1,5 @@
 {
+  "crons": [{ "path": "/api/inventario/recipe-stock-alerts", "schedule": "0 12 * * *" }],
   "rewrites": [
     { "source": "/", "destination": "/" }
   ],
