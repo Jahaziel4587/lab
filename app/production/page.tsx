@@ -2,6 +2,7 @@
 import { useEffect, useState } from "react";
 import MsopEditor from "./MsopEditor";
 import PdoPanel from "./PdoPanel";
+import RecipeMaterialPicker from "@/app/components/inventario/RecipeMaterialPicker";
 import InventoryDialog from "@/app/components/inventario/InventoryDialog";
 import { productionCatalog } from "@/lib/production/client";
 import { useSearchParams, useRouter } from "next/navigation";
@@ -75,12 +76,16 @@ export default function Production() {
       {tab === "recipe" && <section className={`${panel} space-y-4`}><h2 className="text-lg font-semibold">Receta básica · {wi.title}</h2><p className="text-sm text-white/60">Cantidades por una unidad producida en esta WI. Selecciona dispositivos, componentes, MTS y materiales de manufactura del catálogo MSOP del proyecto, incluso sin existencias. Versión {version || "sin guardar"}.</p>
         {!lines.length && <div className="rounded-2xl border border-dashed border-white/15 bg-black/15 p-7 text-center"><Factory size={28} className="mx-auto text-white/40" /><p className="mt-3 text-sm text-white/55">Esta WI aún no tiene receta. Agrega los materiales necesarios por unidad.</p></div>}
         {lines.map((l, i) => <div key={i} className="grid items-end gap-3 rounded-xl border border-white/10 p-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
-          <Field label="Material"><select disabled={busy} className={input} value={l.componentId} onChange={e => setLines(lines.map((x, n) => n === i ? { ...x, componentId: e.target.value } : x))}><option value="">Seleccionar material</option>{recipeComponents.map(c => <option disabled={lines.some((x,n) => n !== i && x.componentId === c.id)} key={c.id} value={c.id}>{c.code} · {c.name} ({c.unit})</option>)}</select></Field>
+          <Field label="Material"><RecipeMaterialPicker
+            components={recipeComponents.filter(c => !lines.some((x, n) => n !== i && x.componentId === c.id))}
+            value={l.componentId} disabled={busy} searchLabel="Buscar material por código o nombre" showAvailability={false}
+            onChange={id => setLines(prior => prior.map((x, n) => n === i ? { ...x, componentId: id } : x))}
+          /></Field>
           <Field label="Cantidad por unidad"><input disabled={busy} className={input} type="number" min="0.000001" step="any" value={l.perUnit || ""} onChange={e => setLines(lines.map((x,n) => n === i ? { ...x, perUnit: Number(e.target.value) } : x))} /></Field>
           <Field label="Extra por scrap (%)"><input disabled={busy} className={input} type="number" min="0" max="1000" step="any" value={l.extraPercent} onChange={e => setLines(lines.map((x,n) => n === i ? { ...x, extraPercent: Number(e.target.value) } : x))} /></Field>
           <button disabled={busy} aria-label={`Quitar material ${i + 1}`} className="inline-flex min-h-11 items-center justify-center rounded-xl border border-red-400/20 px-3 text-sm text-red-200 transition hover:bg-red-400/10" onClick={() => setLines(lines.filter((_, n) => n !== i))}><Trash2 size={16} /></button>
         </div>)}
-        <div className="flex flex-wrap gap-3"><button disabled={busy || lines.length >= 50} className={button} onClick={() => setLines([...lines, { componentId: "", perUnit: 1, extraPercent: 0 }])}><Plus size={16} />Agregar material</button><button disabled={busy || !lines.length} className={button} onClick={() => run(async () => { await request({ action: "recipe", lines, version }); setVersion(version + 1); setMessage("Receta guardada."); })}><Save size={16} />Guardar receta</button></div>
+        <div className="flex flex-wrap gap-3"><button disabled={busy || lines.length >= 50} className={button} onClick={() => setLines([...lines, { componentId: "", perUnit: 1, extraPercent: 0 }])}><Plus size={16} />Agregar material</button><button disabled={busy || !lines.length || lines.some(l => !l.componentId)} className={button} onClick={() => run(async () => { await request({ action: "recipe", lines, version }); setVersion(version + 1); setMessage("Receta guardada."); })}><Save size={16} />Guardar receta</button></div>
       </section>}
       {tab === "pdo" && <PdoPanel key={`${site}:${projectId}:${wiId}`} site={site} projectId={projectId!} wiId={wiId!} wiTitle={wi.title} version={version} />}
 
