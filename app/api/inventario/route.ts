@@ -7,7 +7,7 @@ import { sendPushToEmails } from "@/lib/pushNotifications";
 import { validateVoucherTitle } from "@/lib/inventario/voucher-title";
 import { kivLots } from "@/lib/inventario/kiv";
 import { validateCart } from "@/lib/inventario/cart";
-import { recipePeriod, type FixedRecipe } from "@/lib/inventario/fixed-recipes";
+import type { FixedRecipe } from "@/lib/inventario/fixed-recipes";
 import { storageConditions, componentConditionsFromLot } from "@/lib/inventario/storage";
 import { applyStorage, warehouseRecipients, pushStorageAlerts } from "@/lib/inventario/storage-server";
 import { after, NextRequest, NextResponse } from "next/server";
@@ -218,8 +218,6 @@ export async function POST(req: NextRequest) {
       if (!recipe?.active || b.action !== "movement" || b.kind !== "salida") fail("Receta inactiva o movimiento inválido.");
       recipeVersion = recipe.version;
       if (b.recipeVersion !== undefined && b.recipeVersion !== recipeVersion) fail("La receta cambió. Recarga antes de confirmar.");
-      const period = recipePeriod(recipe, mexicoToday());
-      if (b.operationId !== `recipe-${snap.id}-${period}`) fail("El periodo del retiro no coincide con la receta.");
       if (!Array.isArray(b.lines) || b.lines.length < 1 || b.lines.length > recipe.lines.length) fail("Selecciona al menos un componente de la receta.");
       const allowed = new Set(recipe.lines.map(l => l.componentId));
       const selected = new Set<string>();
