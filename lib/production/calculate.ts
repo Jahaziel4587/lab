@@ -7,3 +7,5 @@ export function requiredQuantity(perUnit: number, units: number, extraPercent: n
   if (!Number.isFinite(total) || total > 1e9) throw new Error("La cantidad calculada excede el límite.");
   return { base, extra: Number((total - base).toFixed(6)), total };
 }
+
+export type RecipeOutput = { componentId: string; quantity: number };
