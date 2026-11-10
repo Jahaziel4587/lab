@@ -3,7 +3,7 @@ const records=new Map();let counter=0,afterQuerySnapshot=null,beforeCommit=null;
 const clone=v=>v===undefined?undefined:JSON.parse(JSON.stringify(v));
 const snap=p=>({id:p.split('/').at(-1),ref:doc(p),exists:records.has(p),data:()=>clone(records.get(p))});
 const doc=p=>({path:p,id:p.split('/').at(-1),get:async()=>snap(p)});
-const collection=name=>({doc:id=>doc(name+'/'+(id||'generated'+ ++counter)),get:async()=>{const docs=[...records.keys()].filter(p=>p.startsWith(name+'/')&&!p.slice(name.length+1).includes('/')).map(snap);if(afterQuerySnapshot)afterQuerySnapshot(name);return {docs};}});
+const collection=(name,filters=[])=>({select:()=>collection(name,filters),where:(field,op,value)=>collection(name,[...filters,[field,value]]),doc:id=>doc(name+'/'+(id||'generated'+ ++counter)),get:async()=>{const docs=[...records.keys()].filter(p=>p.startsWith(name+'/')&&!p.slice(name.length+1).includes('/')).map(snap).filter(d=>filters.every(([field,value])=>d.data()[field]===value));if(afterQuerySnapshot)afterQuerySnapshot(name);return {docs};}});
 const db={collection,getAll:(...refs)=>Promise.all(refs.map(ref=>ref.get())),runTransaction:async fn=>{const writes=[];let writing=false;const get=r=>{assert(!writing,'Reads must precede writes');return r.get();};const result=await fn({get,getAll:(...refs)=>Promise.all(refs.map(get)),create:(r,d)=>{writing=true;writes.push([r.path,d,true]);},set:(r,d)=>{writing=true;writes.push([r.path,d,false]);}});if(beforeCommit){const hook=beforeCommit;beforeCommit=null;hook();}for(const [p,d,create]of writes)if(create&&records.has(p))throw Object.assign(new Error('ALREADY_EXISTS'),{code:6});for(const [p,d]of writes)records.set(p,clone(d));return result;}};
 const stubs={
  'next/server':{NextResponse:{json:(data,o)=>({status:o?.status||200,data})}},
@@ -133,10 +133,30 @@ const cache=new Map();function load(file){file=path.resolve(file);if(cache.has(f
  }
  assert.equal((await saveRecipeWithOutput({componentId:'project-output',quantity:2},'manual-subassembly')).status,200);
  const savedRecipe = [...records.values()].find(r=>r.wiId==='WI.005.01' && r.version===3);
- assert.deepEqual(savedRecipe.output,{componentId:'project-output',quantity:2});
+ assert.deepEqual(savedRecipe.output,{componentId:'005.202',quantity:2});
  recipeBody.version=3;
  assert.equal((await saveRecipeWithOutput(null,'manual-subassembly')).status,200);
  assert.equal([...records.values()].find(r=>r.wiId==='WI.005.01' && r.version===4).output,null);
+
+ const {productionRecipeKey}=load('lib/production/key.ts');
+ const recipePath=site=>'production_recipes/'+productionRecipeKey(site,'project005','WI.005.01');
+ records.delete(recipePath('shared'));
+ records.set(recipePath('B1'),{version:7,updatedAt:'2026-11-10T00:00:00Z',wiTitle:'Assembly',lines:[{componentId:'manual-subassembly',perUnit:2,extraPercent:0}],output:{componentId:'project-output',quantity:1}});
+ records.set(recipePath('B2'),{version:8,updatedAt:'2026-11-09T00:00:00Z',lines:[]});
+ records.set('inventario_b2_componentes/different-warehouse-id',{code:'005.201',name:'B2 assembly input',unit:'pz',lots:[{id:'b2-lot',name:'B2',stock:{aprobado:10}}]});
+ const capacityApi=load('app/api/production/capacity/route.ts');
+ const get=(route,site)=>route.GET({headers:{get:()=>'Bearer test'},nextUrl:{searchParams:new URLSearchParams({site,projectId:'project005',wiId:'WI.005.01'})}});
+ const [b1Recipe,b2Recipe,b1Capacity,b2Capacity]=await Promise.all([get(recipeApi,'B1'),get(recipeApi,'B2'),get(capacityApi,'B1'),get(capacityApi,'B2')]);
+ assert.deepEqual(b1Recipe.data.recipe,b2Recipe.data.recipe);
+ assert.equal(b2Recipe.data.recipe.lines[0].componentId,'005.201');
+ assert.equal(b2Recipe.data.recipe.output.componentId,'005.202');
+ assert.equal(b1Capacity.data.capacity,0);
+ assert.equal(b2Capacity.data.capacity,5);
+ recipeBody.version=7;
+ assert.equal((await saveRecipeWithOutput({componentId:'005.202',quantity:1},'005.201')).status,200);
+ assert.equal(records.get(recipePath('shared')).version,8);
+ assert.equal(records.get(recipePath('B1')).version,7);
+ assert.equal((await saveRecipe('005.201')).status,400,'Stale recipe edits cannot overwrite a shared recipe');
  console.log('Production recipes accept manual project subassemblies without an MSOP, restrict MTS to the MSOP, and reject other-project inventory.');
  console.log('TS codes: normalization, project boundaries, invalid formats, inventory type, MSOP finalization, stable QR/article IDs in B1/B2 and repeat imports passed.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

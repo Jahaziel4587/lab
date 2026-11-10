@@ -6,6 +6,7 @@ import { mexicoToday } from "@/lib/inventario/selection";
 import { cleanPdoDetails, pdoUnits, productionCapacity, type ProductionPdo, type ProductionRequest, type LotChoice } from "@/lib/production/pdo";
 import { requiredQuantity } from "@/lib/production/calculate";
 import { productionRecipeKey } from "@/lib/production/key";
+import { articleCode, chooseRecipe, recipeArticles, recipeByCode, recipeInventory, recipeRefs } from "@/lib/production/shared-recipes";
 import type { InventoryComponent } from "@/lib/inventario/types";
 import { warehouseRecipients } from "@/lib/inventario/storage-server";
 import { sendPushToEmails } from "@/lib/pushNotifications";
@@ -41,16 +42,26 @@ export async function POST(req: NextRequest) {
       const id = operation(b.operationId), pdo = text(b.pdo), totalUnits = pdoUnits(b.totalUnits), details = cleanPdoDetails(b.details);
       const fingerprint = createHash("sha256").update(JSON.stringify({ recipeId, pdo, totalUnits, details, uid: user.uid })).digest("hex");
       const unique = adminDB.collection("production_pdo_numbers").doc(createHash("sha256").update(JSON.stringify([recipeId, pdo.toUpperCase()])).digest("hex"));
+      const inventory = await recipeInventory(adminDB), articles = recipeArticles(inventory, site);
+      const refs = recipeRefs(adminDB, projectId, wiId);
       await adminDB.runTransaction(async t => {
-        const [prior, number, recipeSnap] = await Promise.all([t.get(pdos.doc(id)), t.get(unique), t.get(adminDB.collection("production_recipes").doc(recipeId))]);
+        const [prior, number, recipeSnaps] = await Promise.all([t.get(pdos.doc(id)), t.get(unique), Promise.all(refs.map(ref => t.get(ref)))]);
         if (prior.exists) { if (prior.data()?.fingerprint !== fingerprint) throw new Error("La operación ya se usó con otros datos."); return; }
         if (number.exists) throw new Error("Esta PDO ya existe en esta WI y almacén. Ábrela para solicitar material.");
-        const recipe = recipeSnap.data(); if (!recipe?.lines?.length) throw new Error("Guarda primero una receta para esta WI y almacén.");
-        const cs = await t.getAll(...recipe.lines.map((l: { componentId: string }) => adminDB.collection(names.components).doc(l.componentId)));
-        const lines = recipe.lines.map((l: { componentId: string; perUnit: number; extraPercent: number }, i: number) => {
-          const c = cs[i].data() as InventoryComponent | undefined; if (!c) throw new Error("Un componente ya no existe.");
+        const recipe = recipeByCode(chooseRecipe(recipeSnaps), inventory);
+        if (!recipe?.lines?.length) throw new Error("Guarda primero la receta de esta WI.");
+        const ids = recipe.lines.map(l => {
+          const item = articles.get(l.componentId);
+          if (!item) throw new Error(`${l.componentId}: artículo no disponible en el catálogo de ${site}.`);
+          return item.id;
+        });
+        const cs = await t.getAll(...ids.map(id => adminDB.collection(names.components).doc(id)));
+        const lines = recipe.lines.map((l, i) => {
+          const c = cs[i].data() as InventoryComponent | undefined;
+          if (!c || articleCode(c.code) !== l.componentId) throw new Error(`${l.componentId}: el artículo cambió en ${site}. Recarga e inténtalo otra vez.`);
+          if (l.unit && l.unit !== c.unit) throw new Error(`${c.code}: la unidad de ${site} (${c.unit}) no coincide con la receta (${l.unit}).`);
           requiredQuantity(l.perUnit, 1, l.extraPercent, c.unit);
-          return { ...l, code: c.code, name: c.name, unit: c.unit };
+          return { componentId: ids[i], perUnit: l.perUnit, extraPercent: l.extraPercent, code: c.code, name: c.name, unit: c.unit };
         });
         t.create(pdos.doc(id), { recipeId, site, projectId, projectName: recipe.projectName, wiId, wiTitle: recipe.wiTitle, pdo, totalUnits, requestedUnits: 0, recipeVersion: recipe.version, lines, lots: {}, details, createdAt: now, createdBy: user.uid, fingerprint });
         t.create(unique, { pdoId: id });
