@@ -110,8 +110,9 @@ const cache=new Map();function load(file){file=path.resolve(file);if(cache.has(f
  console.log('DMR.003: opens MSOP, saves project articles in both warehouses, rejects foreign codes, preserves configured project labels and explains missing catalogue entries.');
  const recipeApi=load('app/api/production/route.ts');
  const recipeBody={action:'recipe',site:'B1',projectId:'project005',wiId:'WI.005.01',version:0};
- const saveRecipe=(...ids)=>recipeApi.POST({headers:{get:()=>'Bearer test'},json:async()=>({...recipeBody,lines:ids.map(componentId=>({componentId,perUnit:1,extraPercent:0}))})});
- for(const [id,code] of [['manual-subassembly','005.201'],['another-project','003.201'],['msop-mts','MTS-001'],['bom-only-mts','MTS-002']]){
+ const saveRecipeWithOutput=(output,...ids)=>recipeApi.POST({headers:{get:()=>'Bearer test'},json:async()=>({...recipeBody,output,lines:ids.map(componentId=>({componentId,perUnit:1,extraPercent:0}))})});
+ const saveRecipe=(...ids)=>saveRecipeWithOutput(undefined,...ids);
+ for(const [id,code] of [['project-output','005.202'],['manual-subassembly','005.201'],['another-project','003.201'],['msop-mts','MTS-001'],['bom-only-mts','MTS-002']]){
   records.set('inventario_componentes/'+id,{code,unit:'pz',lots:[]});
  }
  const catalogueId=createHash('sha256').update('project005').digest('hex');
@@ -126,6 +127,16 @@ const cache=new Map();function load(file){file=path.resolve(file);if(cache.has(f
  assert.equal((await saveRecipe('bom-only-mts')).status,400);
  const withMts=await saveRecipe('manual-subassembly','msop-mts');
  assert.equal(withMts.status,200,withMts.data.error);
+ recipeBody.version=2;
+ for (const output of [{componentId:'another-project',quantity:2},{componentId:'manual-subassembly',quantity:2},{componentId:'project-output',quantity:1.5}]) {
+  assert.equal((await saveRecipeWithOutput(output,'manual-subassembly')).status,400);
+ }
+ assert.equal((await saveRecipeWithOutput({componentId:'project-output',quantity:2},'manual-subassembly')).status,200);
+ const savedRecipe = [...records.values()].find(r=>r.wiId==='WI.005.01' && r.version===3);
+ assert.deepEqual(savedRecipe.output,{componentId:'project-output',quantity:2});
+ recipeBody.version=3;
+ assert.equal((await saveRecipeWithOutput(null,'manual-subassembly')).status,200);
+ assert.equal([...records.values()].find(r=>r.wiId==='WI.005.01' && r.version===4).output,null);
  console.log('Production recipes accept manual project subassemblies without an MSOP, restrict MTS to the MSOP, and reject other-project inventory.');
  console.log('TS codes: normalization, project boundaries, invalid formats, inventory type, MSOP finalization, stable QR/article IDs in B1/B2 and repeat imports passed.');
 })().catch(e=>{console.error(e);process.exitCode=1;});

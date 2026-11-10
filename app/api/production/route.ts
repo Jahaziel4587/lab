@@ -2,9 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { adminAuth, adminDB } from "@/lib/firebaseAdmin";
 import { getDmrProjects, getProjectWorkInstructions } from "@/lib/box/boxCatalog";
 import { inventorySite, inventoryCollections } from "@/lib/inventario/sites";
-import { requiredQuantity, type RecipeLine } from "@/lib/production/calculate";
+import { requiredQuantity, type RecipeLine, type RecipeOutput } from "@/lib/production/calculate";
 import { projectCodeFromDmr } from "@/lib/production/bom";
-import { recipeMaterialAllowed } from "@/lib/production/codes";
+import { recipeMaterialAllowed, recipeOutputAllowed } from "@/lib/production/codes";
 import { createHash } from "node:crypto";
 import { projectCatalog } from "@/lib/operacional/server";
 export const runtime = "nodejs";
@@ -43,7 +43,16 @@ export async function POST(req: NextRequest) {
       if (new Set(lines.map(l => l.componentId)).size !== lines.length) throw new Error("El material está repetido.");
       const cs = await adminDB.getAll(...lines.map(l => adminDB.collection(inventoryCollections(site).components).doc(l.componentId)));
       lines.forEach((l, i) => { if (!cs[i].exists) throw new Error("Material inexistente."); if (!recipeMaterialAllowed(cs[i].data()!.code, prefix, allowedMts)) throw new Error("Selecciona un artículo del proyecto o un MTS de su MSOP."); requiredQuantity(l.perUnit, 1, l.extraPercent, cs[i].data()!.unit); });
-      await adminDB.runTransaction(async t => { const old = await t.get(ref); if ((old.data()?.version || 0) !== b.version) throw new Error("La receta cambió. Recarga antes de guardar."); t.set(ref, { site, projectId, projectName, wiId, wiTitle: wi.title, lines, version: (old.data()?.version || 0) + 1, updatedAt: now, updatedBy: user.uid }); });
+      let output: RecipeOutput | null = null;
+      if (b.output != null) {
+        const componentId = text(b.output.componentId), quantity = b.output.quantity;
+        if (componentId.includes("/") || !Number.isSafeInteger(quantity) || quantity < 1 || quantity > 1e9) throw new Error("Indica una cantidad entera de salida válida.");
+        if (lines.some(l => l.componentId === componentId)) throw new Error("La salida de una WI no puede ser uno de sus insumos.");
+        const article = (await adminDB.collection(inventoryCollections(site).components).doc(componentId).get()).data();
+        if (!article || !recipeOutputAllowed(article.code, prefix)) throw new Error("Selecciona un ensamble o subensamble del proyecto.");
+        output = { componentId, quantity };
+      }
+      await adminDB.runTransaction(async t => { const old = await t.get(ref); if ((old.data()?.version || 0) !== b.version) throw new Error("La receta cambió. Recarga antes de guardar."); t.set(ref, { site, projectId, projectName, wiId, wiTitle: wi.title, lines, ...(b.output === undefined && old.data()?.output ? { output: old.data()!.output } : { output }), version: (old.data()?.version || 0) + 1, updatedAt: now, updatedBy: user.uid }); });
       return NextResponse.json({ ok: true });
     }
     throw new Error("Crea o abre una PDO y registra una solicitud parcial de material desde PDO y material.");

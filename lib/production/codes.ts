@@ -12,3 +12,10 @@ export function recipeMaterialAllowed(value: string, projectCode: string, msopCo
     return parsed.type === "MTS" ? msopCodes.has(parsed.code) : !!projectCode && parsed.projectCode === projectCode;
   } catch { return false; }
 }
+
+export function recipeOutputAllowed(value: string, projectCode: string) {
+  try {
+    const parsed = parseComponentCode(value);
+    return !!projectCode && parsed.projectCode === projectCode && ["100", "200"].includes(parsed.type);
+  } catch { return false; }
+}
