@@ -44,10 +44,10 @@ export default function LotLabelDownload({ componentId, code, lotId, lotName }: 
     }
   }
 
-  return <>
-    <button type="button" className={`${secondaryButtonClass} ml-3 mt-4`} disabled={busy} onClick={download}>
+  return <div className="ml-auto max-w-full text-right">
+    <button type="button" className={secondaryButtonClass} disabled={busy} onClick={download}>
       <Download size={15} />{busy ? "Generando etiqueta…" : "Descargar etiqueta P-touch"}
     </button>
-    {error && <p role="alert" className="mt-2 text-xs text-red-300">{error}</p>}
-  </>;
+    {error && <p role="alert" className="mt-2 max-w-60 break-words text-xs text-red-300">{error}</p>}
+  </div>;
 }
