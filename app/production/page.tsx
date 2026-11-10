@@ -10,7 +10,6 @@ import { recipeMaterialAllowed, recipeOutputAllowed } from "@/lib/production/cod
 import { useSearchParams, useRouter } from "next/navigation";
 import { useAuth } from "@/src/Context/AuthContext";
 import { useInspectionCatalog } from "@/app/inspecciones/hooks/useInspectionCatalog";
-import { inventoryRequest } from "@/lib/inventario/service";
 import { type InventorySite } from "@/lib/inventario/sites";
 import type { InventoryComponent } from "@/lib/inventario/types";
 import { ArrowLeft, Factory, Plus, Save, Trash2, ClipboardList, CheckCircle2, LoaderCircle } from "lucide-react";
@@ -39,19 +38,18 @@ export default function Production() {
   const [busy, setBusy] = useState(false), [loading, setLoading] = useState(false), [error, setError] = useState(""), [message, setMessage] = useState("");
   async function request(body?: unknown, signal?: AbortSignal) {
     if (!user) throw new Error("Inicia sesión.");
-    const q = new URLSearchParams({ site, projectId: projectId || "", wiId: wiId || "" });
-    const r = await fetch(`/api/production?${q}`, { method: body ? "POST" : "GET", headers: { Authorization: `Bearer ${await user.getIdToken()}`, "Content-Type": "application/json" }, ...(body ? { body: JSON.stringify({ ...(body as object), site, projectId, wiId }) } : {}), signal });
+    const q = new URLSearchParams({ projectId: projectId || "", wiId: wiId || "" });
+    const r = await fetch(`/api/production?${q}`, { method: body ? "POST" : "GET", headers: { Authorization: `Bearer ${await user.getIdToken()}`, "Content-Type": "application/json" }, ...(body ? { body: JSON.stringify({ ...(body as object), projectId, wiId }) } : {}), signal });
     const d = await r.json(); if (!r.ok) throw new Error(d.error); return d;
   }
-  async function inventory() { const d = await inventoryRequest<{ components: InventoryComponent[] }>(undefined, "", site); setComponents(d.components); }
   useEffect(() => {
     const controller = new AbortController(); setLines([]); setOutput(null); setMsopCodes([]); setVersion(0); setError(""); setMessage(""); setLoading(true);
     if (!user || !projectId || !wiId) { setLoading(false); return () => controller.abort(); }
-    Promise.all([request(undefined, controller.signal), inventoryRequest<{ components: InventoryComponent[] }>(undefined, "", site)]).then(([d, inv]) => { if (controller.signal.aborted) return; setLines(d.recipe?.lines || []); setVersion(d.recipe?.version || 0); setOutput(d.recipe?.output || null); setMsopCodes(d.msopCodes || []); setComponents(inv.components); }).catch(e => { if (!controller.signal.aborted) setError(e.message); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
+    request(undefined, controller.signal).then(d => { if (controller.signal.aborted) return; setLines(d.recipe?.lines || []); setVersion(d.recipe?.version || 0); setOutput(d.recipe?.output || null); setMsopCodes(d.msopCodes || []); setComponents(d.articles || []); }).catch(e => { if (!controller.signal.aborted) setError(e.message); }).finally(() => { if (!controller.signal.aborted) setLoading(false); });
     return () => controller.abort();
-    // Request state follows the selected WI and warehouse.
+    // Request state follows the selected WI.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, projectId, wiId, site]);
+  }, [user, projectId, wiId]);
   async function run(task: () => Promise<void>) { setBusy(true); setError(""); setMessage(""); try { await task(); } catch (e) { setError(e instanceof Error ? e.message : "No se pudo guardar."); } finally { setBusy(false); } }
   function navigate(p?: string, w?: string) { const q = new URLSearchParams(); if (p) q.set("proyecto", p); if (w) q.set("wi", w); router.push(`/production?${q}`); }
   const prefix = projectCodeFromDmr(project?.title || "");
@@ -65,7 +63,7 @@ export default function Production() {
       <InspectionFlowProgress label="Progreso de producción" steps={["Proyecto", "Work instruction", "Receta y PDO"]} currentStep={wiId ? 3 : projectId ? 2 : 1} />
       <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0"><p className="text-xs font-semibold uppercase tracking-[0.22em] text-emerald-300">Production</p><h1 className="mt-3 break-words text-2xl font-semibold sm:text-3xl">{wi?.title || project?.title || "Proyectos de producción"}</h1><p className="mt-3 text-sm leading-relaxed text-white/60">{wiId ? "Define la receta por ejecución y prepara el material de cada orden de producción." : projectId ? "Selecciona una In process work instruction del proyecto." : "Selecciona un proyecto del DMR para consultar sus instrucciones de proceso."}</p></div>
-        {wiId && <div className="w-full sm:w-48"><Field label="Inventario de materiales"><select disabled={busy} className={input} value={site} onChange={e => setSite(e.target.value as InventorySite)}><option value="B1">Almacén B1</option><option value="B2">Almacén B2</option></select></Field></div>}
+        {wiId && tab === "pdo" && <div className="w-full sm:w-48"><Field label="Inventario de materiales"><select disabled={busy} className={input} value={site} onChange={e => setSite(e.target.value as InventorySite)}><option value="B1">Almacén B1</option><option value="B2">Almacén B2</option></select></Field></div>}
       </div>
       {projectId && !wiId && <div className="mt-5 flex flex-wrap gap-3">
         <button className={secondaryButtonClass} onClick={() => setBomOpen(true)}>Cargar MSOP</button>
@@ -81,10 +79,10 @@ export default function Production() {
     {capacityOpen && projectId && !wiId && <InventoryDialog label="Production" wide title="Capacidad de producción" onClose={() => setCapacityOpen(false)}>
       <CapacityPanel key={projectId} projectId={projectId} projectTitle={project?.title || ""} initialSite={site} onSelectWi={(id, selectedSite) => { setSite(selectedSite); setCapacityOpen(false); navigate(projectId, id); }} />
     </InventoryDialog>}
-    {bomOpen && projectId && <InventoryDialog label="Production" wide title="Cargar MSOP" onClose={()=>{if(!msopBusy)setBomOpen(false);}}><h2 className="mb-4 text-xl font-semibold">MSOP · {project?.title}</h2><MsopEditor projectId={projectId} site={site} onBusyChange={setMsopBusy} onSaved={()=>{setMsopBusy(false);setBomOpen(false);void inventory();}} /></InventoryDialog>}
+    {bomOpen && projectId && <InventoryDialog label="Production" wide title="Cargar MSOP" onClose={()=>{if(!msopBusy)setBomOpen(false);}}><h2 className="mb-4 text-xl font-semibold">MSOP · {project?.title}</h2><MsopEditor projectId={projectId} site={site} onBusyChange={setMsopBusy} onSaved={()=>{setMsopBusy(false);setBomOpen(false);}} /></InventoryDialog>}
     {project && wi && !loading && <>
       <nav aria-label="Secciones de producción" className="flex w-fit max-w-full gap-1 rounded-2xl border border-white/10 bg-white/[0.035] p-1">{[{ id: "recipe", title: "Receta básica", Icon: Factory }, { id: "pdo", title: "PDO y material", Icon: ClipboardList }].map(({ id, title, Icon }) => <button disabled={busy} key={id} aria-pressed={tab === id} onClick={() => setTab(id as "recipe" | "pdo")} className={`inline-flex min-h-11 items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition ${tab === id ? "bg-emerald-400/10 text-emerald-300" : "text-white/55 hover:bg-white/5 hover:text-white"}`}><Icon size={16} />{title}</button>)}</nav>
-      {tab === "recipe" && <section className={`${panel} space-y-4`}><h2 className="text-lg font-semibold">Receta básica · {wi.title}</h2><p className="text-sm text-white/60">Cantidades por una ejecución de esta WI. Selecciona artículos del proyecto en el inventario, incluidos los subensambles registrados manualmente. Los MTS se limitan a los del MSOP. Puedes elegir materiales sin existencias. Versión {version || "sin guardar"}.</p>
+      {tab === "recipe" && <section className={`${panel} space-y-4`}><h2 className="text-lg font-semibold">Receta básica · {wi.title}</h2><p className="text-sm text-white/60">Receta compartida por B1 y B2. Las cantidades corresponden a una ejecución de esta WI. Selecciona artículos del proyecto en el inventario, incluidos los subensambles registrados manualmente. Los MTS se limitan a los del MSOP. Puedes elegir materiales sin existencias. Versión {version || "sin guardar"}.</p>
         {!lines.length && <div className="rounded-2xl border border-dashed border-white/15 bg-black/15 p-7 text-center"><Factory size={28} className="mx-auto text-white/40" /><p className="mt-3 text-sm text-white/55">Esta WI aún no tiene receta. Agrega los materiales necesarios por unidad.</p></div>}
         {lines.map((l, i) => <div key={i} className="grid items-end gap-3 rounded-xl border border-white/10 p-3 sm:grid-cols-2 lg:grid-cols-[minmax(0,2fr)_minmax(0,1fr)_minmax(0,1fr)_auto]">
           <Field label="Material"><RecipeMaterialPicker

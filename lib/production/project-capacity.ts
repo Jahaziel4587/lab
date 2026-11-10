@@ -2,7 +2,7 @@ import { requiredQuantity, type RecipeOutput } from "./calculate";
 import { capacityForStock, productionCapacity, type PdoLine, type ProductionRequest } from "./pdo";
 import type { InventoryComponent } from "../inventario/types";
 
-export type CapacityStep = { id: string; title: string; lines: PdoLine[]; output?: RecipeOutput | null; missing?: boolean };
+export type CapacityStep = { id: string; title: string; lines: PdoLine[]; output?: RecipeOutput | null; missing?: boolean; issues?: string[] };
 type Lot = { name: string; stock: number; projected: boolean };
 const limit = 1e9;
 const round = (n: number) => Number(n.toFixed(6));
@@ -13,7 +13,8 @@ export function projectCapacity(steps: CapacityStep[], components: InventoryComp
   const articles = new Map(components.map(c => [c.id, c]));
   const lines = new Map<string, PdoLine>();
   for (const step of steps) {
-    if (step.missing || !step.lines.length) issues.push(`${step.title}: falta la receta o un insumo ya no está en inventario.`);
+    if (step.issues?.length) issues.push(...step.issues.map(issue => `${step.title}: ${issue}`));
+    else if (step.missing || !step.lines.length) issues.push(`${step.title}: falta la receta o un insumo ya no está en inventario.`);
     if (step.output) {
       if (!articles.has(step.output.componentId)) issues.push(`${step.title}: el artículo de salida ya no está en inventario.`);
       if (owners.has(step.output.componentId)) issues.push(`${step.title}: hay más de una WI que produce el mismo artículo. Define una sola ruta de producción.`);

@@ -3,7 +3,7 @@ let records = new Map(), uid = 'planner', counter = 0;
 const clone = x => x === undefined ? undefined : JSON.parse(JSON.stringify(x));
 const snapshot = p => ({ id: p.split('/').at(-1), ref: doc(p), exists: records.has(p), data: () => clone(records.get(p)) });
 function doc(p) { return { path: p, id: p.split('/').at(-1), get: async () => snapshot(p) }; }
-function collection(name, filters = []) { return { id: name, doc: id => doc(name + '/' + (id || 'generated' + ++counter)), where: (field, op, value) => collection(name, [...filters, [field, op, value]]), get: async () => { const docs = [...records.keys()].filter(p => p.startsWith(name + '/') && !p.slice(name.length + 1).includes('/')).map(snapshot).filter(d => filters.every(([f, op, v]) => op === 'array-contains' ? d.data()[f]?.includes(v) : op === '>=' ? d.data()[f] >= v : op === '<=' ? d.data()[f] <= v : d.data()[f] === v)); return { docs, empty: !docs.length }; } }; }
+function collection(name, filters = []) { return { id: name, select: () => collection(name, filters), doc: id => doc(name + '/' + (id || 'generated' + ++counter)), where: (field, op, value) => collection(name, [...filters, [field, op, value]]), get: async () => { const docs = [...records.keys()].filter(p => p.startsWith(name + '/') && !p.slice(name.length + 1).includes('/')).map(snapshot).filter(d => filters.every(([f, op, v]) => op === 'array-contains' ? d.data()[f]?.includes(v) : op === '>=' ? d.data()[f] >= v : op === '<=' ? d.data()[f] <= v : d.data()[f] === v)); return { docs, empty: !docs.length }; } }; }
 const db = { collection, getAll: async (...refs) => Promise.all(refs.map(r => r.get())), runTransaction: async fn => {
   const writes = []; let writing = false;
   const read = r => { assert(!writing, 'Firestore reads must precede writes'); return r.get(); };
@@ -96,6 +96,18 @@ const fulfill = r => ({ action: 'movement', site: 'B1', kind: 'salida', operatio
     assert.equal(records.get('production_pdos/' + second.operationId).requestedUnits, 0);
     uid = 'warehouse'; assert.equal((await post(fulfill(secondRequest), inventory)).status, 400, 'Cancelled request cannot withdraw');
     uid = 'planner'; assert.equal((await post({ ...secondRequest, operationId: 'request-00000003' })).status, 200, 'Cancellation restores pending units');
+    // A shared recipe resolves B2 document IDs while PDOs retain their warehouse scope.
+    seed();
+    const b2Screw = { ...components[0], id: "b2-screw-unique" };
+    records.set("inventario_b2_componentes/" + b2Screw.id, b2Screw);
+    records.set("production_recipes/" + keys.productionRecipeKey("shared", base.projectId, base.wiId), {
+      version: 4, projectName: "001.Project", wiTitle: "Assembly", lines: [{ componentId: screw.code, unit: "pz", perUnit: 10, extraPercent: 0 }],
+    });
+    assert.equal((await post({ ...create, site: "B2" })).status, 200);
+    const b2Pdo = records.get("production_pdos/" + create.operationId);
+    assert.equal(b2Pdo.recipeId, keys.productionRecipeKey("B2", base.projectId, base.wiId));
+    assert.equal(b2Pdo.recipeVersion, 4);
+    assert.equal(b2Pdo.lines[0].componentId, b2Screw.id);
     // Twenty partial requests of 50, frozen recipe, cumulative pending stock and parent total.
     seed(); records.get('inventario_componentes/' + screw.componentId).lots[0].stock.aprobado = 10000; records.get('inventario_componentes/' + housing.componentId).lots[0].stock.aprobado = 5000;
     await post(create); records.get('production_recipes/' + recipeId).lines[0].perUnit = 999;
