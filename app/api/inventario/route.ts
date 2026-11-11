@@ -129,6 +129,7 @@ export async function POST(req: NextRequest) {
         if (!canMoveInventory(profile.data(), site)) fail("Solo el almacenista asignado puede confirmar el ID del vale.");
         if (!snapshot.exists) fail("Vale no encontrado.");
         const value = snapshot.data() as Voucher;
+        if (value.origin === "rd" || value.destination === "rd") fail("El registro R&D no requiere folio oficial.");
         if (value.numberingStatus === "pending") {
           const state = await prepareNumbering(transaction, vouchers, site, value.createdAt);
           if (state.key !== value.numberingWeek) fail("Periodo del vale inválido.");
@@ -170,12 +171,13 @@ export async function POST(req: NextRequest) {
     if (b.action === "component") {
       const parsed = parseComponentCode(str(b.code));
       const { code, type } = parsed;
+      if (parsed.site && parsed.site !== site) fail("El código general debe comenzar con la sede seleccionada.");
       const catalog = await projectCatalog();
       const found = catalog.find(p => p.code === parsed.projectCode);
       if (parsed.projectCode && !found) fail("Registra primero el proyecto en Operacional.");
-      const project = found?.label || "", name = str(b.name), unit = str(b.unit);
+      const project = found?.label || (type === "GENERAL" ? "000.General" : ""), name = str(b.name), unit = str(b.unit);
       if (!(type in TYPES)) fail("Tipo de artículo inválido.");
-      const id = createHash("sha256").update(code.toUpperCase()).digest("hex");
+      const id = createHash("sha256").update(parsed.generalKey || code.toUpperCase()).digest("hex");
       const ref = components.doc(id);
       await adminDB.runTransaction(async t => {
         if ((await t.get(ref)).exists) fail("Ya existe un artículo con ese código.");
@@ -287,7 +289,10 @@ export async function POST(req: NextRequest) {
         const current = await t.get(adminDB.collection(`${names.components}_fixed_recipes`).doc(b.recipeId));
         if (!current.data()?.active || current.data()?.version !== recipeVersion) fail("La receta cambió. Recarga antes de confirmar.");
       }
-      const numbering = isRequestCreation ? null : await prepareNumbering(t, vouchers, site, now);
+      const hasOfficialVoucher = b.action === "lot"
+        ? b.destination !== "rd"
+        : Array.isArray(b.lines) && b.lines.some((line: CartLine) => line?.origin !== "rd" && line?.destination !== "rd");
+      const numbering = !isRequestCreation && hasOfficialVoucher ? await prepareNumbering(t, vouchers, site, now) : null;
       const groups = new Map<string, { origin: string; destination: string; lines: VoucherLine[] }>();
       const changed = new Map<string, InventoryComponent>();
       const addLine = (origin: string, destination: string, c: InventoryComponent, l: Lot, q: number) => {
@@ -295,18 +300,28 @@ export async function POST(req: NextRequest) {
         const group = groups.get(key) || { origin, destination, lines: [] };
         group.lines.push({ componentId: c.id, code: c.code, name: c.name, project: c.project, unit: c.unit, lot: l.name, lotId: l.id, expiry: l.expiry, quantity: q, comments: l.notes }); groups.set(key, group);
       };
+      let relot: { name: string; expiry: string } | undefined;
       if (b.action === "lot") {
         const id = str(b.componentId), destination = location(b.destination), origin = location(b.origin);
         if (!isWarehouse(destination) || isWarehouse(origin)) fail("La entrada debe ir desde un origen externo a un almacén.");
         const snap = await t.get(components.doc(id)); if (!snap.exists) fail("Artículo inexistente.");
         const c = { ...snap.data(), id } as InventoryComponent;
-        const name = str(b.name), expiry = date(b.expiry), q = quantity(b.quantity);
+        const bulk = b.rdBulk === true;
+        if (bulk && destination !== "rd") fail("El saldo sin lote solo se registra en R&D.");
+        const name = bulk ? "Cantidad general · sin lote" : str(b.name), expiry = bulk ? "" : date(b.expiry), q = quantity(b.quantity);
         if (c.unit === "pz" && !Number.isInteger(q)) fail("Las piezas deben ser cantidades enteras.");
-        if (c.lots.some(l => l.name.toUpperCase() === name.toUpperCase())) fail("El lote ya existe. Usa Registrar entrada para agregar existencias.");
-        const l: Lot = { id: randomUUID(), name, expiry, supplier: str(b.supplier || "", false), notes: str(b.notes || "", false), createdAt: now, stock: { [destination]: q } };
+        const existing = bulk ? c.lots.find(l => l.rdBulk) : undefined;
+        if (existing) {
+          existing.stock.rd = Math.round(((existing.stock.rd || 0) + q) * 1e6) / 1e6;
+          changed.set(id, c); addLine(origin, destination, c, existing, q);
+        } else {
+        if (!bulk && c.lots.some(l => !l.rdBulk && l.name.toUpperCase() === name.toUpperCase())) fail("El lote ya existe. Usa Registrar entrada para agregar existencias.");
+        const l: Lot = { ...(bulk ? { rdBulk: true } : {}), id: randomUUID(), name, expiry, supplier: str(b.supplier || "", false), notes: str(b.notes || "", false), createdAt: now, stock: { [destination]: q } };
         const conditions = storageConditions(b.temperatureCondition ?? c.temperatureCondition, b.humidityCondition ?? c.humidityCondition, true);
-        applyStorage(t, c, componentConditionsFromLot(c, conditions, destination), site, actor, emails, storageAlerts); Object.assign(l, conditions);
+        if (destination !== "rd") applyStorage(t, c, componentConditionsFromLot(c, conditions, destination), site, actor, emails, storageAlerts);
+        if (!bulk) Object.assign(l, conditions);
         c.lots.push(l); changed.set(id, c); addLine(origin, destination, c, l, q);
+        }
       } else if (b.action === "movement") {
         if (!["salida", "entrada", "traslado"].includes(b.kind)) fail("Movimiento inválido.");
         if (!Array.isArray(b.lines) || !b.lines.length || b.lines.length > 50) fail("Agrega entre 1 y 50 artículos.");
@@ -323,29 +338,40 @@ export async function POST(req: NextRequest) {
           if (b.kind === "salida" && (!isWarehouse(origin) || isWarehouse(destination))) fail("La salida debe ir desde un almacén a un destino externo.");
           if (b.kind === "entrada" && (isWarehouse(origin) || !isWarehouse(destination))) fail("La entrada debe ir desde un origen externo a un almacén.");
           if (b.kind === "traslado" && (!isWarehouse(origin) || !isWarehouse(destination))) fail("El traslado debe ser entre almacenes.");
+          if (b.kind === "salida" && ((origin === "rd") !== (destination === "externo:rd"))) fail("Las salidas de R&D son únicamente para pruebas de ingeniería. Usa Traslado para cambiar de almacén.");
           let lot: Lot | undefined;
           if (b.kind === "salida") {
-            if (!WAREHOUSES.find(w => w.id === origin)?.usable) fail("Este almacén no está habilitado para retiros de uso. Usa Traslado para cambiar su ubicación.");
-            lot = selectLot(c.lots.filter(l => lotAvailableForProject(l, b.project)), origin, q, mexicoToday(), line.lotId);
+            if (origin !== "rd" && !WAREHOUSES.find(w => w.id === origin)?.usable) fail("Este almacén no está habilitado para retiros de uso. Usa Traslado para cambiar su ubicación.");
+            lot = selectLot(c.lots.filter(l => origin === "rd" || lotAvailableForProject(l, b.project)), origin, q, mexicoToday(), line.lotId);
             if (!lot) fail(`${c.code}: ningún lote vigente tiene ${q} ${c.unit} en el almacén seleccionado. No se combinaron lotes.`);
           } else {
             lot = c.lots.find(l => l.id === line.lotId); if (!lot) fail("Selecciona el lote al que pertenecen las piezas.");
+          }
+          const needsLot = lot.rdBulk && destination !== "rd" && destination !== "externo:rd";
+          if (needsLot && (origin !== "rd" || b.kind !== "traslado" || lines.length !== 1 || b.cart === true)) fail("Identifica un lote desde el movimiento individual del saldo R&D.");
+          if (needsLot) {
+            relot = { name: str(b.rdLotName), expiry: date(b.rdLotExpiry || "") };
+            if (c.lots.some(l => !l.rdBulk && l.name.toUpperCase() === relot!.name.toUpperCase())) fail("Usa una identificación de lote nueva para este traslado.");
           }
           if (isWarehouse(origin)) {
             if ((lot.stock[origin] || 0) < q) fail(`${c.code}: existencias insuficientes.`);
             lot.stock[origin] = Math.round(((lot.stock[origin] || 0) - q) * 1e6) / 1e6;
           }
+          if (needsLot && relot) {
+            lot = { id: randomUUID(), name: relot.name, expiry: relot.expiry, supplier: "", notes: "Procede de cantidad general de R&D, sin lote previo.", createdAt: now, stock: {} };
+            c.lots.push(lot);
+          }
           if (isWarehouse(destination)) lot.stock[destination] = Math.round(((lot.stock[destination] || 0) + q) * 1e6) / 1e6;
           addLine(origin, destination, c, lot, q);
         }
       } else fail("Acción inválida.");
-      const requestedBy = str(b.requestedBy || "", false), receivedBy = str(b.receivedBy || "", false), project = str(b.project || "", false), notes = b.action === "lot" ? "" : str(b.notes || "", false);
+      const requestedBy = str(b.requestedBy || "", false), receivedBy = str(b.receivedBy || "", false), project = str(b.project || "", false), notes = b.action === "lot" && b.destination !== "rd" ? "" : str(b.notes || "", false);
       const supplier = str(b.supplier || "", false);
       const originOther = str(b.originOther || ([...groups.values()].some(g => g.origin === "externo:recepcion") ? supplier : b.action === "lot" ? b.notes || "" : ""), false), destinationOther = str(b.destinationOther || "", false);
       if ([...groups.values()].some(g => g.origin === "externo:otro") && !originOther && !notes) fail("Especifica el origen Otro.");
       if ([...groups.values()].some(g => g.destination === "externo:otro") && !destinationOther && !notes) fail("Especifica el destino Otro.");
       if (movementRequestRef) {
-        const payload = { action: "movement", site, kind: b.kind, lines: [...groups.values()].flatMap(group => group.lines.map(line => ({ componentId: line.componentId, lotId: line.lotId, quantity: line.quantity, origin: group.origin, destination: group.destination }))), project, notes, requestedBy: "", receivedBy: "", supplier, originOther, destinationOther, cart: b.cart === true };
+        const payload = { action: "movement", site, kind: b.kind, lines: relot ? b.lines : [...groups.values()].flatMap(group => group.lines.map(line => ({ componentId: line.componentId, lotId: line.lotId, quantity: line.quantity, origin: group.origin, destination: group.destination }))), ...(relot ? { rdLotName: relot.name, rdLotExpiry: relot.expiry } : {}), project, notes, requestedBy: "", receivedBy: "", supplier, originOther, destinationOther, cart: b.cart === true };
         const lines = [...groups.values()].flatMap(group => group.lines.map(line => ({ ...line, origin: group.origin, destination: group.destination })));
         t.create(movementRequestRef, { site, payload, lines, status: "pending", createdBy: user.uid, requestedBy: actor, createdAt: now, fingerprint, voucherIds: [] });
         requestMessage = lines.map(line => `${actor} ha solicitado ${line.quantity} ${line.unit} de ${line.code} · ${line.name} de ${locationName(line.origin)} (${site}) a ${locationName(line.destination)} (${site}).`).join("\n");
@@ -361,8 +387,9 @@ export async function POST(req: NextRequest) {
       }
       for (const g of groups.values()) {
         const ref = vouchers.doc(); voucherIds.push(ref.id);
-        if (numbering) numbering.ledger.entries.push({ id: ref.id });
-        const v: Voucher = { ...(numbering ? { numberingWeek: numbering.key, numberingStatus: "pending" as const } : {}), ...(productionRequest ? { pdoId: productionRequest.pdoId, productionRequestId: operationId, productionUnits: productionRequest.units } : {}), id: ref.id, site, operationId, kind: b.action === "lot" ? "entrada" : b.kind, origin: g.origin, destination: g.destination, createdAt: now, actor, actorUid: user.uid, requestedBy, receivedBy, project, notes, originOther, destinationOther, lines: g.lines };
+        const official = numbering && g.origin !== "rd" && g.destination !== "rd";
+        if (official) numbering.ledger.entries.push({ id: ref.id });
+        const v: Voucher = { ...(official ? { numberingWeek: numbering.key, numberingStatus: "pending" as const } : {}), ...(productionRequest ? { pdoId: productionRequest.pdoId, productionRequestId: operationId, productionUnits: productionRequest.units } : {}), id: ref.id, site, operationId, kind: b.action === "lot" ? "entrada" : b.kind, origin: g.origin, destination: g.destination, createdAt: now, actor, actorUid: user.uid, requestedBy, receivedBy, project, notes, originOther, destinationOther, lines: g.lines };
         t.create(ref, v);
       }
       if (numbering) t.set(numbering.ref, numbering.ledger);
@@ -370,7 +397,7 @@ export async function POST(req: NextRequest) {
         t.update(requestCollection.doc(b.fulfillMovementRequestId), { status: "fulfilled", fulfilledAt: now, fulfilledBy: user.uid, voucherIds });
         if (requesterEmail) {
           const url = inventoryHref("/inventario/solicitudes", site) + `&movementRequest=${b.fulfillMovementRequestId}`;
-          t.create(adminDB.collection("notifications").doc(), { userEmail: requesterEmail, tipo: "inventory_request_fulfilled", mensaje: "Se retiró tu pedido de almacén. Tienes pendiente firmar el vale de material físico.", url, createdAt: FieldValue.serverTimestamp(), leido: false });
+          t.create(adminDB.collection("notifications").doc(), { userEmail: requesterEmail, tipo: "inventory_request_fulfilled", mensaje: hasOfficialVoucher ? "Se retiró tu pedido de almacén. Tienes pendiente firmar el vale de material físico." : "Se registró tu movimiento de R&D. Consulta el historial; no requiere firma.", url, createdAt: FieldValue.serverTimestamp(), leido: false });
           fulfillmentNotice = { email: requesterEmail, url };
         }
       }
@@ -380,7 +407,7 @@ export async function POST(req: NextRequest) {
     });
     after(() => pushStorageAlerts(storageAlerts, emails, req.url));
     const notice = fulfillmentNotice as { email: string; url: string } | null;
-    if (notice) after(async () => { try { await sendPushToEmails({ emails: [notice.email], title: "Solicitud de almacén atendida", body: "Se retiró tu pedido de almacén. Tienes pendiente firmar el vale de material físico.", url: new URL(notice.url, req.url).toString() }); } catch (error) { console.error("Inventory fulfillment push", error); } });
+    if (notice) after(async () => { try { await sendPushToEmails({ emails: [notice.email], title: "Solicitud de almacén atendida", body: b.lines.every((line: CartLine) => line.origin === "rd" || line.destination === "rd") ? "Se registró tu movimiento de R&D. No requiere firma." : "Se retiró tu pedido de almacén. Tienes pendiente firmar el vale de material físico.", url: new URL(notice.url, req.url).toString() }); } catch (error) { console.error("Inventory fulfillment push", error); } });
     if (isRequestCreation) {
       if (requestCreated) after(async () => { try { await sendPushToEmails({ emails, title: "Nueva solicitud de inventario", body: requestMessage, url: new URL(inventoryHref("/inventario/solicitudes", site) + `&movementRequest=${operationId}`, req.url).toString() }); } catch (error) { console.error("Inventory request push", error); } });
       return NextResponse.json({ requestId: operationId, voucherIds: [] });

@@ -5,7 +5,7 @@ export function cartLotAvailability(component: InventoryComponent, lotId: string
   const expired = !!lot.expiry && lot.expiry < today;
   const alreadyAdded = lines.filter(l=>l.componentId===component.id&&l.lotId===lotId&&l.origin===origin).reduce((sum,l)=>sum+l.quantity,0);
   const available = kind === "entrada" ? Object.values(lot.stock).reduce((sum,q)=>sum+q,0) : Math.max(0,Math.round(((lot.stock[origin]||0)-alreadyAdded)*1e6)/1e6);
-  return { available, expired, selectable: kind === "entrada" || (available > 0 && !(kind === "salida" && expired)) };
+  return { available, expired, selectable: kind === "entrada" || (available > 0 && !(kind === "salida" && origin !== "rd" && expired)) };
 }
 export function validateCart(lines: CartLine[], components?: InventoryComponent[], kind?: MovementKind, today?: string) {
   if (!Array.isArray(lines) || !lines.length || lines.length > 50) throw new Error("Agrega entre 1 y 50 partidas al carrito.");
@@ -17,8 +17,9 @@ export function validateCart(lines: CartLine[], components?: InventoryComponent[
     if (components) {
       const c = components.find(c=>c.id===line.componentId), lot = c?.lots.find(l=>l.id===line.lotId);
       if (!c || !lot) throw new Error("Selecciona un componente y lote existentes.");
+      if (lot.rdBulk && line.destination !== "rd" && line.destination !== "externo:rd") throw new Error("Traslada el saldo sin lote desde el movimiento individual para poder identificarlo.");
       if (c.unit === "pz" && !Number.isInteger(line.quantity)) throw new Error("Las piezas deben ser cantidades enteras.");
-      if (kind === "salida" && lot.expiry && today && lot.expiry < today) throw new Error(`${c.code}: el lote está vencido.`);
+      if (kind === "salida" && line.origin !== "rd" && lot.expiry && today && lot.expiry < today) throw new Error(`${c.code}: el lote está vencido.`);
       if (kind !== "entrada" && (lot.stock[line.origin] || 0) < total) throw new Error(`${c.code} · ${lot.name}: cantidad insuficiente para el total del carrito.`);
     }
   }

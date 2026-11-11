@@ -15,14 +15,14 @@ const api=load("app/api/inventario/route.ts",{
 "@/lib/inventario/voucher-numbering-server":numberingServer,
 "@/lib/inventario/request-preview":load("lib/inventario/request-preview.ts"),
 "@/lib/inventario/voucher-title":load("lib/inventario/voucher-title.ts"),
-"@/lib/inventario/kiv":{},"@/lib/inventario/cart":cart,"@/lib/inventario/fixed-recipes":load("lib/inventario/fixed-recipes.ts"),"@/lib/inventario/storage":{},
+"@/lib/inventario/kiv":{},"@/lib/inventario/cart":cart,"@/lib/inventario/fixed-recipes":load("lib/inventario/fixed-recipes.ts"),"@/lib/inventario/storage":load("lib/inventario/storage.ts"),
 "@/lib/inventario/storage-server":{warehouseRecipients:async()=>["warehouse@example.com"],pushStorageAlerts:async()=>{}},
 "next/server":{after:()=>{},NextResponse:{json:(data,options)=>({status:options?.status||200,data})}},
 "@/lib/firebaseAdmin":{adminDB:db,adminAuth:{verifyIdToken:async()=>currentUser}},
 "firebase-admin/firestore":{FieldValue:{serverTimestamp:()=> "timestamp"}},
 "@/lib/pushNotifications":{sendPushToEmails:async()=>{}},
 "@/lib/inventario/catalogs":catalog,"@/lib/inventario/selection":selection,"@/lib/inventario/sites":sites,
-"@/lib/operacional/catalog":{},"@/lib/operacional/server":{projectCatalog:async()=>[]}
+"@/lib/operacional/catalog":load("lib/operacional/catalog.ts"),"@/lib/operacional/server":{projectCatalog:async()=>[{code:"E033",label:"E033.Ingeniería"}]}
 });
 const componentId="component0000001",lotId="lot-00000000001",componentPath="inventario_componentes/"+componentId;
 records.set(componentPath,{id:componentId,code:"001.305",name:"Material",unit:"pz",project:"",lots:[{id:lotId,name:"LOTE-1",stock:{aprobado:10},expiry:"",notes:"",createdAt:"2026-01-01"}]});
@@ -113,5 +113,39 @@ try{
  records.get(componentPath).lots[0].stock={aprobado:0};assert.equal((await post(remove)).status,200);assert.equal(records.get(componentPath).lots.length,0);
  assert([...records.keys()].some(path=>path.startsWith("inventario_componentes_deleted_lots/")));assert.equal([...records.keys()].filter(path=>path.startsWith("inventario_vales/")).length,5);
  console.log("Warehouse workflow: permissions, insufficient/cumulative stock, notifications, pending requests without deduction, fulfillment/retry, empty-lot deletion and retained audit/vouchers passed.");
+ // R&D: general quantities, named transfers, expired use, history without official numbering.
+ currentUser={uid:"warehouse",email:"warehouse@example.com"};
+ records.set("users/warehouse",{warehouseSites:["B1","B2"]});
+ const general=await post({action:"component",site:"B2",code:"B2-000.01-Tornillos",name:"Tornillos",unit:"pz"});
+ assert.equal(general.status,200);
+ assert.equal(records.get("inventario_b2_componentes/"+general.data.id).type,"GENERAL");
+ assert.equal((await post({action:"component",site:"B1",code:"B2-000.01-Tornillos",name:"Tornillos",unit:"pz"})).status,400);
+ assert.equal((await post({action:"component",site:"B2",code:"B2-000.01-Otro",name:"Otro",unit:"pz"})).status,400);
+ const engineering=await post({action:"component",site:"B1",code:"E033.306",name:"Pieza de prueba",unit:"pz"});
+ assert.equal(engineering.status,200);
+ assert.equal(records.get("inventario_componentes/"+engineering.data.id).project,"E033.Ingeniería");
+ const rdId=engineering.data.id, rdPath="inventario_componentes/"+rdId;
+ const intake={action:"lot",site:"B1",componentId:rdId,origin:"externo:recepcion",destination:"rd",rdBulk:true,quantity:8,operationId:"rd-bulk-intake-01"};
+ const received=await post(intake);assert.equal(received.status,200);
+ assert.equal((await post({...intake,operationId:"rd-bulk-intake-02",quantity:2})).status,200);
+ assert.equal((await post({...intake,operationId:"rd-bulk-wrong-destination",destination:"aprobado"})).status,400);
+ assert.equal(records.get(rdPath).lots.length,1);
+ const bulk=records.get(rdPath).lots[0];assert.equal(bulk.stock.rd,10);assert.equal(bulk.rdBulk,true);
+ assert.equal((await readVoucher(received.data.voucherIds[0])).numberingStatus,undefined);
+ const moveRd=(id,kind,origin,destination,quantity,extra={})=>post({action:"movement",site:"B1",kind,operationId:id,project:"000.General",lines:[{componentId:rdId,lotId:bulk.id,origin,destination,quantity}],...extra});
+ assert.equal((await moveRd("rd-production-block","salida","rd","externo:produccion",1)).status,400);
+ assert.equal((await moveRd("rd-transfer-missing-lot","traslado","rd","pendiente",3)).status,400);
+ const transfer=await moveRd("rd-transfer-with-lot","traslado","rd","pendiente",3,{rdLotName:"LOTE-RD-01",rdLotExpiry:"2000-01-01"});
+ assert.equal(transfer.status,200);
+ const controlled=records.get(rdPath).lots.find(l=>l.name==="LOTE-RD-01");
+ assert.equal(controlled.stock.pendiente,3);assert.equal(controlled.expiry,"2000-01-01");
+ assert.equal(records.get(rdPath).lots[0].stock.rd,7);
+ const back=await moveRd("rd-expired-inbound","traslado","pendiente","rd",3,{lines:[{componentId:rdId,lotId:controlled.id,origin:"pendiente",destination:"rd",quantity:3}]});
+ assert.equal(back.status,200);
+ const use=await moveRd("rd-expired-test","salida","rd","externo:rd",1,{lines:[{componentId:rdId,lotId:controlled.id,origin:"rd",destination:"externo:rd",quantity:1}]});
+ assert.equal(use.status,200);
+ assert.equal((await readVoucher(use.data.voucherIds[0])).numberingStatus,undefined);
+ assert.equal(records.get(rdPath).lots.find(l=>l.id===controlled.id).stock.rd,2);
+ console.log("R&D workflow: independent site codes, engineering projects, bulk and lot transfers, expired tests and internal history passed.");
 }finally{console.error=error;}
 })().catch(error=>{console.error(error);process.exitCode=1;});

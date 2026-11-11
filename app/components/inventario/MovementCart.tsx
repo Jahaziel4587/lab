@@ -5,7 +5,7 @@ import { inventoryHref, voucherDestination } from "@/lib/inventario/sites";
 import { useRouter } from "next/navigation";
 import VoucherProject from "./VoucherProject";
 import { useRef, useState } from "react";
-import { WAREHOUSES, LEGACY_LOCATIONS, EXTERNAL_LOCATIONS } from "@/lib/inventario/catalogs";
+import { WAREHOUSES, LEGACY_LOCATIONS, EXTERNAL_LOCATIONS, RD_USE } from "@/lib/inventario/catalogs";
 import { selectLot, mexicoToday } from "@/lib/inventario/selection";
 import { inventoryRequest } from "@/lib/inventario/service";
 import type { InventoryComponent, MovementKind } from "@/lib/inventario/types";
@@ -20,10 +20,12 @@ export default function MovementCart({ components, initialId = "", fixedLotId = 
   const pending = useRef<{ signature: string; id: string } | null>(null);
   const c = components.find(x => x.id === componentId);
   const selectedLot = c?.lots.find(l => l.id === fixedLotId);
-  const origins = kind === "entrada" ? EXTERNAL_LOCATIONS : [...WAREHOUSES, ...LEGACY_LOCATIONS].filter(w => (kind !== "salida" || w.usable) && (fixedLotId ? (selectedLot?.stock[w.id] || 0) > 0 : c?.lots.some(l => (l.stock[w.id] || 0) > 0)));
+  const origins = kind === "entrada" ? EXTERNAL_LOCATIONS : [...WAREHOUSES, ...LEGACY_LOCATIONS].filter(w => (kind !== "salida" || w.usable || w.id === "rd") && (fixedLotId ? (selectedLot?.stock[w.id] || 0) > 0 : c?.lots.some(l => (l.stock[w.id] || 0) > 0)));
   const actualOrigin = origins.some(w => w.id === origin) ? origin : origins[0]?.id || "";
-  const destinations = kind === "salida" ? EXTERNAL_LOCATIONS : WAREHOUSES;
+  const destinations = kind === "salida" ? (actualOrigin === "rd" ? [RD_USE] : EXTERNAL_LOCATIONS) : WAREHOUSES;
   const actualDestination = destinations.some(w => w.id === destination) ? destination : destinations[0]?.id || "";
+  const needsLot = kind === "traslado" && actualOrigin === "rd" && actualDestination !== "rd" && c?.lots.find(l => l.id === (fixedLotId || lotId))?.rdBulk;
+  const historyOnly = actualOrigin === "rd" || actualDestination === "rd";
   return <section className={`${panelClass} space-y-5`}><div className="border-b border-white/10 pb-4"><h2 className="text-lg font-semibold">Registrar movimiento</h2><p className="mt-1 text-xs text-white/45">{fixedLotId ? `${c?.code} · Lote ${selectedLot?.name}` : "Selecciona el artículo y la cantidad que vas a mover."}</p></div>
     <Field label="Tipo de movimiento"><select disabled={busy} className={inputClass} value={kind} onChange={e => { setKind(e.target.value as MovementKind); setOrigin(""); setLotId(""); }}>{["salida", "entrada", "traslado"].map(k => <option key={k} value={k}>{k === "entrada" ? "Entrada / devolución" : k === "traslado" ? "Traslado entre almacenes" : "Retiro / salida"}</option>)}</select></Field>
     {!fixedLotId && <QrScanner onScan={(id, scannedSite) => { if ((scannedSite || "B1") !== site) { setError("Este QR pertenece a otro almacén. Selecciona el almacén correspondiente."); return; } if (components.some(x => x.id === id)) { setComponentId(id); setOrigin(""); setLotId(""); } else setError("El componente no existe."); }} />}
@@ -39,7 +41,7 @@ export default function MovementCart({ components, initialId = "", fixedLotId = 
       if (actualOrigin === actualDestination) { setError("Origen y destino deben ser diferentes."); return; }
       const chosenId = fixedLotId || lotId;
       const chosen = kind === "salida" ? selectLot(c.lots, actualOrigin, q, mexicoToday(), chosenId || undefined) : c.lots.find(l => l.id === chosenId);
-      if (!chosen || (kind !== "entrada" && (chosen.stock[actualOrigin] || 0) < q)) { setError("El lote no está disponible o no tiene existencias suficientes. Los retiros requieren un lote vigente."); return; }
+      if (!chosen || (kind !== "entrada" && (chosen.stock[actualOrigin] || 0) < q)) { setError("El lote no está disponible o no tiene existencias suficientes. "); return; }
       const meta = Object.fromEntries(new FormData(e.currentTarget));
       const line = { componentId, quantity: q, origin: actualOrigin, destination: actualDestination, lotId: chosen.id };
       const body = { action: access.canMove ? "movement" : "movement-request", kind, lines: [line], ...meta, requestedBy: "", receivedBy: "" };
@@ -50,15 +52,16 @@ export default function MovementCart({ components, initialId = "", fixedLotId = 
       catch (err) { setError(err instanceof Error ? err.message : "No se pudo registrar."); }
       finally { setBusy(false); }
     }}>
+      {needsLot && <><p className="text-sm text-white/60">Identifica el lote que recibirá este saldo en el almacén de destino.</p><Field label="Identificación del nuevo lote"><input name="rdLotName" required disabled={busy} className={inputClass} maxLength={200} /></Field><Field label="Caducidad / reanálisis (si aplica)"><input type="date" name="rdLotExpiry" disabled={busy} className={inputClass} /></Field></>}
       <VoucherProject disabled={busy} />
-      <p className="text-xs text-white/50">Solicitado por y recibido por se llenan a mano en el vale impreso.</p>
-      <Field label="Comentarios del vale (opcional)"><input disabled={busy} name="notes" className={inputClass} maxLength={1000} /><span className="block text-xs text-white/40">Se imprimen en la columna Comentarios de la tabla de artículos.</span></Field>
+      <p className="text-xs text-white/50">{historyOnly ? "Movimiento de R&D: solo historial, sin impresión ni firma." : "Solicitado por y recibido por se llenan a mano en el vale impreso."}</p>
+      <Field label="Comentarios del movimiento (opcional)"><input disabled={busy} name="notes" className={inputClass} maxLength={1000} /><span className="block text-xs text-white/40">{historyOnly ? "Se guardan en el historial." : "Se imprimen en la columna Comentarios."}</span></Field>
       {actualOrigin === "externo:recepcion" && <Field label="Proveedor (opcional)"><input disabled={busy} name="supplier" maxLength={200} className={inputClass} /><span className="block text-xs text-white/40">Se imprime en Origen. Si lo dejas vacío, aparecerá Recepción / proveedor.</span></Field>}
       {actualOrigin === "externo:otro" && <Field label="Especificar origen Otro"><input disabled={busy} required name="originOther" className={inputClass} maxLength={200} /><span className="block text-xs text-white/40">Se imprime junto a la casilla Otro de Origen.</span></Field>}
       {actualDestination === "externo:otro" && <Field label="Especificar destino Otro"><input disabled={busy} required name="destinationOther" className={inputClass} maxLength={200} /><span className="block text-xs text-white/40">Se imprime junto a la casilla Otro de Destino.</span></Field>}
-      <p className="text-sm text-white/60">{access.canMove ? "Al confirmar se actualizarán las existencias y se generará el vale de material." : "Se enviará una solicitud al almacenista. Las existencias se actualizan cuando la atienda."}</p>
+      <p className="text-sm text-white/60">{access.canMove ? (historyOnly ? "Al confirmar se actualizarán las existencias y el historial." : "Al confirmar se actualizarán las existencias y se generará el vale de material.") : "Se enviará una solicitud al almacenista. Las existencias se actualizan cuando la atienda."}</p>
       {access.error && <p role="alert" className="text-red-300">{access.error}</p>}
-      <button disabled={busy || access.loading || !!access.error} className={buttonClass}>{busy ? "Procesando…" : access.loading ? "Verificando permisos…" : access.canMove ? "Confirmar movimiento y generar vale" : "Mandar solicitud"}</button>
+      <button disabled={busy || access.loading || !!access.error} className={buttonClass}>{busy ? "Procesando…" : access.loading ? "Verificando permisos…" : access.canMove ? (historyOnly ? "Registrar movimiento R&D" : "Confirmar movimiento y generar vale") : "Mandar solicitud"}</button>
     </form>
     {error && <p role="alert" className="rounded-xl border border-red-400/20 bg-red-400/5 p-3 text-sm text-red-200">{error}</p>}
   </section>;
