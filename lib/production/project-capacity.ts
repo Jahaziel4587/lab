@@ -2,19 +2,21 @@ import { requiredQuantity, type RecipeOutput } from "./calculate";
 import { capacityForStock, productionCapacity, type PdoLine, type ProductionRequest } from "./pdo";
 import type { InventoryComponent } from "../inventario/types";
 
-export type CapacityStep = { id: string; title: string; lines: PdoLine[]; output?: RecipeOutput | null; missing?: boolean; issues?: string[] };
+export type CapacityStep = { id: string; title: string; lines: (PdoLine & { excluded?: boolean; selectionCode?: string })[]; excluded?: boolean; output?: RecipeOutput | null; missing?: boolean; issues?: string[] };
 type Lot = { name: string; stock: number; projected: boolean };
 const limit = 1e9;
 const round = (n: number) => Number(n.toFixed(6));
 const quantity = (line: PdoLine, units: number) => requiredQuantity(line.perUnit, units, line.extraPercent, line.unit).total;
 
 export function projectCapacity(steps: CapacityStep[], components: InventoryComponent[], project: string, today: string, pending: ProductionRequest[], target?: number) {
+  const configured = steps;
+  steps = steps.filter(step => !step.excluded).map(step => ({ ...step, missing: step.missing || !step.lines.length, lines: step.lines.filter(line => !line.excluded) }));
   const issues: string[] = [], owners = new Map<string, CapacityStep>();
   const articles = new Map(components.map(c => [c.id, c]));
   const lines = new Map<string, PdoLine>();
   for (const step of steps) {
     if (step.issues?.length) issues.push(...step.issues.map(issue => `${step.title}: ${issue}`));
-    else if (step.missing || !step.lines.length) issues.push(`${step.title}: falta la receta o un insumo ya no está en inventario.`);
+    else if (step.missing) issues.push(`${step.title}: falta la receta o un insumo ya no está en inventario.`);
     if (step.output) {
       if (!articles.has(step.output.componentId)) issues.push(`${step.title}: el artículo de salida ya no está en inventario.`);
       if (owners.has(step.output.componentId)) issues.push(`${step.title}: hay más de una WI que produce el mismo artículo. Define una sola ruta de producción.`);
@@ -37,7 +39,7 @@ export function projectCapacity(steps: CapacityStep[], components: InventoryComp
     ordered.push(step);
   }
   steps.forEach(visit);
-  if (!steps.length) issues.push("No se encontraron WI de proceso para este proyecto.");
+  if (!steps.length) issues.push(configured.length ? "Incluye al menos una WI para calcular la capacidad." : "No se encontraron WI de proceso para este proyecto.");
 
   const stock = new Map(productionCapacity([...lines.values()], components, project, today, pending).rows.map(row =>
     [row.componentId, row.options.filter(l => l.available > 0).map(l => ({ name: `${l.lot} · ${l.origin}`, stock: l.available, projected: false }))] as const));
@@ -116,9 +118,9 @@ export function projectCapacity(steps: CapacityStep[], components: InventoryComp
     return { fits, rows, overflow: false };
   }
 
-  function standaloneBatches(step: CapacityStep) {
-    if (!step.lines.length || step.missing) return [];
-    const pool = copyStock(), batches: number[] = [];
+  function standaloneBatches(step: CapacityStep, source = stock) {
+    const pool = new Map(step.lines.map(line => [line.componentId, (source.get(line.componentId) || []).map(l => ({ ...l }))]));
+    const batches: number[] = [];
     let total = 0;
     while (total < limit) {
       const choices = step.lines.map(line => ({ line, ...pick(line, pool.get(line.componentId)) }));
@@ -130,13 +132,35 @@ export function projectCapacity(steps: CapacityStep[], components: InventoryComp
     }
     return batches;
   }
-  const standalone = steps.map(step => ({
-    id: step.id, title: step.title, missing: !!step.missing || !step.lines.length, batches: standaloneBatches(step),
-    materials: step.lines.map(line => {
-      const lots = (stock.get(line.componentId) || []).map(l => capacityForStock(line, l.stock)).filter(Boolean).sort((a, b) => b - a);
-      return { code: line.code, name: line.name, lots };
-    }),
-  }));
+  const active = new Map(steps.map(step => [step.id, step]));
+  const projected = copyStock();
+  const outputs = new Map<string, { code: string; name: string; quantity: number | null; wi: string }>();
+  for (const step of ordered) {
+    if (step.missing || !step.output || step.issues?.length) continue;
+    const article = articles.get(step.output.componentId);
+    if (!article || owners.get(article.id)?.id !== step.id || step.lines.some(l => owners.has(l.componentId) && !outputs.has(l.componentId) && !owners.get(l.componentId)?.missing)) continue;
+    const unconstrained = step.lines.every(l => outputs.get(l.componentId)?.quantity === null);
+    const batches = unconstrained ? [limit] : standaloneBatches(step, projected);
+    const lots = batches.map(units => ({ stock: units * step.output!.quantity, name: step.title, projected: true }));
+    projected.set(article.id, [...(stock.get(article.id) || []), ...lots]);
+    outputs.set(article.id, { code: article.code, name: article.name, wi: step.title,
+      quantity: unconstrained ? null : lots.reduce((sum, lot) => sum + lot.stock, 0) });
+  }
+  const standalone = configured.map(step => {
+    const included = active.get(step.id);
+    return {
+      id: step.id, title: step.title, excluded: !!step.excluded, missing: !!step.missing || !step.lines.length,
+      batches: included?.lines.length && !step.missing ? standaloneBatches(included) : [],
+      unconstrained: !!included && !included.lines.length && !step.missing && !!step.lines.length,
+      output: step.output && !step.excluded && owners.get(step.output.componentId)?.id === step.id ? outputs.get(step.output.componentId) : undefined,
+      materials: step.lines.map(line => {
+        const lots = !line.excluded
+          ? (stock.get(line.componentId) || []).map(l => capacityForStock(line, l.stock)).filter(Boolean).sort((a, b) => b - a) : [];
+        const source = line.excluded || step.excluded ? undefined : outputs.get(line.componentId);
+        return { code: line.code, selectionCode: line.selectionCode || line.code, name: line.name, lots, source };
+      }),
+    };
+  });
   const result = (n: number, diagnose: boolean) => {
     try { return executionPlan(n, diagnose); }
     catch (e) {
@@ -144,7 +168,8 @@ export function projectCapacity(steps: CapacityStep[], components: InventoryComp
       throw e;
     }
   };
-  let low = 0, high = issues.length ? 0 : limit;
+  const unconstrained = !issues.length && steps.every(step => step.lines.every(l => outputs.get(l.componentId)?.quantity === null));
+  let low = 0, high = issues.length || unconstrained ? 0 : limit;
   while (low < high) {
     const mid = Math.ceil((low + high) / 2);
     if (result(mid, false).fits) low = mid;
@@ -152,7 +177,7 @@ export function projectCapacity(steps: CapacityStep[], components: InventoryComp
   }
   const goal = target ?? low;
   const plan = issues.length ? null : result(goal, true);
-  const bottlenecks = !issues.length && low < limit
+  const bottlenecks = !issues.length && !unconstrained && low < limit
     ? result(low + 1, true).rows.flatMap(r => r.materials.filter(m => m.missing > 0).map(m => ({ wi: r.title, code: m.code }))) : [];
-  return { capacity: issues.length ? null : low, goal, plan, issues, standalone, bottlenecks };
+  return { capacity: issues.length || unconstrained ? null : low, unconstrained, goal, plan, issues, standalone, bottlenecks };
 }

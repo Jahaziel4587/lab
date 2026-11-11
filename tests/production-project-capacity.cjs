@@ -48,3 +48,19 @@ const cycle = run([step("WI.01", [line("sub")], { componentId: "raw", quantity: 
 assert.equal(cycle.capacity, null);
 assert.match(cycle.issues[0], /circular/);
 console.log("Project capacity: output yield, existing subassemblies, lot splits, shared stock, reservations and invalid routes passed.");
+
+const solder = line("MTS-045");
+const cable = step("WI.01", [...first.lines, solder], first.output);
+const rework = step("WI.07", []);
+assert.equal(run([cable, second, rework], stock, 3).capacity, null);
+const simulatedCable = { ...cable, lines: [...first.lines, { ...solder, excluded: true }] };
+const simulated = run([simulatedCable, second, { ...rework, excluded: true }], stock, 3);
+assert.equal(simulated.capacity, 5);
+assert.equal(simulated.standalone[0].output.quantity, 4, "Show potential production independently of the target");
+assert.equal(simulated.standalone[1].materials[0].source.quantity, 4);
+assert.equal(simulated.plan.rows[1].materials[0].fromProduction, 2);
+assert.equal(simulated.plan.rows[0].materials.some(m => m.code === solder.code), false);
+assert.equal(simulated.standalone[2].excluded, true);
+assert.equal(run([{ ...first, excluded: true }, second], stock).capacity, 1, "Excluded WI contributes no projected output");
+assert.equal(run([{ ...first, excluded: true }], stock).capacity, null);
+assert.equal(run([{ ...first, lines: first.lines.map(l => ({ ...l, excluded: true })) }], stock).unconstrained, true);

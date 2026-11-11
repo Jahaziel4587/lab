@@ -17,6 +17,8 @@ export async function GET(req: NextRequest) {
   if (!await identify(req)) return NextResponse.json({ error: "Inicia sesión." }, { status: 401 });
   try {
     const q = req.nextUrl.searchParams, projectId = q.get("projectId");
+    const excludedWis = new Set(q.getAll("excludeWi"));
+    const excludedMaterials = new Set(q.getAll("excludeMaterial"));
     const site = inventorySite(q.get("site"));
     const target = q.has("target") ? pdoUnits(Number(q.get("target"))) : undefined;
     const project = projectId && (await getDmrProjects()).find(p => p.id === projectId);
@@ -44,14 +46,15 @@ export async function GET(req: NextRequest) {
       const recipe = recipeByCode(chooseRecipe(snapshots.slice(index * 3, index * 3 + 3)), inventory);
       const raw = recipe?.lines || [];
       const issues: string[] = [];
-      const lines = raw.flatMap(l => {
-        const c = resolve(l.componentId);
-        if (!c) { issues.push("Hay un insumo que ya no se encuentra en el catálogo. Revisa la receta."); return []; }
-        if (l.unit && l.unit !== c.unit) { issues.push(`${c.code}: la unidad de ${site} (${c.unit}) no coincide con la receta (${l.unit}).`); return []; }
-        return [{ ...l, componentId: c.id, code: c.code, name: c.name, unit: c.unit }];
+      const lines = raw.map(l => {
+        const c = resolve(l.componentId), selectionCode = l.componentId;
+        const excluded = excludedMaterials.has(JSON.stringify([wi.id, selectionCode]));
+        if (!excluded && !c) issues.push(`${selectionCode}: el insumo ya no se encuentra en el catálogo. Revisa la receta.`);
+        if (!excluded && c && l.unit && l.unit !== c.unit) issues.push(`${c.code}: la unidad de ${site} (${c.unit}) no coincide con la receta (${l.unit}).`);
+        return { ...l, selectionCode, excluded, componentId: c?.id || selectionCode, code: c?.code || selectionCode, name: c?.name || "Artículo fuera del catálogo", unit: c?.unit || l.unit || "" };
       });
       const output = recipe?.output && { ...recipe.output, componentId: resolve(recipe.output.componentId)?.id || recipe.output.componentId };
-      return { id: wi.id, title: wi.title, lines, missing: !raw.length || raw.length !== lines.length, issues, output };
+      return { id: wi.id, title: wi.title, lines, excluded: excludedWis.has(wi.id), missing: !raw.length || !!issues.length, issues, output };
     });
     const projectName = projects.find(p => p.code === projectCodeFromDmr(project.title))?.label || project.title;
     const pending = orders.docs.filter(d => d.data().pdoId && d.data().status === "pending").map(d => ({ ...d.data(), id: d.id }) as ProductionRequest);
