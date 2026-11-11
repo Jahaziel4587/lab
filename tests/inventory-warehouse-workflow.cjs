@@ -116,11 +116,14 @@ try{
  // R&D: general quantities, named transfers, expired use, history without official numbering.
  currentUser={uid:"warehouse",email:"warehouse@example.com"};
  records.set("users/warehouse",{warehouseSites:["B1","B2"]});
- const general=await post({action:"component",site:"B2",code:"B2-000.01-Tornillos",name:"Tornillos",unit:"pz"});
+ const general=await post({action:"component",site:"B2",code:"B2.000.01",name:"Tornillos",unit:"pz"});
  assert.equal(general.status,200);
+ assert.equal(records.get("inventario_b2_componentes/"+general.data.id).code,"B2.000.01");
+ assert.equal(records.get("inventario_b2_componentes/"+general.data.id).name,"Tornillos");
+ assert.equal((await post({action:"component",site:"B2",code:"B2.000.02-Tornillos",name:"Tornillos",unit:"pz"})).status,400);
  assert.equal(records.get("inventario_b2_componentes/"+general.data.id).type,"GENERAL");
- assert.equal((await post({action:"component",site:"B1",code:"B2-000.01-Tornillos",name:"Tornillos",unit:"pz"})).status,400);
- assert.equal((await post({action:"component",site:"B2",code:"B2-000.01-Otro",name:"Otro",unit:"pz"})).status,400);
+ assert.equal((await post({action:"component",site:"B1",code:"B2.000.01",name:"Tornillos",unit:"pz"})).status,400);
+ assert.equal((await post({action:"component",site:"B2",code:"B2.000.01",name:"Otro",unit:"pz"})).status,400);
  const engineering=await post({action:"component",site:"B1",code:"E033.306",name:"Pieza de prueba",unit:"pz"});
  assert.equal(engineering.status,200);
  assert.equal(records.get("inventario_componentes/"+engineering.data.id).project,"E033.Ingeniería");
