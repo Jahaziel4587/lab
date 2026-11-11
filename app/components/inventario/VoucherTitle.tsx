@@ -24,6 +24,7 @@ export default function VoucherTitle({ voucher, onSaved }: { voucher: Voucher; o
     } catch (e) { setError(e instanceof Error ? e.message : "No se pudo guardar."); }
     finally { setBusy(false); }
   }
+  if (voucher.origin === "rd" || voucher.destination === "rd") return <p className={panelClass}>Registro interno de R&D · No requiere folio oficial, impresión ni firma.</p>;
   return <section className={`${panelClass} print-hide space-y-4`}>
     <div className="flex flex-wrap items-start justify-between gap-3"><div className="min-w-0"><p className="text-xs text-white/45">Identificación del vale · {site}</p><h2 className="mt-1 break-words text-xl font-semibold">{voucherDisplayTitle(voucher)}</h2></div><VoucherNumberingBadge voucher={voucher} /></div>
     <p className="text-sm leading-relaxed text-white/55">{pending ? "Sugerencia según el orden de creación de los vales de esta semana. El almacenista debe revisar y confirmar el ID; todavía no es definitivo." : voucher.numberingStatus === "excluded" ? "Este registro no ocupa un ID semanal. Su movimiento y sus existencias se conservan." : legacyUntitled ? "Vale histórico sin ID. El almacenista puede registrar su identificación." : "ID registrado. Se conserva para mantener la trazabilidad del vale."}</p>
