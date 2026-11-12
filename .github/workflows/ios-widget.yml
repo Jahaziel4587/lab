@@ -1,0 +1,33 @@
+name: Build Bioana iOS widget
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'mobile/ios/**'
+      - '.github/workflows/ios-widget.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: macos-15
+    timeout-minutes: 25
+    defaults:
+      run:
+        working-directory: mobile/ios
+    steps:
+      - uses: actions/checkout@v4
+      - name: Generate Xcode project
+        run: |
+          xcodebuild -version
+          brew install xcodegen
+          xcodegen generate
+      - name: Compile app and widget for iOS Simulator
+        run: |
+          set -o pipefail
+          xcodebuild -project Bioana.xcodeproj -scheme Bioana \
+            -configuration Debug -destination 'generic/platform=iOS Simulator' \
+            -derivedDataPath "$RUNNER_TEMP/bioana-build" CODE_SIGNING_ALLOWED=NO build
+          test -d "$RUNNER_TEMP/bioana-build/Build/Products/Debug-iphonesimulator/Bioana.app/PlugIns/BioanaWidget.appex"
