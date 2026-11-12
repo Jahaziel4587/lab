@@ -119,7 +119,8 @@ export default function ClientLayout({
 
   useEffect(() => {
     if (!authLoading && !user && !isLoginPage) {
-      router.replace("/login");
+      const destination = window.location.pathname + window.location.search;
+      router.replace(`/login?next=${encodeURIComponent(destination)}`);
     }
   }, [authLoading, isLoginPage, router, user]);
 
