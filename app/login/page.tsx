@@ -16,13 +16,25 @@ export default function Login() {
   const [nombre, setNombre] = useState("");
   const [apellido, setApellido] = useState("");
 
+  const returnAfterSignIn = () => {
+    const next = new URLSearchParams(window.location.search).get("next");
+    if (next?.startsWith("/") && !next.startsWith("//") && !next.includes("\\")) {
+      const destination = new URL(next, window.location.origin);
+      if (destination.origin === window.location.origin && !destination.pathname.startsWith("//") && destination.pathname !== "/login") {
+        router.push(destination.pathname + destination.search);
+        return;
+      }
+    }
+    router.push("/");
+  };
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
     setCargando(true);
     try {
       await signInWithEmailAndPassword(auth, correo, contrasena);
-      router.push("/");
+      returnAfterSignIn();
     } catch {
       setError("Correo o contraseña incorrectos");
     } finally {
@@ -53,7 +65,7 @@ export default function Login() {
       await signInWithEmailAndPassword(auth, correo, contrasena);
       await auth.currentUser?.getIdToken(true);
 
-      router.push("/");
+      returnAfterSignIn();
     } catch (e: any) {
       setError(e?.message || "No se pudo registrar");
     } finally {
