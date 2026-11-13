@@ -41,7 +41,7 @@ export default function Home() {
           <h2 id="quality-heading" className="mt-2 text-xl font-semibold sm:text-2xl">Inspecciones</h2>
           <p className="mt-2 text-sm text-white/60">Accede directamente al tipo de inspección que necesitas.</p>
 
-          <div className="mt-5 grid grid-cols-1 gap-4 sm:gap-8 md:grid-cols-2">
+          <div className="mt-5 grid grid-cols-1 gap-4 sm:gap-8 md:grid-cols-3">
             <Link href="/inspecciones/entrada" className={accessClass}>
               <ClipboardCheck className="mb-5 text-emerald-300" size={30} aria-hidden="true" />
               <h3 className="text-xl font-semibold">Inspección de entrada</h3>
@@ -54,6 +54,12 @@ export default function Home() {
               <h3 className="text-xl font-semibold">Inspección de proceso</h3>
               <p className="mt-3 text-sm leading-relaxed text-white/60">Consulta instrucciones y componentes de los proyectos para registrar y dar seguimiento a hallazgos de proceso.</p>
               <span className="mt-auto pt-6 flex items-center gap-2 text-sm font-medium text-emerald-300">Abrir inspecciones de proceso <ArrowRight size={16} aria-hidden="true" /></span>
+            </Link>
+            <Link href="/dhr" className={accessClass}>
+              <ClipboardCheck className="mb-5 text-emerald-300" size={30} aria-hidden="true" />
+              <h3 className="text-xl font-semibold">DHR</h3>
+              <p className="mt-3 text-sm leading-relaxed text-white/60">Busca documentos del DMR en Box y descarga los PDF seleccionados en un ZIP.</p>
+              <span className="mt-auto pt-6 flex items-center gap-2 text-sm font-medium text-emerald-300">Abrir DHR <ArrowRight size={16} aria-hidden="true" /></span>
             </Link>
           </div>
         </section>

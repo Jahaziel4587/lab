@@ -1,6 +1,6 @@
 import "server-only";
 
-import { listBoxFolderItems } from "./boxClient";
+import { listBoxFolderItems, listAllBoxFolderItems } from "./boxClient";
 import { normalizeWorkInstruction } from
   "@/app/inspecciones/utils/normalizeWorkInstruction";
 
@@ -93,9 +93,9 @@ export async function getDmrProjects() {
     );
 
   const response =
-    await listBoxFolderItems(dmrFolderId);
+    await listAllBoxFolderItems(dmrFolderId);
 
-  return response.entries
+  return response
     .filter(
       (item) =>
         item.type === "folder" &&
