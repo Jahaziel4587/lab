@@ -16,7 +16,7 @@ export function affectedLots(component: InventoryComponent, next: Partial<Lot>) 
 export function bioanaDate(value: string) {
   const parts = new Intl.DateTimeFormat("en-GB", { timeZone: "America/Mexico_City", day: "2-digit", month: "numeric", year: "2-digit" }).formatToParts(new Date(value));
   const get = (type: string) => parts.find(p => p.type === type)?.value || "";
-  return `${get("day")}/${["ene","feb","mar","abr","may","jun","jul","ago","sep","oct","nov","dic"][Number(get("month")) - 1]}/${get("year")}`;
+  return `${get("day")}/${["Ene","Feb","Mar","Abr","May","Jun","Jul","Ago","Sep","Oct","Nov","Dic"][Number(get("month")) - 1]}/${get("year")}`;
 }
 
 export function componentConditionsFromLot(component: Partial<Lot>, conditions: Partial<Lot>, destination?: string) {
