@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import ProjectTimer from "./components/ProjectTimer";
 import { ClipboardCheck, Factory, PackagePlus, ScanLine, ArrowRight } from "lucide-react";
 
 const cardClass = "rounded-2xl border border-white/10 bg-white/[0.04] p-5 backdrop-blur-xl sm:rounded-3xl sm:p-7";
@@ -11,6 +12,7 @@ export default function Home() {
   return (
     <div className="min-h-[calc(100vh-140px)]">
       <main className="mx-auto max-w-6xl px-4 py-6 text-white sm:px-8 sm:py-14">
+        <ProjectTimer />
         <section aria-label="Prototipado e inventario" className="grid grid-cols-1 items-stretch auto-rows-fr gap-4 sm:gap-8 md:grid-cols-2">
           <Link href="/hacer-pedido/proyecto" data-tutorial="card-place-order" className={accessClass}>
             <PackagePlus className="mb-5 text-emerald-300" size={30} aria-hidden="true" />
