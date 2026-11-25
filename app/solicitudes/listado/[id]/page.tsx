@@ -785,6 +785,7 @@ export default function DetallePedidoPage() {
   ) {
     return (
       <DetalleFixture
+        key={pedidoId}
         pedido={pedido}
         pedidoId={pedidoId}
         isAdmin={isAdmin}

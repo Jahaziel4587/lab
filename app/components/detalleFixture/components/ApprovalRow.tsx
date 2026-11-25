@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 import { arrayUnion, doc, updateDoc } from "firebase/firestore";
 import { FiPaperclip, FiUpload, FiX } from "react-icons/fi";
 import { db } from "@/src/firebase/firebaseConfig";
@@ -27,6 +27,7 @@ export default function ApprovalRow({
   pruebaId?: string;
   versionLabel?: string;
 }) {
+  const decisionGroupId = useId();
   const normalizedFirma = {
     ...firma,
     decision: firma?.decision || "",
@@ -234,19 +235,35 @@ export default function ApprovalRow({
 
       {signingOpen && canApprove && (
         <div className="mt-4 grid gap-3 border-t border-white/10 pt-4">
-          <label className="text-xs font-semibold uppercase tracking-[0.18em] text-white/40">
-            Decisión
-          </label>
+          <fieldset className="grid grid-cols-2 gap-2">
+            <legend className="mb-2 text-xs font-semibold uppercase tracking-[0.18em] text-white/65">
+              Decisión
+            </legend>
 
-          <select
-            value={decision}
-            onChange={(e) => setDecision(e.target.value as Decision | "")}
-            className="min-h-11 w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2 text-sm text-white outline-none focus:ring-2 focus:ring-emerald-400/20"
-          >
-            <option value="">Seleccionar decisión</option>
-            <option value="aprobado">Aprobado</option>
-            <option value="rechazado">Rechazado</option>
-          </select>
+            <label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-emerald-400/40 bg-emerald-500/10 px-2 py-2 text-sm font-semibold text-emerald-100 transition hover:bg-emerald-500/20 has-[:checked]:border-emerald-300 has-[:checked]:bg-emerald-500/30">
+              <input
+                type="radio"
+                name={decisionGroupId}
+                value="aprobado"
+                checked={decision === "aprobado"}
+                onChange={() => setDecision("aprobado")}
+                className="accent-emerald-400"
+              />
+              Aprobado
+            </label>
+
+            <label className="flex min-h-11 cursor-pointer items-center justify-center gap-2 rounded-xl border border-red-400/40 bg-red-500/10 px-2 py-2 text-sm font-semibold text-red-100 transition hover:bg-red-500/20 has-[:checked]:border-red-300 has-[:checked]:bg-red-500/30">
+              <input
+                type="radio"
+                name={decisionGroupId}
+                value="rechazado"
+                checked={decision === "rechazado"}
+                onChange={() => setDecision("rechazado")}
+                className="accent-red-400"
+              />
+              Rechazado
+            </label>
+          </fieldset>
 
           {decision === "rechazado" && (
             <>

@@ -42,13 +42,24 @@ import PruebaDiseno from "./detalleFixture/sections/PruebaDiseno";
 import FaseBeta from "./detalleFixture/sections/FaseBeta";
 import SpecFinal from "./detalleFixture/sections/SpecFinal";
 
+const fixturePhaseTabs = new Map<string, TabKey>([
+  ["proof_of_concept_solicitud", "resumen"],
+  ["concepto_diseno", "concepto"],
+  ["prueba_diseno", "prueba"],
+  ["fase_beta", "beta"],
+  ["spec_draft", "beta"],
+  ["spec_final", "specFinal"],
+]);
+
 export default function DetalleFixture({
   pedido,
   pedidoId,
   isAdmin,
   user,
 }: Props) {
-  const [activeTab, setActiveTab] = useState<TabKey>("resumen");
+  const [activeTab, setActiveTab] = useState<TabKey>(
+    () => fixturePhaseTabs.get(pedido?.faseFixture) ?? "resumen"
+  );
 
   const [conceptos, setConceptos] = useState<FixtureVersion[]>([]);
   const [pruebas, setPruebas] = useState<FixtureVersion[]>([]);
@@ -144,6 +155,9 @@ export default function DetalleFixture({
     { key: "beta", label: "Beta", done: hasBetaApproved },
     { key: "specFinal", label: "Spec Final", done: specFinalGenerada },
   ];
+
+  const faseActualTab = fixturePhaseTabs.get(faseActual) ?? "resumen";
+  const faseActualLabel = tabs.find((tab) => tab.key === faseActualTab)?.label;
 
   const nextConceptLabel = useMemo(() => {
     const letters = ["VA", "VB", "VC", "VD", "VE", "VF", "VG"];
@@ -829,7 +843,7 @@ export default function DetalleFixture({
         <ResumenSolicitud
           pedido={pedido}
           pedidoId={pedidoId}
-          faseActual={faseActual}
+          faseActual={faseActualLabel ?? tabs[0].label}
           userDisplayName={userDisplayName}
           generatingPdf={generatingPdf}
           onDownloadDocx={descargarSolicitudFormalPDF}
