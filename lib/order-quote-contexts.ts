@@ -2,7 +2,11 @@ import { collection, getDocs } from "firebase/firestore";
 import { db } from "@/src/firebase/firebaseConfig";
 
 // The original quote lives on the order; repetitions have their own quotes.
-export async function loadOrderQuoteContexts(pedidoId: string, original: Record<string, any>) {
+export async function loadOrderQuoteContexts(
+  pedidoId: string,
+  original: Record<string, any>,
+  onQuoteError?: (error: unknown) => void,
+) {
   const executions = await getDocs(collection(db, "pedidos", pedidoId, "ejecuciones"));
   const contexts = [
     { id: "original", data: original, path: ["pedidos", pedidoId] },
@@ -13,8 +17,14 @@ export async function loadOrderQuoteContexts(pedidoId: string, original: Record<
     })),
   ];
   return Promise.all(contexts.map(async (context) => {
-    const lines = await getDocs(collection(db, context.path[0], ...context.path.slice(1), "quote_live", "live", "lines"));
-    return { ...context, lines: lines.docs.map((line) => line.data()) };
+    try {
+      const lines = await getDocs(collection(db, context.path[0], ...context.path.slice(1), "quote_live", "live", "lines"));
+      return { ...context, lines: lines.docs.map((line) => line.data()) };
+    } catch (error) {
+      if (!onQuoteError) throw error;
+      onQuoteError(error);
+      return { ...context, lines: [] };
+    }
   }));
 }
 
