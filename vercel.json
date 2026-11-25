@@ -1,7 +1,19 @@
 {
-  "crons": [{ "path": "/api/inventario/recipe-stock-alerts", "schedule": "0 12 * * *" }],
+  "crons": [
+    {
+      "path": "/api/inventario/recipe-stock-alerts",
+      "schedule": "0 12 * * *"
+    },
+    {
+      "path": "/api/time-tracking/reminders",
+      "schedule": "* * * * *"
+    }
+  ],
   "rewrites": [
-    { "source": "/", "destination": "/" }
+    {
+      "source": "/",
+      "destination": "/"
+    }
   ],
   "redirects": [],
   "headers": [],

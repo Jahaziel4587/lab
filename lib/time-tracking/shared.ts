@@ -1,3 +1,4 @@
+export const REMINDER_INTERVAL = 60 * 1000; // Temporary one-minute notification test.
 export const HOUR = 60 * 60 * 1000;
 export const PROJECT = "Proyecto · registro de horas";
 export type Session = { id: string; uid: string; name: string; title: string; start: number; end: number | null };

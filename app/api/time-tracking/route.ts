@@ -1,9 +1,10 @@
 import { NextRequest } from "next/server";
 import { adminDB } from "@/lib/firebaseAdmin";
+import { canOperate } from "@/lib/operacional/catalog";
 import { identify } from "@/lib/operacional/server";
 import { getDisplayNameForUid } from "@/lib/pushNotifications";
 import { active, sessions, remind } from "@/lib/time-tracking/server";
-import { currentMonth, HOUR, monthBounds } from "@/lib/time-tracking/shared";
+import { currentMonth, REMINDER_INTERVAL, monthBounds } from "@/lib/time-tracking/shared";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -13,15 +14,26 @@ export async function GET(req: NextRequest) {
   const month = req.nextUrl.searchParams.get("month") || currentMonth();
   let bounds: number[];
   try { bounds = monthBounds(month); } catch { return Response.json({ error: "Mes inválido." }, { status: 400 }); }
-  const all = req.nextUrl.searchParams.get("all") === "true" && user.admin === true;
+  const all = req.nextUrl.searchParams.get("all") === "true";
+  if (all && !canOperate(user.email)) return Response.json({ error: "Sin acceso a reportes de Operacional." }, { status: 403 });
   // Single range filter avoids requiring a composite Firestore index.
   const query = all ? sessions : sessions.where("uid", "==", user.uid);
   const [snap, running] = await Promise.all([query.get(), active.doc(user.uid).get()]);
   const now = Date.now();
+  const months = new Set([currentMonth(), month]);
+  for (const doc of snap.docs) {
+    const session = doc.data();
+    let cursor = new Date(session.start - 6 * 3600000);
+    const last = new Date((session.end ?? now) - 6 * 3600000).toISOString().slice(0, 7);
+    while (cursor.toISOString().slice(0, 7) <= last) {
+      months.add(cursor.toISOString().slice(0, 7));
+      cursor = new Date(Date.UTC(cursor.getUTCFullYear(), cursor.getUTCMonth() + 1, 1));
+    }
+  }
   const rows = snap.docs.map(d => ({ ...d.data(), id: d.id })).filter((s: any) => s.start < bounds[1] && (s.end ?? now) > bounds[0]);
   await remind(user.uid).catch(error => console.error("Timer reminder", error));
   const heartbeat = await adminDB.collection("project_time_scheduler").doc(process.env.VERCEL_ENV === "preview" ? "preview" : "production").get();
-  return Response.json({ sessions: rows, active: running.data() || null, now, all, schedulerActive: now - (heartbeat.data()?.lastRun || 0) < 180000 });
+  return Response.json({ sessions: rows, active: running.data() || null, now, all, months: [...months].sort().reverse(), schedulerActive: now - (heartbeat.data()?.lastRun || 0) < 180000 });
 }
 
 export async function POST(req: NextRequest) {
@@ -44,7 +56,7 @@ export async function POST(req: NextRequest) {
         if (running) return;
         const session = { uid: user.uid, name, email: user.email, title, start: now, end: null };
         tx.create(newSession, session);
-        tx.set(runningRef, { ...session, id: newSession.id, nextReminder: now + HOUR, url: new URL("/", req.url).toString() });
+        tx.set(runningRef, { ...session, id: newSession.id, nextReminder: now + REMINDER_INTERVAL, reminderInterval: REMINDER_INTERVAL, url: new URL("/", req.url).toString() });
         return;
       }
       const ref = sessions.doc(sessionId);
