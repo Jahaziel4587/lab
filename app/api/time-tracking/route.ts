@@ -5,7 +5,7 @@ import { identify } from "@/lib/operacional/server";
 import { getDisplayNameForUid } from "@/lib/pushNotifications";
 import { scheduleSession } from "@/lib/time-tracking/schedule-session";
 import { active, sessions } from "@/lib/time-tracking/server";
-import { currentMonth, REMINDER_INTERVAL, monthBounds } from "@/lib/time-tracking/shared";
+import { currentMonth, REMINDER_INTERVAL, monthBounds, manualTimeRange } from "@/lib/time-tracking/shared";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
@@ -43,11 +43,33 @@ export async function POST(req: NextRequest) {
   if (!user?.email) return Response.json({ error: "Inicia sesión." }, { status: 401 });
   let body;
   try { body = await req.json(); } catch { return Response.json({ error: "Solicitud inválida." }, { status: 400 }); }
+  if (!body || typeof body !== "object") return Response.json({ error: "Solicitud inválida." }, { status: 400 });
   const { action, sessionId } = body;
   const title = String(body.title || "").trim().slice(0, 200);
-  if (!["start", "stop", "title"].includes(action)) return Response.json({ error: "Acción inválida." }, { status: 400 });
-  if (action !== "start" && (typeof sessionId !== "string" || !/^[a-zA-Z0-9_-]{1,100}$/.test(sessionId))) return Response.json({ error: "Sesión inválida." }, { status: 400 });
+  if (!["start", "stop", "title", "manual"].includes(action)) return Response.json({ error: "Acción inválida." }, { status: 400 });
+  if (["stop", "title"].includes(action) && (typeof sessionId !== "string" || !/^[a-zA-Z0-9_-]{1,100}$/.test(sessionId))) return Response.json({ error: "Sesión inválida." }, { status: 400 });
   const name = await getDisplayNameForUid(user.uid, user.email);
+  if (action === "manual") {
+    let range: { start: number; end: number };
+    try { range = manualTimeRange(body.start, body.end, Date.now()); }
+    catch (error) { return Response.json({ error: error instanceof Error ? error.message : "Rango inválido." }, { status: 400 }); }
+    if (typeof body.requestId !== "string" || !/^[a-zA-Z0-9_-]{1,100}$/.test(body.requestId)) return Response.json({ error: "Identificador de registro inválido." }, { status: 400 });
+    const ref = sessions.doc(`manual_${body.requestId}`);
+    try {
+      await adminDB.runTransaction(async tx => {
+        const existing = (await tx.get(ref)).data();
+        if (existing) {
+          if (existing.uid !== user.uid || existing.source !== "manual" || existing.start !== range.start || existing.end !== range.end || existing.title !== title) throw new Error("El identificador corresponde a otro registro.");
+          return;
+        }
+        tx.create(ref, { uid: user.uid, name, email: user.email, title, ...range, source: "manual", createdAt: Date.now() });
+      });
+      return Response.json({ ok: true });
+    } catch (error) {
+      console.error("Manual time session", error);
+      return Response.json({ error: "No se pudo registrar la sesión. Actualiza e inténtalo de nuevo." }, { status: 409 });
+    }
+  }
   const newSession = sessions.doc();
   const runningRef = active.doc(user.uid);
   try {
@@ -56,7 +78,7 @@ export async function POST(req: NextRequest) {
       const now = Date.now();
       if (action === "start") {
         if (running) return;
-        const session = { uid: user.uid, name, email: user.email, title, start: now, end: null };
+        const session = { uid: user.uid, name, email: user.email, title, start: now, end: null, source: "timer", createdAt: now };
         tx.create(newSession, session);
         tx.set(runningRef, { ...session, id: newSession.id, nextReminder: now + REMINDER_INTERVAL, reminderInterval: REMINDER_INTERVAL, url: new URL("/", req.url).toString() });
         return;
