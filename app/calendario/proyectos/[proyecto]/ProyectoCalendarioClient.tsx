@@ -81,11 +81,17 @@ export default function ProyectoCalendarioClient({
     return Array.from(
       new Set(
         pedidos
-          .flatMap((pedido) => (pedido.quoteContexts || [{ fechaEntregaReal: pedido.fechaEntregaReal }]).map((context) => monthKeyFromValue(context.fechaEntregaReal)))
+          .map((pedido) => monthKeyFromValue(pedido.fechaEntregaReal))
           .filter((month): month is string => Boolean(month))
       )
     ).sort((a, b) => b.localeCompare(a));
   }, [pedidos]);
+
+  useEffect(() => {
+    if (selectedMonth !== "all" && !availableMonths.includes(selectedMonth)) {
+      setSelectedMonth("all");
+    }
+  }, [availableMonths, selectedMonth]);
 
   const pedidosFiltrados = useMemo(() => {
     const searchQuery = busqueda.trim().toLowerCase();
@@ -93,7 +99,7 @@ export default function ProyectoCalendarioClient({
     return pedidos.filter((pedido) => {
       if (
         selectedMonth !== "all" &&
-        !(pedido.quoteContexts || [{ fechaEntregaReal: pedido.fechaEntregaReal }]).some((context: any) => monthKeyFromValue(context.fechaEntregaReal) === selectedMonth)
+        monthKeyFromValue(pedido.fechaEntregaReal) !== selectedMonth
       ) {
         return false;
       }
@@ -101,7 +107,7 @@ export default function ProyectoCalendarioClient({
       if (!searchQuery) return true;
 
       const titulo = String(pedido.titulo || "").toLowerCase();
-      const id = String(pedido.id || "").toLowerCase();
+      const id = pedido.pedidoId.toLowerCase();
 
       const solicitante = String(
         pedido.nombreUsuario || pedido.correoUsuario || ""
@@ -112,10 +118,11 @@ export default function ProyectoCalendarioClient({
         id.includes(searchQuery) ||
         solicitante.includes(searchQuery)
       );
-    }).map((pedido: any) => selectedMonth === "all" ? pedido : ({
-      ...pedido,
-      subtotalBaseMXN: (pedido.quoteContexts || []).filter((context: any) => monthKeyFromValue(context.fechaEntregaReal) === selectedMonth).reduce((sum: number, context: any) => sum + context.subtotal, 0),
-    }));
+    }).sort((a, b) =>
+      (b.fechaEntregaReal || b.fechaLimite || "").localeCompare(
+        a.fechaEntregaReal || a.fechaLimite || "",
+      )
+    );
   }, [pedidos, busqueda, selectedMonth]);
 
   const totalFiltradoMXN = useMemo(

@@ -39,30 +39,68 @@ export default function ProyectoPedidosTable({
   totalProyectoMXN,
   onActualizarCampo,
 }: ProyectoPedidosTableProps) {
+  const deliveryDate = (pedido: Pedido) => isAdmin ? (
+    <input
+      type="date"
+      aria-label="Entrega real"
+      value={pedido.fechaEntregaReal || ""}
+      onChange={(event) => {
+        void onActualizarCampo(pedido, "fechaEntregaReal", event.target.value).catch(() => {});
+      }}
+      className="w-[140px] rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/25 [color-scheme:dark]"
+    />
+  ) : (
+    <span className="text-white/75">{pedido.fechaEntregaReal || "—"}</span>
+  );
+
+  const statusControl = (pedido: Pedido) => isAdmin ? (
+    <select
+      aria-label="Estatus"
+      value={String(pedido.status || "enviado").trim().toLowerCase()}
+      onChange={(event) => {
+        void onActualizarCampo(pedido, "status", event.target.value).catch(() => {});
+      }}
+      className={`${projectStatusPillClass(pedido.status)} [&>option]:bg-white [&>option]:text-black`}
+    >
+      {STATUS_OPTIONS.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  ) : (
+    <span className={projectStatusPillClass(pedido.status)}>
+      {statusLabel(pedido.status)}
+    </span>
+  );
+
   return (
     <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl border border-white/10 bg-white/[0.035] backdrop-blur-sm sm:backdrop-blur-2xl ring-1 ring-white/5 sm:shadow-[0_30px_120px_-80px_rgba(0,0,0,0.95)]">
       <div className="pointer-events-none absolute inset-x-0 top-0 h-20 sm:h-24 bg-gradient-to-b from-emerald-500/10 to-transparent" />
 
-      {/* Mobile/tablet: título como enlace + costo */}
       <div className="relative divide-y divide-white/10 lg:hidden">
         {pedidos.map((pedido) => (
-          <div
-            key={pedido.id}
-            className="flex items-center justify-between gap-4 px-4 py-3.5"
-          >
-            <Link
-              href={`/solicitudes/listado/${pedido.pedidoId}`}
-              className="min-w-0 flex-1 break-words text-sm font-medium leading-snug text-emerald-100 transition hover:text-emerald-50 active:text-white"
-              title={pedido.titulo}
-            >
-              {pedido.titulo || "Sin título"}
-            </Link>
-
-            <span className="shrink-0 text-sm tabular-nums text-white/75">
-              {Number(pedido.subtotalBaseMXN || 0) > 0
-                ? fmtMXN(Number(pedido.subtotalBaseMXN))
-                : "—"}
-            </span>
+          <div key={pedido.id} className="space-y-2 px-4 py-3.5">
+            <div className="flex items-start justify-between gap-4">
+              <Link
+                href={`/solicitudes/listado/${pedido.pedidoId}`}
+                className="min-w-0 flex-1 break-words text-sm font-medium leading-snug text-emerald-100 transition hover:text-emerald-50"
+              >
+                {pedido.titulo || "Sin título"}
+              </Link>
+              <span className="shrink-0 text-sm tabular-nums text-white/75">
+                {Number(pedido.subtotalBaseMXN || 0) > 0
+                  ? fmtMXN(Number(pedido.subtotalBaseMXN))
+                  : "—"}
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 text-sm">
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-white/60">Entrega real</span>
+                {deliveryDate(pedido)}
+              </div>
+              {statusControl(pedido)}
+            </div>
           </div>
         ))}
       </div>
@@ -106,7 +144,7 @@ export default function ProyectoPedidosTable({
                     {pedido.titulo || "Sin título"}
                   </div>
                   <div className="text-[10px] text-white/35 mt-1">
-                    ID: <span className="break-all">{pedido.id}</span>
+                    ID: <span className="break-all">{pedido.pedidoId}</span>
                   </div>
                 </td>
 
@@ -119,24 +157,7 @@ export default function ProyectoPedidosTable({
                 </td>
 
                 <td className="py-2.5 px-4">
-                  {isAdmin ? (
-                    <input
-                      type="date"
-                      value={pedido.fechaEntregaReal || ""}
-                      onChange={(event) => {
-                        void onActualizarCampo(
-                          pedido,
-                          "fechaEntregaReal",
-                          event.target.value,
-                        );
-                      }}
-                      className="w-[140px] rounded-2xl border border-white/10 bg-white/[0.05] px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-emerald-400/25 [color-scheme:dark]"
-                    />
-                  ) : (
-                    <span className="text-white/75">
-                      {pedido.fechaEntregaReal || "—"}
-                    </span>
-                  )}
+                  {deliveryDate(pedido)}
                 </td>
 
                 <td className="py-2.5 px-4 text-white/80 text-right tabular-nums">
@@ -146,31 +167,7 @@ export default function ProyectoPedidosTable({
                 </td>
 
                 <td className="py-2.5 px-4">
-                  {isAdmin ? (
-                    <select
-                      value={pedido.status || "enviado"}
-                      onChange={(event) => {
-                        void onActualizarCampo(
-                          pedido,
-                          "status",
-                          event.target.value,
-                        );
-                      }}
-                      className={`${projectStatusPillClass(
-                        pedido.status,
-                      )} [&>option]:bg-white [&>option]:text-black`}
-                    >
-                      {STATUS_OPTIONS.map((option) => (
-                        <option key={option.value} value={option.value}>
-                          {option.label}
-                        </option>
-                      ))}
-                    </select>
-                  ) : (
-                    <span className={projectStatusPillClass(pedido.status)}>
-                      {statusLabel(pedido.status)}
-                    </span>
-                  )}
+                  {statusControl(pedido)}
                 </td>
 
                 <td className="py-2.5 px-4">

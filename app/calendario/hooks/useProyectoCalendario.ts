@@ -110,48 +110,52 @@ export function useProyectoCalendario(
         });
       });
 
-      const pedidosConSubtotal = await Promise.all(
-        pedidosBase.map(async (pedido) => {
+      const filasPorPedido = await Promise.all(
+        pedidosBase.map(async (pedido): Promise<Pedido[]> => {
           try {
-            const contexts = await loadOrderQuoteContexts(pedido.pedidoId, pedido);
-            const quoteContexts = contexts.map((context) => ({
-              fechaEntregaReal: context.data.fechaEntregaReal || "",
-              subtotal: quoteSubtotal(context.lines),
-            }));
-            return { ...pedido, quoteContexts, subtotalBaseMXN: quoteContexts.reduce((sum, item) => sum + item.subtotal, 0) };
-          } catch (subtotalError) {
-            console.error(
-              `Error al cargar subtotal de ${pedido.id}:`,
-              subtotalError
+            const contexts = await loadOrderQuoteContexts(
+              pedido.pedidoId,
+              pedido,
+              (error) => console.error(`Error al cargar cotización de ${pedido.id}:`, error),
             );
 
-            return {
-              ...pedido,
-              subtotalBaseMXN: 0,
-            };
+            return contexts.flatMap(({ id, data, lines }) => {
+              const subtotalBaseMXN = quoteSubtotal(lines);
+              if (id === "original") {
+                return pedido.fechaEntregaReal?.trim() || contexts.length > 1
+                  ? [{ ...pedido, subtotalBaseMXN }]
+                  : [];
+              }
+
+              const correo = data.solicitadoPorEmail || data.correoUsuario || data.usuario || "";
+              const nombre = data.solicitadoPorNombre || data.nombreUsuario || "";
+
+              return [{
+                id: `${pedido.pedidoId}__${id}`,
+                pedidoId: pedido.pedidoId,
+                ejecucionId: id,
+                esEjecucion: true,
+                titulo: data.titulo || (data.numero
+                  ? `${pedido.titulo} (${data.numero})`
+                  : `${pedido.titulo} · Repetición`),
+                proyecto: pedido.proyecto,
+                fechaLimite: data.fechaLimite || "",
+                fechaEntregaReal: data.fechaEntregaReal || "",
+                status: data.status || "en proceso",
+                correoUsuario: correo,
+                nombreUsuario: (nombre && !String(nombre).includes("@") ? nombre : "") ||
+                  nameByEmail[correo] || correo || "Sin información",
+                subtotalBaseMXN,
+              }];
+            });
+          } catch (loadError) {
+            console.error(`Error al cargar ejecuciones de ${pedido.id}:`, loadError);
+            return pedido.fechaEntregaReal?.trim() ? [pedido] : [];
           }
         })
       );
 
-      setPedidos(
-        pedidosConSubtotal
-          .filter(
-            (pedido) =>
-              (pedido.fechaEntregaReal && pedido.fechaEntregaReal.trim() !== "") ||
-              pedido.quoteContexts?.some((context) => context.fechaEntregaReal)
-          )
-          .sort((a, b) => {
-            const dateA = new Date(
-              `${a.fechaEntregaReal}T00:00:00`
-            ).getTime();
-
-            const dateB = new Date(
-              `${b.fechaEntregaReal}T00:00:00`
-            ).getTime();
-
-            return dateB - dateA;
-          })
-      );
+      setPedidos(filasPorPedido.flat());
 
       if (isAdmin) {
   setCargandoShare(true);
@@ -219,7 +223,6 @@ const actualizarCampo = useCallback(
           ? {
               ...item,
               [campo]: valor,
-              ...(campo === "fechaEntregaReal" && item.quoteContexts ? { quoteContexts: item.quoteContexts.map((context: any, index: number) => index === 0 ? { ...context, fechaEntregaReal: valor } : context) } : {}),
             }
           : item
       )
@@ -345,7 +348,6 @@ const actualizarCampo = useCallback(
             ? {
                 ...item,
                 [campo]: valorAnterior,
-              ...(campo === "fechaEntregaReal" && item.quoteContexts ? { quoteContexts: item.quoteContexts.map((context: any, index: number) => index === 0 ? { ...context, fechaEntregaReal: valorAnterior } : context) } : {}),
               }
             : item
         )

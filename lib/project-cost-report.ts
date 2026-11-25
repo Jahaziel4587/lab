@@ -50,7 +50,7 @@ export function buildProjectCostReport(options: ReportOptions): any {
         ...rows,
       ] }, layout: { hLineColor: () => "#e5e7eb", vLineColor: () => "#e5e7eb", paddingTop: () => 6, paddingBottom: () => 6 }, margin: [0, 0, 0, 12] },
       { text: `Total gastado, subtotal base: ${money(options.total)}`, alignment: "right", bold: true, fontSize: 11 },
-      { text: "Importes base de los servicios cotizados; sin ganancia, IVA ni envío. El filtro mensual considera la fecha real de cada ejecución. Las fechas mostradas corresponden al pedido original.", fontSize: 8, color: "#666666", margin: [0, 12, 0, 0] },
+      { text: "Importes base de los servicios cotizados; sin ganancia, IVA ni envío. El filtro mensual considera la fecha real de cada ejecución.", fontSize: 8, color: "#666666", margin: [0, 12, 0, 0] },
     ],
     footer: (currentPage: number, pageCount: number) => ({ text: `Página ${currentPage} de ${pageCount}`, alignment: "right", margin: [36, 0, 36, 0], fontSize: 8, color: "#777777" }),
   };
