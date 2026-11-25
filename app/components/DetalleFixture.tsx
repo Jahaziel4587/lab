@@ -976,7 +976,7 @@ export default function DetalleFixture({
       </div>
 
       <div className="mt-8 rounded-3xl border border-white/10 bg-white/[0.035] p-5 md:p-6">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-6">
+        <div className="grid grid-cols-1 gap-3 md:grid-cols-5">
           {tabs.map((tab, index) => {
             const selected = activeTab === tab.key;
             return (
@@ -984,7 +984,7 @@ export default function DetalleFixture({
                 key={tab.key}
                 type="button"
                 onClick={() => setActiveTab(tab.key)}
-                className={`w-full rounded-full border px-4 py-2 text-center text-xs font-semibold transition ${
+                className={`min-h-10 w-full rounded-full border px-3 py-2 text-center text-xs font-semibold transition ${
                   selected
                     ? "border-emerald-300/60 bg-emerald-400/20 text-emerald-50 shadow-[0_0_25px_rgba(16,185,129,0.18)]"
                     : tab.done
