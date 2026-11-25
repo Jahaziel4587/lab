@@ -3,7 +3,8 @@ import { adminDB } from "@/lib/firebaseAdmin";
 import { canOperate } from "@/lib/operacional/catalog";
 import { identify } from "@/lib/operacional/server";
 import { getDisplayNameForUid } from "@/lib/pushNotifications";
-import { active, sessions, remind } from "@/lib/time-tracking/server";
+import { scheduleSession } from "@/lib/time-tracking/schedule-session";
+import { active, sessions } from "@/lib/time-tracking/server";
 import { currentMonth, REMINDER_INTERVAL, monthBounds } from "@/lib/time-tracking/shared";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -31,9 +32,10 @@ export async function GET(req: NextRequest) {
     }
   }
   const rows = snap.docs.map(d => ({ ...d.data(), id: d.id })).filter((s: any) => s.start < bounds[1] && (s.end ?? now) > bounds[0]);
-  await remind(user.uid).catch(error => console.error("Timer reminder", error));
-  const heartbeat = await adminDB.collection("project_time_scheduler").doc(process.env.VERCEL_ENV === "preview" ? "preview" : "production").get();
-  return Response.json({ sessions: rows, active: running.data() || null, now, all, months: [...months].sort().reverse(), schedulerActive: now - (heartbeat.data()?.lastRun || 0) < 180000 });
+  let remindersReady = !running.exists;
+  try { if (running.exists) remindersReady = await scheduleSession(user.uid); }
+  catch (error) { console.error("Schedule timer reminders", error); }
+  return Response.json({ sessions: rows, active: running.data() || null, now, all, months: [...months].sort().reverse(), schedulerActive: remindersReady });
 }
 
 export async function POST(req: NextRequest) {
@@ -73,7 +75,15 @@ export async function POST(req: NextRequest) {
       tx.update(ref, { end: now, title });
       tx.delete(runningRef);
     });
-    return Response.json({ ok: true });
+    let warning: string | undefined;
+    if (action === "start") {
+      try { await scheduleSession(user.uid); }
+      catch (error) {
+        console.error("Schedule timer reminders", error);
+        warning = "Tu tiempo se está registrando, pero no se pudo programar el recordatorio. Recarga para reintentarlo.";
+      }
+    }
+    return Response.json({ ok: true, warning });
   } catch (error) {
     console.error("Time tracking", error);
     return Response.json({ error: "No se pudo guardar. Actualiza e inténtalo de nuevo." }, { status: 409 });

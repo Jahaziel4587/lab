@@ -19,7 +19,6 @@
     "firebase": "^12.0.0",
     "firebase-admin": "^13.4.0",
     "framer-motion": "^12.34.0",
-    "jose": "^6.2.18",
     "libreoffice-convert": "^1.8.1",
     "lucide-react": "^0.564.0",
     "next": "^15.4.8",
@@ -34,6 +33,7 @@
     "sharp": "^0.35.5",
     "three": "^0.184.0",
     "uuid": "^11.1.0",
+    "workflow": "^5.8.0",
     "xlsx": "^0.18.5"
   },
   "devDependencies": {

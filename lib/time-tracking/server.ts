@@ -8,14 +8,14 @@ export const scope = process.env.VERCEL_ENV === "preview" ? "preview" : "product
 export const sessions = adminDB.collection(`project_time_${scope}_sessions`);
 export const active = adminDB.collection(`project_time_${scope}_active`);
 
-export async function remind(uid: string) {
+export async function remind(uid: string, sessionId?: string) {
   const ref = active.doc(uid);
   const lease = randomUUID();
   const claim = await adminDB.runTransaction(async tx => {
     const snap = await tx.get(ref);
     const data = snap.data();
     const now = Date.now();
-    if (!data) return null;
+    if (!data || (sessionId && data.id !== sessionId)) return null;
     const nextReminder = data.reminderInterval === REMINDER_INTERVAL ? data.nextReminder : data.start + REMINDER_INTERVAL;
     if (now < nextReminder || (data.leaseUntil || 0) > now) return null;
     tx.update(ref, { lease, leaseUntil: now + 120000 });
