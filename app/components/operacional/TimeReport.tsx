@@ -37,7 +37,7 @@ export default function TimeReport() {
   const users = [...totals.values()].sort((a, b) => a.name.localeCompare(b.name));
   function download() {
     if (!data) return;
-    const rows = [[PROJECT, month], ["Usuario", "Horas del mes", "Tiempo", "Sesiones"], ...users.map(t => [t.name, (t.ms / 3600000).toFixed(4), clock(t.ms), t.count]), [], ["Usuario", "Actividad", "Inicio (Monterrey)", "Fin (Monterrey)", "Horas dentro del mes", "Estado"], ...[...data.sessions].sort((a,b) => a.start-b.start).map(s => [s.name, s.title, date(s.start), s.end ? date(s.end) : "", (monthDuration(s, bounds, data.now) / 3600000).toFixed(4), s.end ? "Finalizada" : "En curso"])];
+    const rows = [[PROJECT, month], ["Usuario", "Horas del mes", "Tiempo", "Sesiones"], ...users.map(t => [t.name, (t.ms / 3600000).toFixed(4), clock(t.ms), t.count]), [], ["Usuario", "Actividad", "Inicio (Monterrey)", "Fin (Monterrey)", "Horas dentro del mes", "Estado", "Tipo de sesión", "Fecha de registro (Monterrey)"], ...[...data.sessions].sort((a,b) => a.start-b.start).map(s => [s.name, s.title, date(s.start), s.end ? date(s.end) : "", (monthDuration(s, bounds, data.now) / 3600000).toFixed(4), s.end ? "Finalizada" : "En curso", s.source === "manual" ? "Manual" : "Cronómetro", s.createdAt ? date(s.createdAt) : ""])];
     const csv = rows.map(row => row.map(cell => { const value = String(cell ?? ""); return `"${(/^[\s]*[=+@-]/.test(value) ? "'" + value : value).replaceAll('"', '""')}"`; }).join(",")).join("\r\n");
     const url = URL.createObjectURL(new Blob(["\uFEFF", csv], { type: "text/csv;charset=utf-8" }));
     const link = document.createElement("a"); link.href = url; link.download = `Horas-proyecto-${month}.csv`; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
