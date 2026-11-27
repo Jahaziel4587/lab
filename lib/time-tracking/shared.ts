@@ -1,6 +1,6 @@
 export const REMINDER_INTERVAL = 60 * 1000; // Temporary one-minute notification test.
 export const HOUR = 60 * 60 * 1000;
-export const PROJECT = "Proyecto · registro de horas";
+export const PROJECT = "041.Mentiscare";
 export type Session = { id: string; uid: string; name: string; title: string; start: number; end: number | null; source?: "timer" | "manual"; createdAt?: number };
 export function monthBounds(month: string) {
   if (!/^\d{4}-(0[1-9]|1[0-2])$/.test(month)) throw new Error("Mes inválido.");
