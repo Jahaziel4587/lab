@@ -105,6 +105,24 @@ export async function POST(req: NextRequest) {
       if (!snapshot.exists) fail("Solicitud no encontrada.");
       b = { ...snapshot.data()!.payload, action: "movement", site, operationId: `inv-request-${requestId}`, fulfillMovementRequestId: requestId };
     }
+    if (b.action === "rename-lot") {
+      const componentId = str(b.componentId), lotId = str(b.lotId), name = str(b.name);
+      if (!/^[a-zA-Z0-9]{10,100}$/.test(componentId) || !/^[a-zA-Z0-9-]{10,100}$/.test(lotId)) fail("Componente o lote inválido.");
+      if (name.length > 200) fail("El nombre del lote debe tener máximo 200 caracteres.");
+      await adminDB.runTransaction(async transaction => {
+        const [profile, snapshot] = await Promise.all([transaction.get(adminDB.collection("users").doc(user.uid)), transaction.get(components.doc(componentId))]);
+        if (!canDeleteEmptyLots(profile.data())) fail("Solo el jefe de almacén puede modificar el nombre de los lotes.");
+        if (!snapshot.exists) fail("Componente no encontrado.");
+        const component = snapshot.data() as InventoryComponent, lot = component.lots.find(lot => lot.id === lotId);
+        if (!lot) fail("Lote no encontrado.");
+        if (lot.rdBulk) fail("Las cantidades generales R&D no tienen un nombre de lote editable.");
+        if (component.lots.some(other => other.id !== lotId && other.name.trim().toLocaleLowerCase() === name.toLocaleLowerCase())) fail("Ya existe un lote con ese nombre en este componente.");
+        if (lot.name === name) return;
+        transaction.create(operations.doc(), { action: "rename-lot", componentId, lotId, previousName: lot.name, name, site, createdAt: now, createdBy: user.uid });
+        transaction.update(snapshot.ref, { lots: component.lots.map(lot => lot.id === lotId ? { ...lot, name } : lot) });
+      });
+      return NextResponse.json({ renamed: true });
+    }
     if (b.action === "delete-empty-lot") {
       const componentId = str(b.componentId), lotId = str(b.lotId);
       if (!/^[a-zA-Z0-9]{10,100}$/.test(componentId) || !/^[a-zA-Z0-9-]{10,100}$/.test(lotId)) fail("Componente o lote inválido.");

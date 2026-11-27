@@ -1,4 +1,5 @@
 "use client";
+import { useWarehouseAccess } from "@/app/components/inventario/useWarehouseAccess";
 import { isEmptyStock } from "@/lib/inventario/warehouse-access";
 import { useInventorySite } from "@/app/components/inventario/InventoryProvider";
 import { inventoryHref, voucherDestination } from "@/lib/inventario/sites";
@@ -9,7 +10,7 @@ import ComponentStorage from "@/app/components/inventario/ComponentStorage";
 import { Boxes, QrCode, ArrowLeftRight, Plus } from "lucide-react";
 import { useParams, useSearchParams } from "next/navigation";
 import { useState } from "react";
-import InventoryShell, { useInventory, panelClass, buttonClass } from "@/app/components/inventario/InventoryShell";
+import InventoryShell, { useInventory, panelClass, buttonClass, inputClass, Field } from "@/app/components/inventario/InventoryShell";
 import InventoryDialog from "@/app/components/inventario/InventoryDialog";
 import LotForm from "@/app/components/inventario/LotForm";
 import LotLabelDownload from "@/app/components/inventario/LotLabelDownload";
@@ -18,6 +19,8 @@ import ComponentHistory from "@/app/components/inventario/ComponentHistory";
 import MovementCart from "@/app/components/inventario/MovementCart";
 import { locationName, TYPES } from "@/lib/inventario/catalogs";
 export default function ComponentPage() {
+  const access = useWarehouseAccess();
+  const [renameLot, setRenameLot] = useState(""), [renameValue, setRenameValue] = useState(""), [renameError, setRenameError] = useState(""), [renameBusy, setRenameBusy] = useState(false);
   const { site } = useInventorySite(); const router = useRouter();
   const { componenteId } = useParams<{ componenteId: string }>(); const { components, loading, error, reload } = useInventory();
   const [storageLot, setStorageLot] = useState(""), [storageError, setStorageError] = useState(""), [storageBusy, setStorageBusy] = useState(false);
@@ -38,6 +41,7 @@ export default function ComponentPage() {
           <div className="mt-5 space-y-3">{!c.lots.length && <p className="rounded-2xl border border-dashed border-white/10 px-4 py-10 text-center text-sm text-white/45">Todavía no hay lotes. Registra el primero para comenzar.</p>}{c.lots.map(l => <div key={l.id} className={`rounded-2xl border p-4 sm:p-5 ${isEmptyStock(l.stock) ? "border-amber-300/25 bg-amber-300/[0.035]" : "border-white/10 bg-white/[0.035]"}`}><div className="flex flex-wrap items-start justify-between gap-2">
             <div className="flex min-w-0 flex-wrap items-center gap-2">
               <strong className="break-all text-sm text-white/90">{l.name}</strong>
+              {access.canDeleteEmptyLots && !l.rdBulk && <button type="button" className="min-h-11 px-2 text-xs text-emerald-300 hover:text-emerald-200" onClick={() => { setRenameLot(l.id); setRenameValue(l.name); setRenameError(""); }}>Editar nombre</button>}
               {!l.rdBulk && <span className="rounded-full border border-white/10 px-2.5 py-1 text-[11px] text-white/55">Caducidad: {l.expiry || "No aplica"}</span>}
             </div>
             {!l.rdBulk && <LotLabelDownload componentId={c.id} code={c.code} lotId={l.id} lotName={l.name} />}
@@ -48,6 +52,11 @@ export default function ComponentPage() {
         <div hidden={active !== "qr"}><LotQrLabel component={c} /></div>
       </section>
     </div>
+    {renameLot && access.canDeleteEmptyLots && <InventoryDialog title="Editar nombre del lote" onClose={() => { if (!renameBusy) setRenameLot(""); }}><form className="space-y-4" onSubmit={async e => {
+      e.preventDefault(); setRenameBusy(true); setRenameError("");
+      try { await inventoryRequest({ action: "rename-lot", componentId: c.id, lotId: renameLot, name: renameValue, site }); setRenameLot(""); await reload(); }
+      catch (e) { setRenameError((e as Error).message); } finally { setRenameBusy(false); }
+    }}><Field label="Nombre del lote"><input autoFocus required maxLength={200} className={inputClass} value={renameValue} onChange={e => setRenameValue(e.target.value)} disabled={renameBusy} /></Field><p className="text-xs text-white/50">Se conserva el historial, las cantidades y el identificador interno. Los vales anteriores conservarán el nombre registrado al realizar el movimiento.</p>{renameError && <p role="alert" className="text-sm text-red-300">{renameError}</p>}<div className="flex flex-wrap justify-end gap-2"><button type="button" className="min-h-11 px-4 text-sm text-white/70" disabled={renameBusy} onClick={() => setRenameLot("")}>Cancelar</button><button className={buttonClass} disabled={renameBusy || !renameValue.trim()}>{renameBusy ? "Guardando…" : "Guardar nombre"}</button></div></form></InventoryDialog>}
     {storageLot && <InventoryDialog title="Almacenamiento del lote" onClose={() => { if (!storageBusy) setStorageLot(""); }}><form className="space-y-4" onSubmit={async e => { e.preventDefault(); setStorageBusy(true); try { await inventoryRequest({action:"lot-storage",componentId:c.id,lotId:storageLot,...Object.fromEntries(new FormData(e.currentTarget)),site}); setStorageLot(""); void reload(); } catch(e) { setStorageError((e as Error).message); } finally { setStorageBusy(false); } }}><h2 className="text-xl font-semibold">Almacenamiento · {c.lots.find(l=>l.id===storageLot)?.name}</h2><StorageFields optional component={{...c,temperatureCondition:c.lots.find(l=>l.id===storageLot)?.temperatureCondition ?? c.temperatureCondition,humidityCondition:c.lots.find(l=>l.id===storageLot)?.humidityCondition ?? c.humidityCondition}}/>{storageError&&<p role="alert" className="text-red-300">{storageError}</p>}<button className={buttonClass} disabled={storageBusy}>Guardar y avisar al almacenista</button></form></InventoryDialog>}
     {movementLot && <InventoryDialog title="Realizar movimiento" onClose={() => setMovementLot("")}><MovementCart components={[c]} initialId={c.id} fixedLotId={movementLot} onSaved={() => { setRevision(r => r + 1); void reload(); }} /></InventoryDialog>}
   </>}</InventoryShell>;
